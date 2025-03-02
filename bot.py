@@ -1,4 +1,13 @@
 import asyncio
+import signal
+import threading
+import json
+from config import ConfigModel, MainConfig
+from log import Logger
+from core.agent_executor import ChatAgentExecutor
+import sys
+from pathlib import Path
+
 from typing import (
     Optional,
     Dict,
@@ -10,13 +19,8 @@ from typing import (
     Callable,
     Awaitable,
     Union,
-)
-import json
-from config import ConfigModel, MainConfig
-from log import Logger
-from core.agent_executor import ChatAgentExecutor
-import sys
-from pathlib import Path
+) # type: ignore
+
 from pydantic import (
     ValidationError,
     create_model,  # pyright: ignore[reportUnknownVariableType]
@@ -26,8 +30,14 @@ from .utils import (
     get_classes_from_module_name,
     is_config_class,
     samefile,
-    wrap_get_func,
     validate_instance
+)
+
+from ._types import BotHook
+
+HANDLED_SIGNALS = (
+    signal.SIGINT,  # Unix signal 2. Sent by Ctrl+C.
+    signal.SIGTERM,  # Unix signal 15. Sent by `kill <pid>`.
 )
 
 if sys.version_info >= (3, 11):  # pragma: no cover
@@ -60,9 +70,20 @@ def is_private_message(event: dict) -> bool:
 class Bot():
     config: MainConfig
     logger: Logger
+    should_exit: asyncio.Event
+    global_state: Dict[Any, Any]
+
+    _condition: asyncio.Condition
+
+    _module_path_finder: ModulePathFinder  # 用于查找 plugins 的模块元路径查找器
+    _raw_config_dict: Dict[str, Any]  # 原始配置字典
 
     _config_file: str | None  # 配置文件
     _config_dict: Dict[str, Any] | None  # 配置
+
+    #钩子
+    _bot_run_hooks: List[BotHook]
+    _bot_exit_hooks: List[BotHook]
 
     def __init__(
         self,
@@ -80,23 +101,89 @@ class Bot():
         """
         self.config = MainConfig()
         self.logger = Logger(self)
+        self.global_state = {}
+
+        self._module_path_finder = ModulePathFinder()
 
         self._config_file = config_file
         self._config_dict = config_dict
 
-        self.chat_agent = ChatAgentExecutor(
-            bot=self,
-            api_key=self.config.api_key,
-            base_url=self.config.base_url,
-            model_name=self.config.model,
-            redis_url=self.config.redis_url
-        )
+        self._config_file = config_file
+        self._config_dict = config_dict
+
+        self._bot_run_hooks = []
+        self._bot_exit_hooks = []
+
+        sys.meta_path.insert(0, self._module_path_finder)
+
+        #self.chat_agent = ChatAgentExecutor(self)
+
+    def run(self) -> None:
+        """启动 SekaiBot，读取配置文件并执行 bot 逻辑。"""
+        asyncio.run(self._run())
+
+    async def _run(self) -> None:
+        self.should_exit = asyncio.Event()
+        self._condition = asyncio.Condition()
+
+        # 监听并拦截系统退出信号，从而完成一些善后工作后再关闭程序
+        if threading.current_thread() is threading.main_thread():  # pragma: no cover
+            # Signal 仅能在主线程中被处理。
+            try:
+                loop = asyncio.get_running_loop()
+                for sig in HANDLED_SIGNALS:
+                    loop.add_signal_handler(sig, self._handle_exit)
+            except NotImplementedError:
+                # add_signal_handler 仅在 Unix 下可用，以下对于 Windows。
+                for sig in HANDLED_SIGNALS:
+                    signal.signal(sig, self._handle_exit)
+
+        # 加载配置文件
+        self._reload_config_dict()
+
+        # 启动 KafuBot
+        self.logger.info("Running KafuBot...")
+
+        #执行启动钩子
+        for bot_run_hook_func in self._bot_run_hooks:
+            await bot_run_hook_func(self)
+
+        try:
+            """启动各种task
+                _agent_task = asyncio.create_task(_agent.safe_run())
+                self._agent_tasks.add(_agent_task)
+                _agent_task.add_done_callback(self._agent_tasks.discard)
+            """
+
+            await self.should_exit.wait()
+
+        finally:
+            """执行结束方法
+                结束各个任务
+                while self._agent_tasks:
+                    await asyncio.sleep(0)
+            """
+
+            # 执行退出钩子
+            for bot_exit_hook_func in self._bot_exit_hooks:
+                await bot_exit_hook_func(self)
+
+            self._module_path_finder.path.clear()
         
+    def _handle_exit(self, *_args: Any):
+        """当机器人收到退出信号时，根据情况进行处理。"""
+        self.logger.info("Stopping KafuBot...")
+        if self.should_exit.is_set():
+            self.logger.warning("Force Exit KafuBot...")
+            sys.exit()
+        else:
+            self.should_exit.set()
+    
     def _update_config(self) -> None:
         """更新 config，合并入来自 Plugin 和 Adapter 的 Config。"""
 
-        '''def update_config(
-            source: List[Type[Plugin[Any, Any, Any]]] | List[Adapter[Any, Any]],
+        def update_config(
+            source: List[Any],
             name: str,
             base: Type[ConfigModel],
         ) -> Tuple[Type[ConfigModel], ConfigModel]:
@@ -118,10 +205,10 @@ class Bot():
 
         self.config = create_model(
             "Config",
-            plugin=update_config(self.plugins, "PluginConfig", PluginConfig),
-            adapter=update_config(self.adapters, "AdapterConfig", AdapterConfig),
+            #plugin=update_config(self.plugins, "PluginConfig", PluginConfig),
+            #adapter=update_config(self.adapters, "AdapterConfig", AdapterConfig),
             __base__=MainConfig,
-        )(**self._raw_config_dict)'''
+        )(**self._raw_config_dict)
 
         self.logger._load_logger()
 
@@ -155,7 +242,34 @@ class Bot():
             self.logger.exception("Config dict parse error")
         self._update_config()
 
-    
+    def bot_run_hook(self, func: BotHook) -> BotHook:
+        """注册一个 Bot 启动时的函数。
+
+        Args:
+            func: 被注册的函数。
+
+        Returns:
+            被注册的函数。
+        """
+        self._bot_run_hooks.append(func)
+        return func
+
+    def bot_exit_hook(self, func: BotHook) -> BotHook:
+        """注册一个 Bot 退出时的函数。
+
+        Args:
+            func: 被注册的函数。
+
+        Returns:
+            被注册的函数。
+        """
+        self._bot_exit_hooks.append(func)
+        return func
+
+
+
+
+
     def get_session_id(self, event: dict):
         if is_private_message(event):
             return "user_" + str(event.get("user_id"))
@@ -171,8 +285,6 @@ class Bot():
         if is_group:
             group_keywords_hit = check_group_keywords(event.get("plain_text", ""), self.config.keywords)
         return is_at_bot(event) or (is_group and group_keywords_hit)
-        
-        
 
     async def handle_message(self, event: dict) -> Optional[str]:
         """
@@ -205,7 +317,7 @@ class Bot():
 
     
 
-if __name__ == "__main__":
+'''if __name__ == "__main__":
     # 示例：模拟私聊测试
     sample_event_private = {
         "type": "message",
@@ -246,4 +358,4 @@ if __name__ == "__main__":
         resp2 = await bot.handle_message(sample_event_group)
         print("群聊回复:", resp2)
 
-    asyncio.run(run_test())
+    asyncio.run(run_test())'''

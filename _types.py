@@ -11,15 +11,21 @@ from typing import (
     final,
     overload,
     override, 
-)
+) # type: ignore
 
 if TYPE_CHECKING:
-    from typing import Any
+    from typing import Any # type: ignore
     from .bot import Bot
+    from .config import ConfigModel
 
 __all__ = [
-
+    "ConfigT",
+    "BotHook"
 ]
+
+ConfigT = TypeVar("ConfigT", bound=Optional["ConfigModel"])
+
+BotHook = Callable[["Bot"], Awaitable[None]]
 
 _T = TypeVar("_T")
 
