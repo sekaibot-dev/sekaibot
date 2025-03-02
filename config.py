@@ -7,10 +7,11 @@ from typing import (
     Optional, 
     Set, 
     Union, 
-    Any
+    Any,
+    Annotated
 )
 
-from pydantic import BaseModel, ConfigDict, DirectoryPath, Field
+from pydantic import BaseModel, ConfigDict, DirectoryPath, Field, TypeAdapter
 
 __all__ = [
     "ConfigModel",
@@ -62,6 +63,43 @@ class LLMConfig(ConfigModel):
     base_url: str = "https://api.chatanywhere.tech/v1"
     model: str = "gpt-4o-mini"
 
+class ToolConfig(ConfigModel):
+    """Tool 配置。
+
+    Attributes:
+    """
+    tools: Set[str] = Field(default_factory=set)
+    tool_dirs: Set[DirectoryPath] = Field(default_factory=set)
+
+class PromptConfig(ConfigModel):
+    """角色信息配置。
+    
+    Attributes:
+        name: 角色名字
+        role_definition: 角色定义
+        symbol_conversation: 角色对话样例
+    """
+
+    name: str | None = "Sekai"
+    role_definition: str | None = (
+        "你是一个善解人意、幽默风趣的AI助理，会根据用户的上下文对话内容进行自然回答。"
+        "请注意对话场景的合理性，并结合用户和系统信息。"
+    )
+    symbol_conversation: List[Dict[str, str | List[str | Dict]]] | None = [
+        {"input": "你好", "output": "你好，很高兴能帮助你"}
+    ]
+
+class AgentConfig(ConfigModel):
+    """Agent 配置。
+
+    Attributes:
+
+    """
+
+    llm: LLMConfig = LLMConfig()
+    tool: ToolConfig = ToolConfig()
+    prompt: PromptConfig = PromptConfig()
+
 
 class SQLConfig(ConfigModel):
     """SQL 配置。
@@ -73,6 +111,7 @@ class SQLConfig(ConfigModel):
         engine_args: Additional configuration for creating database engines.
         async_mode: Whether it is an asynchronous connection.
     """
+    db_type: Literal["sql"]
     connection_string: Optional[str] = None,
     table_name: str = "message_store",
     session_id_field_name: str = "session_id",
@@ -87,6 +126,7 @@ class RedisConfig(ConfigModel):
         key_prefix: The prefix of the key, combined with `session id` to form the key.
         ttl: Set the expiration time of `key`, the unit is seconds.
     """
+    db_type: Literal["redis"]
     url: str = "redis://localhost:6379/0"
     key_prefix: str = "message_store:"
     ttl: Optional[int] = None
@@ -101,37 +141,30 @@ class MongoDBConfig(ConfigModel):
         create_index: whether to create an index with name SessionId. Set to False if
             such an index already exists.
     """
+    db_type: Literal["mongodb"]
     connection_string: str
     session_id: str
     database_name: str = "chat_history"
     collection_name: str = "message_store"
     create_index: bool = True
 
+DatabaseConfigType = Annotated[
+    Union[SQLConfig, RedisConfig, MongoDBConfig],
+    Field(discriminator="db_type"),
+]
+
 class DatabaseConfig(ConfigModel):
     """Database 配置。
 
     Attributes:
+        config: SQLConfig | RedisConfig | MongoDBConfig
     """
-    db_type: Literal["sql", "redis", "mongodb"] = "redis"
-    config: SQLConfig | RedisConfig | MongoDBConfig
+    config: DatabaseConfigType
 
-class CharacterConfig(ConfigModel):
-    """角色信息配置。
-    
-    Attributes:"""
 
-    name: str = "Sekai"
-    role_definition: str = (
-        "你是一个善解人意、幽默风趣的AI助理，会根据用户的上下文对话内容进行自然回答。"
-        "请注意对话场景的合理性，并结合用户和系统信息。"
-    )
-    symbol_conversation: List[Dict[str, str | List[str | Dict]]] = [
-        {"input": "你好", "output": "你好，很高兴能帮助你"}
-    ]
 
 class MainConfig(ConfigModel):
     """SekaiBot 主体配置。"""
     bot: BotConfig = BotConfig()
-    llm: LLMConfig = LLMConfig()
+    agent: AgentConfig = AgentConfig()
     database: DatabaseConfig = DatabaseConfig()
-    character: CharacterConfig = CharacterConfig()
