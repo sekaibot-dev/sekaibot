@@ -4,11 +4,11 @@ import asyncio
 from langchain_community.chat_message_histories import RedisChatMessageHistory
 from langchain.schema import HumanMessage, AIMessage, SystemMessage, BaseMessage
 from typing import Literal, Dict, Any, List
+from .utils import cacheDict
 
 class MemoryManager:
     """
     使用 RedisChatMessageHistory 管理持久化的对话记忆。
-    注意：RedisChatMessageHistory 目前是同步的，若需要完全异步，需要自行基于 redis.asyncio 实现。
     """
 
     def __init__(
@@ -19,7 +19,7 @@ class MemoryManager:
         self.redis_url = redis_url
         self.key_prefix = key_prefix
         # 用于缓存 session_id -> RedisChatMessageHistory 实例
-        self._history_cache: Dict[str, RedisChatMessageHistory] = {}
+        self._history_cache: cacheDict[str, RedisChatMessageHistory] = cacheDict(max_size=50)
 
     def get_history(
         self, session_id: str
@@ -41,8 +41,9 @@ class MemoryManager:
         
         msg = HumanMessage(content=content, additional_kwargs={"timestamp": timestamp, "message_id": message_id}) if role == "user" else \
             AIMessage(content=content, additional_kwargs={"timestamp": timestamp, "message_id": message_id}) if role == "assistant" else \
-            SystemMessage(content=content, additional_kwargs={"timestamp": timestamp, "message_id": message_id})
-        await history.aadd_messages([msg])  # 直接使用异步方法
+            SystemMessage(content=content, additional_kwargs={"timestamp": timestamp, "message_id": message_id}) if role == "system" else None
+        if msg is not None:
+            await history.aadd_messages([msg])  # 直接使用异步方法
 
     async def add_messages(
         self,
@@ -53,7 +54,7 @@ class MemoryManager:
         msg_list = [
             HumanMessage(content=message.get("content"), additional_kwargs={"timestamp": message.get("timestamp"),"message_id": message.get("message_id"),}) if message.get("role") == "user" else \
             AIMessage(content=message.get("content"), additional_kwargs={"timestamp": message.get("timestamp"),"message_id": message.get("message_id"),}) if message.get("role") == "assistant" else \
-            SystemMessage(content=message.get("content"), additional_kwargs={"timestamp": message.get("timestamp"),"message_id": message.get("message_id"),})
+            SystemMessage(content=message.get("content"), additional_kwargs={"timestamp": message.get("timestamp"),"message_id": message.get("message_id"),}) if message.get("role") == "system" else None
             for message in messages
         ]
         await history.aadd_messages(list(filter(lambda x: x is not None, msg_list)))
