@@ -22,6 +22,7 @@ from typing import (
     Callable,
     Awaitable,
     Union,
+    DefaultDict
 ) # type: ignore
 
 from .exceptions import (
@@ -41,7 +42,7 @@ from .utils import (
     validate_instance
 )
 
-from .plugin import Plugin, PluginLoadType
+from .node import Node, NodeLoadType
 from ._types import BotHook
 
 HANDLED_SIGNALS = (
@@ -76,28 +77,32 @@ def is_private_message(event: dict) -> bool:
     """
     return event.get("message_type") == "private"
 
+def tree() -> DefaultDict[Any, "tree"]:
+    return defaultdict(tree)
+
 class Bot():
     config: MainConfig
     logger: Logger
     should_exit: asyncio.Event
-    plugins_tree: Dict[int, List[Type[Plugin[Any, Any, Any]]]]
-    plugin_state: Dict[str, Any]
+    nodes_tree: DefaultDict[Type[Node[Any, Any, Any]], "tree"]
+    nodes_table: Dict[str, Type[Node[Any, Any, Any]]]
+    node_state: Dict[str, Any]
     global_state: Dict[Any, Any]
 
     _condition: asyncio.Condition
 
-    _module_path_finder: ModulePathFinder  # 用于查找 plugins 的模块元路径查找器
+    _module_path_finder: ModulePathFinder  # 用于查找 nodes 的模块元路径查找器
     _raw_config_dict: Dict[str, Any]  # 原始配置字典
 
     _config_file: str | None  # 配置文件
     _config_dict: Dict[str, Any] | None  # 配置
 
-    _extend_plugins: List[
-        Type[Plugin[Any, Any, Any]] | str | Path
-    ]  # 使用 load_plugins() 方法程序化加载的插件列表
-    _extend_plugin_dirs: List[
+    _extend_nodes: List[
+        Type[Node[Any, Any, Any]] | str | Path
+    ]  # 使用 load_nodes() 方法程序化加载的节点列表
+    _extend_node_dirs: List[
         Path
-    ]  # 使用 load_plugins_from_dirs() 方法程序化加载的插件路径列表
+    ]  # 使用 load_nodes_from_dirs() 方法程序化加载的节点路径列表
 
     #钩子
     _bot_run_hooks: List[BotHook]
@@ -119,8 +124,9 @@ class Bot():
         """
         self.config = MainConfig()
         self.logger = Logger(self)
-        self.plugins_tree = defaultdict(list)
-        self.plugin_state = defaultdict(lambda: None)
+        self.nodes_tree = tree()
+        self.nodes_table = defaultdict(lambda: None)
+        self.node_state = defaultdict(lambda: None)
         self.global_state = {}
 
         self._module_path_finder = ModulePathFinder()
@@ -138,10 +144,11 @@ class Bot():
 
         #self.chat_agent = ChatAgentExecutor(self)
 
+
     @property
-    def plugins(self) -> List[Type[Plugin[Any, Any, Any]]]:
-        """当前已经加载的插件的列表。"""
-        return list(chain(*self.plugins_tree.values()))
+    def nodes(self) -> List[Type[Node[Any, Any, Any]]]:
+        """当前已经加载的节点的列表。"""
+        return list(self.nodes_table.values())
 
     def run(self) -> None:
         """启动 SekaiBot，读取配置文件并执行 bot 逻辑。"""
@@ -205,7 +212,7 @@ class Bot():
             self.should_exit.set()
     
     def _update_config(self) -> None:
-        """更新 config，合并入来自 Plugin 和 Adapter 的 Config。"""
+        """更新 config，合并入来自 Node 和 Adapter 的 Config。"""
 
         def update_config(
             source: List[Any],
@@ -230,7 +237,7 @@ class Bot():
 
         self.config = create_model(
             "Config",
-            #plugin=update_config(self.plugins, "PluginConfig", PluginConfig),
+            #node=update_config(self.nodes, "NodeConfig", NodeConfig),
             #adapter=update_config(self.adapters, "AdapterConfig", AdapterConfig),
             __base__=MainConfig,
         )(**self._raw_config_dict)
@@ -267,183 +274,211 @@ class Bot():
             self.logger.exception("Config dict parse error")
         self._update_config()
 
-    def _load_plugin_class(
+    def _load_node_class(
         self,
-        *plugin_class: Type[Plugin[Any, Any, Any]],
-        plugin_load_type: PluginLoadType,
-        plugin_file_path: str | None,
+        *node_classes: Type[Node[Any, Any, Any]],
+        node_load_type: NodeLoadType,
+        node_file_path: str | None,
     ) -> None:
-        """加载插件类。"""
-        '''priority = getattr(plugin_class, "priority", None)
+        """基于 node_classes 构建树"""
+        nodes_dict = {}
+        for node_class in node_classes:
+            node_class.__node_load_type__ = node_load_type
+            node_class.__node_file_path__ = node_file_path
+            nodes_dict[node_class.__name__] = node_class
+            
+        all_nodes = set(nodes_dict.values())
+        for _node in set(self.nodes) & all_nodes:
+            self.logger.warning(
+                "Already have a same name node", name=_node.__name__
+            )
+        all_children = set()
+        all_children.update(
+            nodes_dict[child] for node_class in node_classes for child in node_class.children if child in nodes_dict
+        )
+        roots = all_nodes - all_children
+        trees = tree()
+        def build_tree(node_class: Type[Node[Any, Any, Any]]):
+            _tree = tree()
+            for child in node_class.children:
+                if child in nodes_dict:
+                    child_node = nodes_dict[child]
+                    _tree[child] = build_tree(child_node)
+            return _tree
+        trees = {root: build_tree(root) for root in roots}
+        self.nodes_tree = trees
+
+        """加载节点类。"""
+        '''priority = getattr(node_class, "priority", None)
         if isinstance(priority, int) and priority >= 0:
-            for _plugin in self.plugins:
-                if _plugin.__name__ == plugin_class.__name__:
+            for _node in self.nodes:
+                if _node.__name__ == node_class.__name__:
                     self.logger.warning(
-                        "Already have a same name plugin", name=_plugin.__name__
+                        "Already have a same name node", name=_node.__name__
                     )
-            plugin_class.__plugin_load_type__ = plugin_load_type
-            plugin_class.__plugin_file_path__ = plugin_file_path
-            #self.plugins_tree[priority].append(plugin_class)
+            node_class.__node_load_type__ = node_load_type
+            node_class.__node_file_path__ = node_file_path
+            #self.nodes_tree[priority].append(node_class)
             self.logger.info(
-                "Succeeded to load plugin from class",
-                name=plugin_class.__name__,
-                plugin_class=plugin_class,
+                "Succeeded to load node from class",
+                name=node_class.__name__,
+                node_class=node_class,
             )
         else:
             self.logger.error(
-                "Load plugin from class failed: Plugin priority incorrect in the class",
-                plugin_class=plugin_class,
+                "Load node from class failed: Node priority incorrect in the class",
+                node_class=node_class,
             )'''
 
-    def _load_plugins_from_module_name(
+    def _load_nodes_from_module_name(
         self,
         *module_name: str,
-        plugin_load_type: PluginLoadType,
+        node_load_type: NodeLoadType,
         reload: bool = False,
     ) -> None:
-        """从模块名称中插件模块。"""
+        """从模块名称中节点模块。"""
         
-        plugin_classes: List[Tuple[Type[Plugin], ModuleType]] = []
+        node_classes: List[Tuple[Type[Node], ModuleType]] = []
         for name in module_name:
             try:
-                classes = get_classes_from_module_name(name, Plugin, reload=reload)
-                plugin_classes.extend(classes)
+                classes = get_classes_from_module_name(name, Node, reload=reload)
+                node_classes.extend(classes)
             except ImportError as e:
                 self.logger.exception("Import module failed", module_name=name)
-        if plugin_classes:
-            for plugin_class, module in plugin_classes:
-                self._load_plugin_class(
-                    plugin_class,  # type: ignore
-                    plugin_load_type,
+        if node_classes:
+            for node_class, module in node_classes:
+                self._load_node_class(
+                    node_class,  # type: ignore
+                    node_load_type,
                     module.__file__,
                 )
 
-    def _load_plugins(
+    def _load_nodes(
         self,
-        *plugins: Type[Plugin[Any, Any, Any]] | str | Path,
-        plugin_load_type: PluginLoadType | None = None,
+        *nodes: Type[Node[Any, Any, Any]] | str | Path,
+        node_load_type: NodeLoadType | None = None,
         reload: bool = False,
     ) -> None:
-        """加载插件。
+        """加载节点。
 
         Args:
-            *plugins: 插件类、插件模块名称或者插件模块文件路径。类型可以是 `Type[Plugin]`, `str` 或 `pathlib.Path`。
-                如果为 `Type[Plugin]` 类型时，将作为插件类进行加载。
-                如果为 `str` 类型时，将作为插件模块名称进行加载，格式和 Python `import` 语句相同。
-                    例如：`path.of.plugin`。
-                如果为 `pathlib.Path` 类型时，将作为插件模块文件路径进行加载。
-                    例如：`pathlib.Path("path/of/plugin")`。
-            plugin_load_type: 插件加载类型，如果为 `None` 则自动判断，否则使用指定的类型。
+            *nodes: 节点类、节点模块名称或者节点模块文件路径。类型可以是 `Type[Node]`, `str` 或 `pathlib.Path`。
+                如果为 `Type[Node]` 类型时，将作为节点类进行加载。
+                如果为 `str` 类型时，将作为节点模块名称进行加载，格式和 Python `import` 语句相同。
+                    例如：`path.of.node`。
+                如果为 `pathlib.Path` 类型时，将作为节点模块文件路径进行加载。
+                    例如：`pathlib.Path("path/of/node")`。
+            node_load_type: 节点加载类型，如果为 `None` 则自动判断，否则使用指定的类型。
             reload: 是否重新加载模块。
         """
-        plugin_classes = []
+        node_classes = []
         module_names = []
         
-        for plugin_ in plugins:
+        for node_ in nodes:
             try:
-                if isinstance(plugin_, type) and issubclass(plugin_, Plugin):
-                    # 插件类直接加入列表
-                    plugin_classes.append(plugin_)
-                elif isinstance(plugin_, str):
+                if isinstance(node_, type) and issubclass(node_, Node):
+                    # 节点类直接加入列表
+                    node_classes.append(node_)
+                elif isinstance(node_, str):
                     # 字符串直接作为模块名称加入列表
-                    self.logger.info("Loading plugins from module", module_name=plugin_)
-                    module_names.append(plugin_)
-                elif isinstance(plugin_, Path):
-                    self.logger.info("Loading plugins from path", path=plugin_)
-                    if not plugin_.is_file():
+                    self.logger.info("Loading nodes from module", module_name=node_)
+                    module_names.append(node_)
+                elif isinstance(node_, Path):
+                    self.logger.info("Loading nodes from path", path=node_)
+                    if not node_.is_file():
                         raise LoadModuleError(
-                            f'The plugin path "{plugin_}" must be a file'
+                            f'The node path "{node_}" must be a file'
                         )
-                    if plugin_.suffix != ".py":
+                    if node_.suffix != ".py":
                         raise LoadModuleError(
-                            f'The path "{plugin_}" must endswith ".py"'
+                            f'The path "{node_}" must endswith ".py"'
                         )
         
-                    plugin_module_name = None
+                    node_module_name = None
                     for path in self._module_path_finder.path:
                         try:
-                            if plugin_.stem == "__init__":
-                                if plugin_.resolve().parent.parent.samefile(Path(path)):
-                                    plugin_module_name = plugin_.resolve().parent.name
+                            if node_.stem == "__init__":
+                                if node_.resolve().parent.parent.samefile(Path(path)):
+                                    node_module_name = node_.resolve().parent.name
                                     break
-                            elif plugin_.resolve().parent.samefile(Path(path)):
-                                plugin_module_name = plugin_.stem
+                            elif node_.resolve().parent.samefile(Path(path)):
+                                node_module_name = node_.stem
                                 break
                         except OSError:
                             continue
-                    if plugin_module_name is None:
-                        rel_path = plugin_.resolve().relative_to(Path().resolve())
+                    if node_module_name is None:
+                        rel_path = node_.resolve().relative_to(Path().resolve())
                         if rel_path.stem == "__init__":
-                            plugin_module_name = ".".join(rel_path.parts[:-1])
+                            node_module_name = ".".join(rel_path.parts[:-1])
                         else:
-                            plugin_module_name = ".".join(rel_path.parts[:-1] + (rel_path.stem,))
+                            node_module_name = ".".join(rel_path.parts[:-1] + (rel_path.stem,))
         
-                    module_names.append(plugin_module_name)
+                    module_names.append(node_module_name)
                 else:
-                    raise TypeError(f"{plugin_} can not be loaded as plugin")
+                    raise TypeError(f"{node_} can not be loaded as node")
             except Exception:
-                self.logger.exception("Load plugin failed:", plugin=plugin_)
+                self.logger.exception("Load node failed:", node=node_)
         
-        # 如果有插件类，则调用新的 _load_plugin_class 批量加载
-        if plugin_classes:
-            self._load_plugin_class(
-                *plugin_classes,
-                plugin_load_type=plugin_load_type or PluginLoadType.CLASS,
-                plugin_file_path=None
+        # 如果有节点类，则调用新的 _load_node_class 批量加载
+        if node_classes:
+            self._load_node_class(
+                *node_classes,
+                node_load_type=node_load_type or NodeLoadType.CLASS,
+                node_file_path=None
             )
         
-        # 如果有模块名称，则调用新的 _load_plugins_from_module_name 批量加载
+        # 如果有模块名称，则调用新的 _load_nodes_from_module_name 批量加载
         if module_names:
-            self._load_plugins_from_module_name(
+            self._load_nodes_from_module_name(
                 *module_names,
-                plugin_load_type=plugin_load_type or PluginLoadType.NAME,
+                node_load_type=node_load_type or NodeLoadType.NAME,
                 reload=reload
             )
 
-    def load_plugins(
-        self, *plugins: Type[Plugin[Any, Any, Any]] | str | Path
+    def load_nodes(
+        self, *nodes: Type[Node[Any, Any, Any]] | str | Path
     ) -> None:
-        """加载插件。
+        """加载节点。
 
         Args:
-            *plugins: 插件类、插件模块名称或者插件模块文件路径。
-                类型可以是 `Type[Plugin]`, `str` 或 `pathlib.Path`。
-                如果为 `Type[Plugin]` 类型时，将作为插件类进行加载。
-                如果为 `str` 类型时，将作为插件模块名称进行加载，格式和 Python `import` 语句相同。
-                    例如：`path.of.plugin`。
-                如果为 `pathlib.Path` 类型时，将作为插件模块文件路径进行加载。
-                    例如：`pathlib.Path("path/of/plugin")`。
+            *nodes: 节点类、节点模块名称或者节点模块文件路径。
+                类型可以是 `Type[Node]`, `str` 或 `pathlib.Path`。
+                如果为 `Type[Node]` 类型时，将作为节点类进行加载。
+                如果为 `str` 类型时，将作为节点模块名称进行加载，格式和 Python `import` 语句相同。
+                    例如：`path.of.node`。
+                如果为 `pathlib.Path` 类型时，将作为节点模块文件路径进行加载。
+                    例如：`pathlib.Path("path/of/node")`。
         """
-        self._extend_plugins.extend(plugins)
-        return self._load_plugins(*plugins)
+        self._extend_nodes.extend(nodes)
+        return self._load_nodes(*nodes)
 
-    def _load_plugins_from_dirs(self, *dirs: Path) -> None:
-        """从目录中加载插件，以 `_` 开头的模块中的插件不会被导入。路径可以是相对路径或绝对路径。
+    def _load_nodes_from_dirs(self, *dirs: Path) -> None:
+        """从目录中加载节点，以 `_` 开头的模块中的节点不会被导入。路径可以是相对路径或绝对路径。
 
         Args:
-            *dirs: 储存包含插件的模块的模块路径。
-                例如：`pathlib.Path("path/of/plugins/")` 。
+            *dirs: 储存包含节点的模块的模块路径。
+                例如：`pathlib.Path("path/of/nodes/")` 。
         """
         dir_list = [str(x.resolve()) for x in dirs]
-        self.logger.info("Loading plugins from dirs", dirs=", ".join(map(str, dir_list)))
+        self.logger.info("Loading nodes from dirs", dirs=", ".join(map(str, dir_list)))
         self._module_path_finder.path.extend(dir_list)
         module_name = list(
             filter(lambda name: not name.startswith("_"), 
                 (module_info.name for module_info in pkgutil.iter_modules(dir_list)))
         )
-        self._load_plugins_from_module_name(
-            *module_name, plugin_load_type=PluginLoadType.DIR
+        self._load_nodes_from_module_name(
+            *module_name, node_load_type=NodeLoadType.DIR
         )
 
-    def load_plugins_from_dirs(self, *dirs: Path) -> None:
-        """从目录中加载插件，以 `_` 开头的模块中的插件不会被导入。路径可以是相对路径或绝对路径。
+    def load_nodes_from_dirs(self, *dirs: Path) -> None:
+        """从目录中加载节点，以 `_` 开头的模块中的节点不会被导入。路径可以是相对路径或绝对路径。
 
         Args:
-            *dirs: 储存包含插件的模块的模块路径。
-                例如：`pathlib.Path("path/of/plugins/")` 。
+            *dirs: 储存包含节点的模块的模块路径。
+                例如：`pathlib.Path("path/of/nodes/")` 。
         """
-        self._extend_plugin_dirs.extend(dirs)
-        self._load_plugins_from_dirs(*dirs)
+        self._extend_node_dirs.extend(dirs)
+        self._load_nodes_from_dirs(*dirs)
 
 
     def bot_run_hook(self, func: BotHook) -> BotHook:

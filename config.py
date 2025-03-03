@@ -17,7 +17,7 @@ __all__ = [
     "ConfigModel",
     "LogConfig",
     "BotConfig",
-    "PluginConfig",
+    "NodeConfig",
     "AdapterConfig",
     "MainConfig",
 ]
@@ -161,10 +161,14 @@ class DatabaseConfig(ConfigModel):
     """
     config: DatabaseConfigType
 
+class NodeConfig(ConfigModel):
+    """节点配置。"""
+
 
 
 class MainConfig(ConfigModel):
     """SekaiBot 主体配置。"""
     bot: BotConfig = BotConfig()
     agent: AgentConfig = AgentConfig()
+    node: NodeConfig = NodeConfig()
     database: DatabaseConfig = DatabaseConfig()

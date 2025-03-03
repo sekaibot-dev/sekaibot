@@ -16,17 +16,17 @@ __all__ = [
 
 
 class EventException(BaseException):
-    """事件处理过程中由插件抛出的异常，用于控制事件的传播，会被 SekaiBot 自动捕获并处理。"""
+    """事件处理过程中由节点抛出的异常，用于控制事件的传播，会被 SekaiBot 自动捕获并处理。"""
 
 
 class SkipException(EventException):
-    """跳过当前插件继续当前事件传播。"""
+    """跳过当前节点继续当前事件传播。"""
 
 
 class JumpToException(EventException):
-    """跳转到特定插件并将事件转发到该插件。"""
-    def __init__(self, plugin):
-        self.plugin = plugin
+    """跳转到特定节点并将事件转发到该节点。"""
+    def __init__(self, node):
+        self.node = node
 
 
 class PruningException(EventException):

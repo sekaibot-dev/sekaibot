@@ -19,10 +19,12 @@ if TYPE_CHECKING:
     from .config import ConfigModel
 
 __all__ = [
+    "StateT",
     "ConfigT",
     "BotHook"
 ]
 
+StateT = TypeVar("StateT")
 ConfigT = TypeVar("ConfigT", bound=Optional["ConfigModel"])
 
 BotHook = Callable[["Bot"], Awaitable[None]]
