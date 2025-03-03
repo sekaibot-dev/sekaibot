@@ -1,7 +1,10 @@
 import asyncio
 import signal
+import pkgutil
 import threading
 import json
+from collections import defaultdict
+from itertools import chain
 from config import ConfigModel, MainConfig
 from log import Logger
 from core.agent_executor import ChatAgentExecutor
@@ -21,18 +24,24 @@ from typing import (
     Union,
 ) # type: ignore
 
+from .exceptions import (
+    LoadModuleError,
+)
+
 from pydantic import (
     ValidationError,
     create_model,  # pyright: ignore[reportUnknownVariableType]
 )
 from .utils import (
     ModulePathFinder,
+    ModuleType,
     get_classes_from_module_name,
     is_config_class,
     samefile,
     validate_instance
 )
 
+from .plugin import Plugin, PluginLoadType
 from ._types import BotHook
 
 HANDLED_SIGNALS = (
@@ -71,6 +80,8 @@ class Bot():
     config: MainConfig
     logger: Logger
     should_exit: asyncio.Event
+    plugins_tree: Dict[int, List[Type[Plugin[Any, Any, Any]]]]
+    plugin_state: Dict[str, Any]
     global_state: Dict[Any, Any]
 
     _condition: asyncio.Condition
@@ -80,6 +91,13 @@ class Bot():
 
     _config_file: str | None  # 配置文件
     _config_dict: Dict[str, Any] | None  # 配置
+
+    _extend_plugins: List[
+        Type[Plugin[Any, Any, Any]] | str | Path
+    ]  # 使用 load_plugins() 方法程序化加载的插件列表
+    _extend_plugin_dirs: List[
+        Path
+    ]  # 使用 load_plugins_from_dirs() 方法程序化加载的插件路径列表
 
     #钩子
     _bot_run_hooks: List[BotHook]
@@ -101,6 +119,8 @@ class Bot():
         """
         self.config = MainConfig()
         self.logger = Logger(self)
+        self.plugins_tree = defaultdict(list)
+        self.plugin_state = defaultdict(lambda: None)
         self.global_state = {}
 
         self._module_path_finder = ModulePathFinder()
@@ -117,6 +137,11 @@ class Bot():
         sys.meta_path.insert(0, self._module_path_finder)
 
         #self.chat_agent = ChatAgentExecutor(self)
+
+    @property
+    def plugins(self) -> List[Type[Plugin[Any, Any, Any]]]:
+        """当前已经加载的插件的列表。"""
+        return list(chain(*self.plugins_tree.values()))
 
     def run(self) -> None:
         """启动 SekaiBot，读取配置文件并执行 bot 逻辑。"""
@@ -241,6 +266,185 @@ class Bot():
             self.config = MainConfig()
             self.logger.exception("Config dict parse error")
         self._update_config()
+
+    def _load_plugin_class(
+        self,
+        *plugin_class: Type[Plugin[Any, Any, Any]],
+        plugin_load_type: PluginLoadType,
+        plugin_file_path: str | None,
+    ) -> None:
+        """加载插件类。"""
+        '''priority = getattr(plugin_class, "priority", None)
+        if isinstance(priority, int) and priority >= 0:
+            for _plugin in self.plugins:
+                if _plugin.__name__ == plugin_class.__name__:
+                    self.logger.warning(
+                        "Already have a same name plugin", name=_plugin.__name__
+                    )
+            plugin_class.__plugin_load_type__ = plugin_load_type
+            plugin_class.__plugin_file_path__ = plugin_file_path
+            #self.plugins_tree[priority].append(plugin_class)
+            self.logger.info(
+                "Succeeded to load plugin from class",
+                name=plugin_class.__name__,
+                plugin_class=plugin_class,
+            )
+        else:
+            self.logger.error(
+                "Load plugin from class failed: Plugin priority incorrect in the class",
+                plugin_class=plugin_class,
+            )'''
+
+    def _load_plugins_from_module_name(
+        self,
+        *module_name: str,
+        plugin_load_type: PluginLoadType,
+        reload: bool = False,
+    ) -> None:
+        """从模块名称中插件模块。"""
+        
+        plugin_classes: List[Tuple[Type[Plugin], ModuleType]] = []
+        for name in module_name:
+            try:
+                classes = get_classes_from_module_name(name, Plugin, reload=reload)
+                plugin_classes.extend(classes)
+            except ImportError as e:
+                self.logger.exception("Import module failed", module_name=name)
+        if plugin_classes:
+            for plugin_class, module in plugin_classes:
+                self._load_plugin_class(
+                    plugin_class,  # type: ignore
+                    plugin_load_type,
+                    module.__file__,
+                )
+
+    def _load_plugins(
+        self,
+        *plugins: Type[Plugin[Any, Any, Any]] | str | Path,
+        plugin_load_type: PluginLoadType | None = None,
+        reload: bool = False,
+    ) -> None:
+        """加载插件。
+
+        Args:
+            *plugins: 插件类、插件模块名称或者插件模块文件路径。类型可以是 `Type[Plugin]`, `str` 或 `pathlib.Path`。
+                如果为 `Type[Plugin]` 类型时，将作为插件类进行加载。
+                如果为 `str` 类型时，将作为插件模块名称进行加载，格式和 Python `import` 语句相同。
+                    例如：`path.of.plugin`。
+                如果为 `pathlib.Path` 类型时，将作为插件模块文件路径进行加载。
+                    例如：`pathlib.Path("path/of/plugin")`。
+            plugin_load_type: 插件加载类型，如果为 `None` 则自动判断，否则使用指定的类型。
+            reload: 是否重新加载模块。
+        """
+        plugin_classes = []
+        module_names = []
+        
+        for plugin_ in plugins:
+            try:
+                if isinstance(plugin_, type) and issubclass(plugin_, Plugin):
+                    # 插件类直接加入列表
+                    plugin_classes.append(plugin_)
+                elif isinstance(plugin_, str):
+                    # 字符串直接作为模块名称加入列表
+                    self.logger.info("Loading plugins from module", module_name=plugin_)
+                    module_names.append(plugin_)
+                elif isinstance(plugin_, Path):
+                    self.logger.info("Loading plugins from path", path=plugin_)
+                    if not plugin_.is_file():
+                        raise LoadModuleError(
+                            f'The plugin path "{plugin_}" must be a file'
+                        )
+                    if plugin_.suffix != ".py":
+                        raise LoadModuleError(
+                            f'The path "{plugin_}" must endswith ".py"'
+                        )
+        
+                    plugin_module_name = None
+                    for path in self._module_path_finder.path:
+                        try:
+                            if plugin_.stem == "__init__":
+                                if plugin_.resolve().parent.parent.samefile(Path(path)):
+                                    plugin_module_name = plugin_.resolve().parent.name
+                                    break
+                            elif plugin_.resolve().parent.samefile(Path(path)):
+                                plugin_module_name = plugin_.stem
+                                break
+                        except OSError:
+                            continue
+                    if plugin_module_name is None:
+                        rel_path = plugin_.resolve().relative_to(Path().resolve())
+                        if rel_path.stem == "__init__":
+                            plugin_module_name = ".".join(rel_path.parts[:-1])
+                        else:
+                            plugin_module_name = ".".join(rel_path.parts[:-1] + (rel_path.stem,))
+        
+                    module_names.append(plugin_module_name)
+                else:
+                    raise TypeError(f"{plugin_} can not be loaded as plugin")
+            except Exception:
+                self.logger.exception("Load plugin failed:", plugin=plugin_)
+        
+        # 如果有插件类，则调用新的 _load_plugin_class 批量加载
+        if plugin_classes:
+            self._load_plugin_class(
+                *plugin_classes,
+                plugin_load_type=plugin_load_type or PluginLoadType.CLASS,
+                plugin_file_path=None
+            )
+        
+        # 如果有模块名称，则调用新的 _load_plugins_from_module_name 批量加载
+        if module_names:
+            self._load_plugins_from_module_name(
+                *module_names,
+                plugin_load_type=plugin_load_type or PluginLoadType.NAME,
+                reload=reload
+            )
+
+    def load_plugins(
+        self, *plugins: Type[Plugin[Any, Any, Any]] | str | Path
+    ) -> None:
+        """加载插件。
+
+        Args:
+            *plugins: 插件类、插件模块名称或者插件模块文件路径。
+                类型可以是 `Type[Plugin]`, `str` 或 `pathlib.Path`。
+                如果为 `Type[Plugin]` 类型时，将作为插件类进行加载。
+                如果为 `str` 类型时，将作为插件模块名称进行加载，格式和 Python `import` 语句相同。
+                    例如：`path.of.plugin`。
+                如果为 `pathlib.Path` 类型时，将作为插件模块文件路径进行加载。
+                    例如：`pathlib.Path("path/of/plugin")`。
+        """
+        self._extend_plugins.extend(plugins)
+        return self._load_plugins(*plugins)
+
+    def _load_plugins_from_dirs(self, *dirs: Path) -> None:
+        """从目录中加载插件，以 `_` 开头的模块中的插件不会被导入。路径可以是相对路径或绝对路径。
+
+        Args:
+            *dirs: 储存包含插件的模块的模块路径。
+                例如：`pathlib.Path("path/of/plugins/")` 。
+        """
+        dir_list = [str(x.resolve()) for x in dirs]
+        self.logger.info("Loading plugins from dirs", dirs=", ".join(map(str, dir_list)))
+        self._module_path_finder.path.extend(dir_list)
+        module_name = list(
+            filter(lambda name: not name.startswith("_"), 
+                (module_info.name for module_info in pkgutil.iter_modules(dir_list)))
+        )
+        self._load_plugins_from_module_name(
+            *module_name, plugin_load_type=PluginLoadType.DIR
+        )
+
+    def load_plugins_from_dirs(self, *dirs: Path) -> None:
+        """从目录中加载插件，以 `_` 开头的模块中的插件不会被导入。路径可以是相对路径或绝对路径。
+
+        Args:
+            *dirs: 储存包含插件的模块的模块路径。
+                例如：`pathlib.Path("path/of/plugins/")` 。
+        """
+        self._extend_plugin_dirs.extend(dirs)
+        self._load_plugins_from_dirs(*dirs)
+
 
     def bot_run_hook(self, func: BotHook) -> BotHook:
         """注册一个 Bot 启动时的函数。
