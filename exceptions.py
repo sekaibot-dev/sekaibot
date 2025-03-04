@@ -25,7 +25,8 @@ class SkipException(EventException):
 
 class JumpToException(EventException):
     """跳转到特定节点并将事件转发到该节点。"""
-    def __init__(self, node):
+    node: str
+    def __init__(self, node: str):
         self.node = node
 
 

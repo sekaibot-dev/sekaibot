@@ -19,14 +19,17 @@ if TYPE_CHECKING:
     from typing import Any # type: ignore
     from .bot import Bot
     from .config import ConfigModel
+    from .event import Event
 
 __all__ = [
     "TreeType",
+    "EventT",
     "StateT",
     "ConfigT",
     "BotHook"
 ]
 
+EventT = TypeVar("EventT", bound="Event")
 StateT = TypeVar("StateT")
 ConfigT = TypeVar("ConfigT", bound=Optional["ConfigModel"])
 

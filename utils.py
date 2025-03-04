@@ -39,6 +39,7 @@ from typing_extensions import ParamSpec, TypeAlias, TypeGuard
 from pydantic import BaseModel
 
 from .config import ConfigModel
+from ._types import EventT
 
 if TYPE_CHECKING:
     from os import PathLike
@@ -332,6 +333,22 @@ async def sync_ctx_manager_wrapper(
     else:
         await sync_func_wrapper(cm.__exit__, to_thread=to_thread)(None, None, None)
 
+def wrap_get_func(
+    func: Optional[Callable[[EventT], Union[bool, Awaitable[bool]]]],
+) -> Callable[[EventT], Awaitable[bool]]:
+    """将 `get()` 函数接受的参数包装为一个异步函数。
+
+    Args:
+        func: `get()` 函数接受的参数。
+
+    Returns:
+        异步函数。
+    """
+    if func is None:
+        return sync_func_wrapper(lambda _: True)
+    if not asyncio.iscoroutinefunction(func):
+        return sync_func_wrapper(func)  # type: ignore
+    return func
 
 if sys.version_info >= (3, 10):  # pragma: no cover
     from inspect import get_annotations

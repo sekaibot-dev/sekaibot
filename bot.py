@@ -3,7 +3,7 @@ import signal
 import pkgutil
 import threading
 import json
-from collections import defaultdict
+
 from itertools import chain
 from config import ConfigModel, MainConfig, NodeConfig
 from log import Logger
@@ -85,7 +85,6 @@ class Bot():
     should_exit: asyncio.Event
     nodes_tree: TreeType[Type[Node[Any, Any, Any]]]
     nodes_list: List[Tuple[Type[Node[Any, Any, Any]], int]]
-    node_state: Dict[str, Any]
     global_state: Dict[Any, Any]
 
     _condition: asyncio.Condition
@@ -125,7 +124,6 @@ class Bot():
         self.logger = Logger(self)
         self.nodes_tree = {}
         self.nodes_list = []
-        self.node_state = defaultdict(lambda: None)
         self.global_state = {}
 
         self._module_path_finder = ModulePathFinder()
@@ -175,8 +173,13 @@ class Bot():
         # 加载配置文件
         self._reload_config_dict()
 
-        # 启动 KafuBot
-        self.logger.info("Running KafuBot...")
+        # 加载节点
+        self._load_nodes_from_dirs(*self.config.bot.node_dirs)
+        self._load_nodes(*self.config.bot.nodes)
+        self._update_config()
+
+        # 启动 SekaiBot
+        self.logger.info("Running SekaiBot...")
 
         #执行启动钩子
         for bot_run_hook_func in self._bot_run_hooks:
@@ -206,9 +209,9 @@ class Bot():
         
     def _handle_exit(self, *_args: Any):
         """当机器人收到退出信号时，根据情况进行处理。"""
-        self.logger.info("Stopping KafuBot...")
+        self.logger.info("Stopping SekaiBot...")
         if self.should_exit.is_set():
-            self.logger.warning("Force Exit KafuBot...")
+            self.logger.warning("Force Exit SekaiBot...")
             sys.exit()
         else:
             self.should_exit.set()
