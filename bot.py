@@ -5,7 +5,7 @@ import threading
 import json
 from collections import defaultdict
 from itertools import chain
-from config import ConfigModel, MainConfig
+from config import ConfigModel, MainConfig, NodeConfig
 from log import Logger
 from core.agent_executor import ChatAgentExecutor
 import sys
@@ -36,6 +36,8 @@ from pydantic import (
 from .utils import (
     ModulePathFinder,
     ModuleType,
+    TreeType,
+    flatten_tree_with_jumps,
     get_classes_from_module_name,
     is_config_class,
     samefile,
@@ -77,15 +79,12 @@ def is_private_message(event: dict) -> bool:
     """
     return event.get("message_type") == "private"
 
-def tree() -> DefaultDict[Any, "tree"]:
-    return defaultdict(tree)
-
 class Bot():
     config: MainConfig
     logger: Logger
     should_exit: asyncio.Event
-    nodes_tree: DefaultDict[Type[Node[Any, Any, Any]], "tree"]
-    nodes_table: Dict[str, Type[Node[Any, Any, Any]]]
+    nodes_tree: TreeType[Type[Node[Any, Any, Any]]]
+    nodes_list: List[Tuple[Type[Node[Any, Any, Any]], int]]
     node_state: Dict[str, Any]
     global_state: Dict[Any, Any]
 
@@ -124,8 +123,8 @@ class Bot():
         """
         self.config = MainConfig()
         self.logger = Logger(self)
-        self.nodes_tree = tree()
-        self.nodes_table = defaultdict(lambda: None)
+        self.nodes_tree = {}
+        self.nodes_list = []
         self.node_state = defaultdict(lambda: None)
         self.global_state = {}
 
@@ -148,7 +147,10 @@ class Bot():
     @property
     def nodes(self) -> List[Type[Node[Any, Any, Any]]]:
         """当前已经加载的节点的列表。"""
-        return list(self.nodes_table.values())
+        if self.nodes_tree and not self.nodes_list:
+            self.nodes_list = flatten_tree_with_jumps(self.nodes_tree)
+
+        return [_node for _node, _ in self.nodes_list]
 
     def run(self) -> None:
         """启动 SekaiBot，读取配置文件并执行 bot 逻辑。"""
@@ -215,7 +217,7 @@ class Bot():
         """更新 config，合并入来自 Node 和 Adapter 的 Config。"""
 
         def update_config(
-            source: List[Any],
+            source: List[Type[Node[Any, Any, Any]]],
             name: str,
             base: Type[ConfigModel],
         ) -> Tuple[Type[ConfigModel], ConfigModel]:
@@ -237,12 +239,11 @@ class Bot():
 
         self.config = create_model(
             "Config",
-            #node=update_config(self.nodes, "NodeConfig", NodeConfig),
-            #adapter=update_config(self.adapters, "AdapterConfig", AdapterConfig),
+            node=update_config(self.nodes, "NodeConfig", NodeConfig),
             __base__=MainConfig,
         )(**self._raw_config_dict)
 
-        self.logger._load_logger()
+        self.logger._reload_logger()
 
     def _reload_config_dict(self) -> None:
         """重新加载配置文件。"""
@@ -272,63 +273,41 @@ class Bot():
         except ValidationError:
             self.config = MainConfig()
             self.logger.exception("Config dict parse error")
+        
         self._update_config()
 
-    def _load_node_class(
+    def _load_node_classes(
         self,
-        *node_classes: Type[Node[Any, Any, Any]],
-        node_load_type: NodeLoadType,
-        node_file_path: str | None,
+        *nodes: Tuple[Type[Node[Any, Any, Any]], NodeLoadType, str | None],
     ) -> None:
-        """基于 node_classes 构建树"""
-        nodes_dict = {}
-        for node_class in node_classes:
-            node_class.__node_load_type__ = node_load_type
-            node_class.__node_file_path__ = node_file_path
+        """加载节点类，并构建树"""
+        nodes_dict: Dict[str, Type[Node[Any, Any, Any]]] = {
+            _node.__name__: _node for _node in (self.nodes or [])
+        }
+        for node_class, load_type, file_path in nodes:
+            node_class.__node_load_type__ = load_type
+            node_class.__node_file_path__ = file_path
+            if node_class.__name__ in nodes_dict:
+                self.logger.warning(
+                    "Already have a same name node", name=node_class.__name__
+                )
             nodes_dict[node_class.__name__] = node_class
-            
-        all_nodes = set(nodes_dict.values())
-        for _node in set(self.nodes) & all_nodes:
-            self.logger.warning(
-                "Already have a same name node", name=_node.__name__
-            )
-        all_children = set()
-        all_children.update(
-            nodes_dict[child] for node_class in node_classes for child in node_class.children if child in nodes_dict
-        )
-        roots = all_nodes - all_children
-        trees = tree()
-        def build_tree(node_class: Type[Node[Any, Any, Any]]):
-            _tree = tree()
-            for child in node_class.children:
-                if child in nodes_dict:
-                    child_node = nodes_dict[child]
-                    _tree[child] = build_tree(child_node)
-            return _tree
-        trees = {root: build_tree(root) for root in roots}
-        self.nodes_tree = trees
 
-        """加载节点类。"""
-        '''priority = getattr(node_class, "priority", None)
-        if isinstance(priority, int) and priority >= 0:
-            for _node in self.nodes:
-                if _node.__name__ == node_class.__name__:
-                    self.logger.warning(
-                        "Already have a same name node", name=_node.__name__
-                    )
-            node_class.__node_load_type__ = node_load_type
-            node_class.__node_file_path__ = node_file_path
-            #self.nodes_tree[priority].append(node_class)
+        all_nodes = set(nodes_dict.values())
+        all_children = {nodes_dict[child] for node_class in all_nodes for child in node_class.children if child in nodes_dict}
+
+        def build_tree(node_class: Type[Node[Any, Any, Any]]) -> Dict[str, Any]:
+            return {child: build_tree(nodes_dict[child]) for child in node_class.children if child in nodes_dict}
+        
+        roots = all_nodes - all_children
+        self.nodes_tree = {root: build_tree(root) for root in roots}
+        self.nodes_list = flatten_tree_with_jumps(self.nodes_tree)
+        for _node, _, _ in nodes:
             self.logger.info(
                 "Succeeded to load node from class",
-                name=node_class.__name__,
-                node_class=node_class,
+                name=_node.__name__,
+                node_class=_node,
             )
-        else:
-            self.logger.error(
-                "Load node from class failed: Node priority incorrect in the class",
-                node_class=node_class,
-            )'''
 
     def _load_nodes_from_module_name(
         self,
@@ -346,12 +325,8 @@ class Bot():
             except ImportError as e:
                 self.logger.exception("Import module failed", module_name=name)
         if node_classes:
-            for node_class, module in node_classes:
-                self._load_node_class(
-                    node_class,  # type: ignore
-                    node_load_type,
-                    module.__file__,
-                )
+            nodes = [(node_class, node_load_type, module.__file__) for node_class, module in node_classes]
+            self._load_node_classes(*nodes)
 
     def _load_nodes(
         self,
@@ -421,11 +396,8 @@ class Bot():
         
         # 如果有节点类，则调用新的 _load_node_class 批量加载
         if node_classes:
-            self._load_node_class(
-                *node_classes,
-                node_load_type=node_load_type or NodeLoadType.CLASS,
-                node_file_path=None
-            )
+            nodes = [(node_class, node_load_type or NodeLoadType.CLASS, None) for node_class in node_classes]
+            self._load_node_classes(*nodes)
         
         # 如果有模块名称，则调用新的 _load_nodes_from_module_name 批量加载
         if module_names:

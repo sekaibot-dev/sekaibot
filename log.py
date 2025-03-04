@@ -19,7 +19,8 @@ class Logger:
         self.bot = bot
         self.logger = get_logger()
 
-    def _load_logger(self):
+    def _reload_logger(self):
+        """重载logger。"""
         if self.bot.config.bot.log is not None:
             log_level = 0
             if isinstance(self.bot.config.bot.log.level, int):

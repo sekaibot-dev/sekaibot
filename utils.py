@@ -62,6 +62,7 @@ _R = TypeVar("_R")
 _TypeT = TypeVar("_TypeT", bound=Type[Any])
 
 StrOrBytesPath: TypeAlias = Union[str, bytes, "PathLike[str]", "PathLike[bytes]"]
+TreeType = Dict[_T, Union[Any, "TreeType"]]
 
 
 class ModulePathFinder(MetaPathFinder):
@@ -185,6 +186,74 @@ def get_classes_from_module_name(
         raise
     except BaseException as e:
         raise ImportError(e, traceback.format_exc()) from e
+
+
+def flatten_tree_with_jumps(
+    tree: TreeType[_T]
+) -> List[Tuple[_T, int]]:
+    """将树按深度优先遍历展开，并计算剪枝后跳转索引。
+
+    该函数遍历给定的树结构，并按深度优先遍历顺序生成节点列表。
+    同时，为每个节点计算在剪枝后应跳转的索引，以便提高运行性能。
+
+    适用于运行树，其中每个节点可能执行剪枝操作，剪枝后跳转到最近的兄弟节点，
+    如果没有兄弟节点，则跳转到父节点的下一个兄弟节点。若无可跳转位置，则跳转至 -1（表示终止）。
+
+    Args:
+        tree: 一个字典形式的树，键代表节点，值可以是子树（字典）或叶子节点。
+
+    Returns:
+        一个列表，每个元素是一个元组 (节点, 剪枝后跳转索引)
+        其中剪枝后跳转索引指向下一个可执行的节点，-1 表示无可跳转位置。
+    """
+    ordered_nodes: List[_T] = []  # 存储深度优先遍历顺序
+    parent_map: Dict[_T, Union[_T, None]] = {}  # 记录每个节点的父节点
+    children_map: Dict[Union[_T, None], List[_T]] = {}  # 记录每个节点的所有子节点
+
+    def dfs(node_dict: TreeType[_T], parent: Union[_T, None] = None) -> None:
+        """深度优先遍历树，构建 parent_map 和 children_map"""
+        for key, value in node_dict.items():
+            ordered_nodes.append(key)
+            parent_map[key] = parent  # 记录父节点
+            children_map.setdefault(parent, []).append(key)  # 记录子节点
+            if isinstance(value, dict):  # 递归遍历子节点
+                dfs(value, key)
+
+    dfs(tree)
+
+    def build_jump_map() -> Dict[_T, int]:
+        """构建剪枝跳转映射，计算每个节点剪枝后的跳转索引"""
+        jump_map: Dict[_T, int] = {node: -1 for node in ordered_nodes}  # 默认剪枝后都终止
+
+        for i in range(len(ordered_nodes) - 1, -1, -1):
+            node: _T = ordered_nodes[i]
+            parent: Union[_T, None] = parent_map.get(node)
+
+            # 获取兄弟节点
+            siblings: List[_T] = children_map.get(parent, [])
+            node_pos: int = siblings.index(node)
+
+            # 如果有兄弟节点，跳到最近的兄弟
+            if node_pos + 1 < len(siblings):
+                jump_map[node] = ordered_nodes.index(siblings[node_pos + 1])
+            else:
+                # 回溯父节点的兄弟节点
+                temp_parent: Union[_T, None] = parent
+                while temp_parent is not None:
+                    parent_siblings: List[_T] = children_map.get(parent_map.get(temp_parent), [])
+                    if temp_parent in parent_siblings:
+                        temp_pos: int = parent_siblings.index(temp_parent)
+                        if temp_pos + 1 < len(parent_siblings):  # 父节点有兄弟
+                            jump_map[node] = ordered_nodes.index(parent_siblings[temp_pos + 1])
+                            break
+                    temp_parent = parent_map.get(temp_parent)  # 继续向上回溯
+
+        return jump_map
+
+    jump_map: Dict[_T, int] = build_jump_map()
+
+    # 构造最终列表
+    return [(node, jump_map[node]) for node in ordered_nodes]
 
 
 class PydanticEncoder(json.JSONEncoder):

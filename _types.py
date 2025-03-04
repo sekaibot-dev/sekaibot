@@ -1,5 +1,6 @@
 from typing import (
     TYPE_CHECKING, 
+    Dict,
     Awaitable, 
     Callable, 
     Optional, 
@@ -11,6 +12,7 @@ from typing import (
     final,
     overload,
     override, 
+    TypeAlias
 ) # type: ignore
 
 if TYPE_CHECKING:
@@ -19,6 +21,7 @@ if TYPE_CHECKING:
     from .config import ConfigModel
 
 __all__ = [
+    "TreeType",
     "StateT",
     "ConfigT",
     "BotHook"
