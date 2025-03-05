@@ -24,9 +24,9 @@ from typing_extensions import Annotated, get_args, get_origin
 
 from .config import ConfigModel
 from .dependencies import Depends
-#from .event import Info, Comm
+from .event import Event
 from .exceptions import SkipException, JumpToException, PruningException, StopException
-from ._types import ConfigT, CommT, InfoT, StateT
+from ._types import ConfigT, EventT, StateT
 from .utils import is_config_class
 
 if TYPE_CHECKING:
@@ -44,7 +44,7 @@ class NodeLoadType(Enum):
     CLASS = "class"
 
 
-class Node(ABC, Generic[StateT, ConfigT]):
+class Node(ABC, Generic[EventT, StateT, ConfigT]):
     """所有 KafuBot 节点的基类。
 
     Attributes:
@@ -57,6 +57,7 @@ class Node(ABC, Generic[StateT, ConfigT]):
     """
 
     children: List[str] = 0
+    event_type: ClassVar[Optional[str | Type[Event]]] = None
     block: ClassVar[bool] = False
 
     # 不能使用 ClassVar 因为 PEP 526 不允许这样做
@@ -93,8 +94,8 @@ class Node(ABC, Generic[StateT, ConfigT]):
             origin_class = get_origin(orig_base)
             if inspect.isclass(origin_class) and issubclass(origin_class, Node):
                 try:
-                    _info_t, state_t, config_t = cast(
-                        Tuple[InfoT, StateT, ConfigT], get_args(orig_base)
+                    _event_t, state_t, config_t = cast(
+                        Tuple[EventT, StateT, ConfigT], get_args(orig_base)
                     )
                 except ValueError:  # pragma: no cover
                     continue

@@ -2,6 +2,9 @@ import asyncio
 import time
 from contextlib import AsyncExitStack
 from collections import defaultdict
+import anyio
+from anyio.abc import TaskStatus
+from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -26,7 +29,7 @@ from .exceptions import (
 from ._types import EventT
 from .utils import validate_instance, wrap_get_func
 from .dependencies import solve_dependencies
-from .event import Event
+from .event import Event, EventHandleOption
 
 if TYPE_CHECKING:
     from .bot import Bot
@@ -35,22 +38,35 @@ class Manager():
     bot: "Bot"
 
     node_state: Dict[str, Any]
-    _condition: asyncio.Condition
+    _condition: anyio.Condition
+    _cancel_condition: anyio.Condition
     _current_event: Event | None
 
-    _handle_event_tasks: Set[
-        "asyncio.Task[None]"
-    ] 
+    _event_send_stream: MemoryObjectSendStream[EventHandleOption]  # pyright: ignore[reportUninitializedInstanceVariable]
+    _event_receive_stream: MemoryObjectReceiveStream[EventHandleOption]  # pyright: ignore[reportUninitializedInstanceVariable]
 
     def __init__(self, bot: "Bot"):
         self.bot = bot
         self.node_state = defaultdict(lambda: None)
-        self._condition = asyncio.Condition()
-        self._handle_event_tasks = set()
+
+    async def startup(self) -> None:
+        self._condition = anyio.Condition()
+        self._cancel_condition = anyio.Condition()
+        self._event_send_stream, self._event_receive_stream = (
+            anyio.create_memory_object_stream(
+                max_buffer_size=self.bot.config.bot.event_queue_size
+            )
+        )
+
+    async def run(self) -> None:
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(self._handle_event_receive)
+            tg.start_soon(self._handle_should_exit, tg)
+
 
     async def handle_event(
         self,
-        current_event: Event,
+        current_event: Event[Any],
         *,
         handle_get: bool = True,
         show_log: bool = True,
@@ -70,39 +86,48 @@ class Manager():
                 current_event=current_event,
             )
 
-        if handle_get:
-            _handle_event_task = asyncio.create_task(self._handle_event())
-            self._handle_event_tasks.add(_handle_event_task)
-            _handle_event_task.add_done_callback(self._handle_event_tasks.discard)
-            await asyncio.sleep(0)
-            async with self._condition:
-                self._current_event = current_event
-                self._condition.notify_all()
-        else:
-            _handle_event_task = asyncio.create_task(self._handle_event(current_event))
-            self._handle_event_tasks.add(_handle_event_task)
-            _handle_event_task.add_done_callback(self._handle_event_tasks.discard)
+        await self._event_send_stream.send(
+            EventHandleOption(
+                event=current_event,
+                handle_get=handle_get,
+            )
+        )
 
-    async def _handle_event(
-        self, 
-        current_event: Event | None = None, 
+    async def _handle_event_receive(self) -> None:
+        async with anyio.create_task_group() as tg, self._event_receive_stream:
+            async for current_event, handle_get in self._event_receive_stream:
+                if handle_get:
+                    await tg.start(self._handle_event_wait_condition)
+                    async with self._condition:
+                        self._current_event = current_event
+                        self._condition.notify_all()
+                else:
+                    tg.start_soon(self._handle_event, current_event)
+
+    async def _handle_event_wait_condition(
+        self, *, task_status: TaskStatus[None] = anyio.TASK_STATUS_IGNORED
     ) -> None:
-        if current_event is None:
-            async with self._condition:
-                await self._condition.wait()
-                assert self._current_event is not None
-                current_event = self._current_event
-            if current_event.__handled__:
-                return
+        async with self._condition:
+            task_status.started()
+            await self._condition.wait()
+            assert self._current_event is not None
+            current_event = self._current_event
+        await self._handle_event(current_event)
 
-        '''for _hook_func in self._event_preprocessor_hooks:
-            await _hook_func(current_event)'''
+    async def _handle_event(self, current_event: Event[Any]) -> None:
+        if current_event.__handled__:
+            return
+
+        for _hook_func in self.bot._event_preprocessor_hooks:
+            await _hook_func(current_event)
+
         _nodes_list = self.bot.nodes_list
         index = 0
         while index < len(_nodes_list):
             node_priority, pruning_node = _nodes_list[index]
             self.bot.logger.debug("Checking for matching nodes", priority=node_priority)
-            #if validate_instance(obj=current_event, type_check=node.event_type):
+            if not validate_instance(obj=current_event, type_check=node_priority.event_type):
+                continue
             try:
                 async with AsyncExitStack() as stack:
                     _node = await solve_dependencies(
@@ -157,8 +182,8 @@ class Manager():
             else:
                 break
                 
-        '''for _hook_func in self._event_postprocessor_hooks:
-            await _hook_func(current_event)'''
+        for _hook_func in self.bot._event_postprocessor_hooks:
+            await _hook_func(current_event)
 
         self.bot.logger.info("Event Finished")
 
@@ -255,19 +280,14 @@ class Manager():
                 try_times += 1
 
         raise GetEventTimeout
-
-
-    async def cancel_tasks(self) -> None:
-        """取消所有未完成的任务"""
-        while self._handle_event_tasks:
-            task = self._handle_event_tasks.pop()
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
+    
+    async def _handle_should_exit(self, cancel_scope: anyio.CancelScope) -> None:
+        """当 should_exit 被设置时取消当前的 task group。"""
+        await self._cancel_condition.wait()
+        cancel_scope.cancel()
 
     async def shutdown(self) -> None:
         """关闭并清理事件。"""
-        await self.cancel_tasks()
+        async with self._cancel_condition:
+            self._cancel_condition.notify_all()
         self.node_state.clear()

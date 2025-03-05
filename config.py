@@ -49,6 +49,7 @@ class LogConfig(ConfigModel):
 class BotConfig(ConfigModel):
     """Bot 相关设置。"""
 
+    event_queue_size: int = Field(default=0, ge=0)
     nodes: Set[str] = Field(default_factory=set)
     node_dirs: Set[DirectoryPath] = Field(default_factory=set)
     log: LogConfig | None = None

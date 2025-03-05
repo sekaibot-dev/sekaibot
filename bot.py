@@ -45,7 +45,7 @@ from .utils import (
 )
 
 from .node import Node, NodeLoadType
-from ._types import BotHook
+from ._types import BotHook, EventHook
 
 HANDLED_SIGNALS = (
     signal.SIGINT,  # Unix signal 2. Sent by Ctrl+C.
@@ -105,6 +105,8 @@ class Bot():
     #钩子
     _bot_run_hooks: List[BotHook]
     _bot_exit_hooks: List[BotHook]
+    _event_preprocessor_hooks: list[EventHook]
+    _event_postprocessor_hooks: list[EventHook]
 
     def __init__(
         self,
@@ -136,6 +138,8 @@ class Bot():
 
         self._bot_run_hooks = []
         self._bot_exit_hooks = []
+        self._event_preprocessor_hooks = []
+        self._event_postprocessor_hooks = []
 
         sys.meta_path.insert(0, self._module_path_finder)
 
@@ -193,7 +197,7 @@ class Bot():
             """
 
             await self.should_exit.wait()
-
+            
         finally:
             """执行结束方法
                 结束各个任务
@@ -480,7 +484,29 @@ class Bot():
         self._bot_exit_hooks.append(func)
         return func
 
+    def event_preprocessor_hook(self, func: EventHook) -> EventHook:
+        """注册一个事件预处理函数。
 
+        Args:
+            func: 被注册的函数。
+
+        Returns:
+            被注册的函数。
+        """
+        self._event_preprocessor_hooks.append(func)
+        return func
+
+    def event_postprocessor_hook(self, func: EventHook) -> EventHook:
+        """注册一个事件后处理函数。
+
+        Args:
+            func: 被注册的函数。
+
+        Returns:
+            被注册的函数。
+        """
+        self._event_postprocessor_hooks.append(func)
+        return func
 
 
 

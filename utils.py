@@ -133,8 +133,8 @@ def validate_instance(obj: Any, type_check: Union[Type[Any], Tuple[Type[Any]]]) 
         如果 obj 是 type_check 中任意一个类型的实例，则返回 True，否则返回 False。
     """
     if isinstance(type_check, tuple):
-        return any(isinstance(obj, t) for t in type_check)
-    return isinstance(obj, type_check)
+        return any(obj.__class__.__name__ == t if isinstance(t, str) else isinstance(obj, t) for t in type_check)
+    return obj.__class__.__name__ == type_check if isinstance(type_check, str) else isinstance(obj, type_check)
 
 def get_classes_from_module(module: ModuleType, super_class: _TypeT) -> List[_TypeT]:
     """从模块中查找指定类型的类。

@@ -19,14 +19,15 @@ if TYPE_CHECKING:
     from typing import Any # type: ignore
     from .bot import Bot
     from .config import ConfigModel
-    from .event import Event
+    from .event import Event, EventHandleOption
 
 __all__ = [
     "TreeType",
     "EventT",
     "StateT",
     "ConfigT",
-    "BotHook"
+    "BotHook",
+    "EventHook"
 ]
 
 EventT = TypeVar("EventT", bound="Event")
@@ -34,6 +35,7 @@ StateT = TypeVar("StateT")
 ConfigT = TypeVar("ConfigT", bound=Optional["ConfigModel"])
 
 BotHook = Callable[["Bot"], Awaitable[None]]
+EventHook = Callable[["Event[Any]"], Awaitable[None]]
 
 _T = TypeVar("_T")
 
