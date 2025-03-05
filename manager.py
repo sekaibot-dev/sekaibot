@@ -186,8 +186,18 @@ class Manager():
             await _hook_func(current_event)
 
         self.bot.logger.info("Event Finished")
+    
+    async def _handle_should_exit(self, cancel_scope: anyio.CancelScope) -> None:
+        """当 should_exit 被设置时取消当前的 task group。"""
+        await self._cancel_condition.wait()
+        cancel_scope.cancel()
 
-        
+    async def shutdown(self) -> None:
+        """关闭并清理事件。"""
+        async with self._cancel_condition:
+            self._cancel_condition.notify_all()
+        self.node_state.clear()
+
     @overload
     async def get(
         self,
@@ -280,14 +290,3 @@ class Manager():
                 try_times += 1
 
         raise GetEventTimeout
-    
-    async def _handle_should_exit(self, cancel_scope: anyio.CancelScope) -> None:
-        """当 should_exit 被设置时取消当前的 task group。"""
-        await self._cancel_condition.wait()
-        cancel_scope.cancel()
-
-    async def shutdown(self) -> None:
-        """关闭并清理事件。"""
-        async with self._cancel_condition:
-            self._cancel_condition.notify_all()
-        self.node_state.clear()

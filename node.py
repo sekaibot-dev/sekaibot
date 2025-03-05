@@ -176,13 +176,13 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
         raise PruningException
 
     @property
-    def state(self) -> StateT:
+    def node_state(self) -> StateT:
         """节点状态。"""
         return self.bot.node_state[self.name]
 
-    @state.setter
+    @node_state.setter
     @final
-    def state(self, value: StateT) -> None:
+    def node_state(self, value: StateT) -> None:
         self.bot.node_state[self.name] = value
 
     @abstractmethod
