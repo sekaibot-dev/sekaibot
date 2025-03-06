@@ -1,4 +1,5 @@
 import asyncio
+import anyio
 import signal
 import pkgutil
 import threading
@@ -40,11 +41,13 @@ from .utils import (
     flatten_tree_with_jumps,
     get_classes_from_module_name,
     is_config_class,
+    cancel_on_exit,
     samefile,
     validate_instance
 )
 
 from .node import Node, NodeLoadType
+from .manager import NodeManager
 from ._types import BotHook, EventHook
 
 HANDLED_SIGNALS = (
@@ -80,20 +83,23 @@ def is_private_message(event: dict) -> bool:
     return event.get("message_type") == "private"
 
 class Bot():
+
     config: MainConfig
     logger: Logger
-    should_exit: asyncio.Event
+    manager: NodeManager
+
     nodes_tree: TreeType[Type[Node[Any, Any, Any]]]
     nodes_list: List[Tuple[Type[Node[Any, Any, Any]], int]]
     global_state: Dict[Any, Any]
 
-    _condition: asyncio.Condition
-
+    _should_exit: anyio.Event
+    _restart_flag: bool  # 重启标记    
     _module_path_finder: ModulePathFinder  # 用于查找 nodes 的模块元路径查找器
     _raw_config_dict: Dict[str, Any]  # 原始配置字典
 
     _config_file: str | None  # 配置文件
     _config_dict: Dict[str, Any] | None  # 配置
+    _handle_signals: bool  # 是否处理信号
 
     _extend_nodes: List[
         Type[Node[Any, Any, Any]] | str | Path
@@ -113,6 +119,7 @@ class Bot():
         *,
         config_file: str | None = "config.toml",
         config_dict: Dict[str, Any] | None = None,
+        handle_signals: bool = True,
     ):
         """初始化 SekaiBot，读取配置文件，创建配置。
 
@@ -121,6 +128,7 @@ class Bot():
                 若指定为 `None`，则不加载配置文件。
             config_dict: 配置字典，默认为 `None。`
                 若指定字典，则会忽略 `config_file` 配置，不再读取配置文件。
+            _handle_signals: 是否处理结束信号，默认为 `True`。
         """
         self.config = MainConfig()
         self.logger = Logger(self)
@@ -132,9 +140,7 @@ class Bot():
 
         self._config_file = config_file
         self._config_dict = config_dict
-
-        self._config_file = config_file
-        self._config_dict = config_dict
+        self._handle_signals = handle_signals
 
         self._bot_run_hooks = []
         self._bot_exit_hooks = []
@@ -153,35 +159,49 @@ class Bot():
             self.nodes_list = flatten_tree_with_jumps(self.nodes_tree)
 
         return [_node for _node, _ in self.nodes_list]
-
+    
     def run(self) -> None:
-        """启动 SekaiBot，读取配置文件并执行 bot 逻辑。"""
-        asyncio.run(self._run())
+        """运行 SekaiBot。"""
+        anyio.run(self.arun())
 
-    async def _run(self) -> None:
-        self.should_exit = asyncio.Event()
-        self._condition = asyncio.Condition()
+    async def arun(self) -> None:
+        """异步运行 SekaiBot。"""
+        self._restart_flag = True
+        self._should_exit = anyio.Event()
+        while self._restart_flag:
+            self._restart_flag = False
+            self._load_config_dict()
+            await self.startup(init=True)
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(self._run)
+                tg.start_soon(cancel_on_exit, self._should_exit, tg.cancel_scope)
+                if self._handle_signals:  # pragma: no cover
+                    tg.start_soon(self._handle_exit_signal)
+            if self._restart_flag:
+                self._load_nodes_from_dirs(*self._extend_node_dirs)
+                self._load_nodes(*self._extend_nodes)
 
-        # 监听并拦截系统退出信号，从而完成一些善后工作后再关闭程序
-        if threading.current_thread() is threading.main_thread():  # pragma: no cover
-            # Signal 仅能在主线程中被处理。
-            try:
-                loop = asyncio.get_running_loop()
-                for sig in HANDLED_SIGNALS:
-                    loop.add_signal_handler(sig, self._handle_exit)
-            except NotImplementedError:
-                # add_signal_handler 仅在 Unix 下可用，以下对于 Windows。
-                for sig in HANDLED_SIGNALS:
-                    signal.signal(sig, self._handle_exit)
+    def restart(self) -> None:
+        """退出并重新运行 SekaiBot。"""
+        self.logger.info("Restarting SekaiBot...")
+        self._restart_flag = True
+        self._should_exit.set()
 
-        # 加载配置文件
-        self._reload_config_dict()
-
+    async def startup(self, init: bool = False) -> None:
+        """加载或重加载 SekaiBot 的所有加载项"""
+        
+        self.nodes_tree.clear()
+        self.nodes_list.clear()
         # 加载节点
         self._load_nodes_from_dirs(*self.config.bot.node_dirs)
         self._load_nodes(*self.config.bot.nodes)
+        if not init:
+            self._load_nodes(*self._extend_nodes)
+            self._load_nodes_from_dirs(*self._extend_node_dirs)
         self._update_config()
 
+    async def _run(self) -> None:
+        """运行 SekaiBot。"""
         # 启动 SekaiBot
         self.logger.info("Running SekaiBot...")
 
@@ -196,7 +216,7 @@ class Bot():
                 _agent_task.add_done_callback(self._agent_tasks.discard)
             """
 
-            await self.should_exit.wait()
+            await self._should_exit.wait()
             
         finally:
             """执行结束方法
@@ -210,15 +230,29 @@ class Bot():
                 await bot_exit_hook_func(self)
 
             self._module_path_finder.path.clear()
+
+    async def _handle_exit_signal(self) -> None:  # pragma: no cover
+        """根据平台不同注册信号处理程序。"""
+        if threading.current_thread() is not threading.main_thread():
+            # Signal 仅能在主线程中被处理
+            return
+        try:
+            with anyio.open_signal_receiver(*HANDLED_SIGNALS) as signals:
+                async for _signal in signals:
+                    self.shutdown()
+        except NotImplementedError:
+            # add_signal_handler 仅在 Unix 下可用，以下对于 Windows
+            for sig in HANDLED_SIGNALS:
+                signal.signal(sig, self.shutdown)
         
-    def _handle_exit(self, *_args: Any):
+    def shutdown(self, *_args: Any):
         """当机器人收到退出信号时，根据情况进行处理。"""
         self.logger.info("Stopping SekaiBot...")
-        if self.should_exit.is_set():
+        if self._should_exit.is_set():
             self.logger.warning("Force Exit SekaiBot...")
             sys.exit()
         else:
-            self.should_exit.set()
+            self._should_exit.set()
     
     def _update_config(self) -> None:
         """更新 config，合并入来自 Node 和 Adapter 的 Config。"""
@@ -252,7 +286,7 @@ class Bot():
 
         self.logger._reload_logger()
 
-    def _reload_config_dict(self) -> None:
+    def _load_config_dict(self) -> None:
         """重新加载配置文件。"""
         self._raw_config_dict = {}
 

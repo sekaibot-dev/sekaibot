@@ -26,20 +26,22 @@ from .exceptions import (
     PruningException,
     JumpToException,
 )
-from ._types import EventT
-from .utils import validate_instance, wrap_get_func
+from ._types import EventT, StateT
+from .utils import validate_instance, wrap_get_func, cancel_on_exit
 from .dependencies import solve_dependencies
 from .event import Event, EventHandleOption
 
 if TYPE_CHECKING:
     from .bot import Bot
 
-class Manager():
+class NodeManager():
     bot: "Bot"
 
     node_state: Dict[str, Any]
+    global_state: StateT
+
     _condition: anyio.Condition
-    _cancel_condition: anyio.Condition
+    _cancel_event: anyio.Event
     _current_event: Event | None
 
     _event_send_stream: MemoryObjectSendStream[EventHandleOption]  # pyright: ignore[reportUninitializedInstanceVariable]
@@ -51,7 +53,7 @@ class Manager():
 
     async def startup(self) -> None:
         self._condition = anyio.Condition()
-        self._cancel_condition = anyio.Condition()
+        self._cancel_event = anyio.Event()
         self._event_send_stream, self._event_receive_stream = (
             anyio.create_memory_object_stream(
                 max_buffer_size=self.bot.config.bot.event_queue_size
@@ -61,7 +63,7 @@ class Manager():
     async def run(self) -> None:
         async with anyio.create_task_group() as tg:
             tg.start_soon(self._handle_event_receive)
-            tg.start_soon(self._handle_should_exit, tg)
+            tg.start_soon(cancel_on_exit, self._cancel_event, tg)
 
 
     async def handle_event(
@@ -122,6 +124,7 @@ class Manager():
             await _hook_func(current_event)
 
         _nodes_list = self.bot.nodes_list
+        event_state = None
         index = 0
         while index < len(_nodes_list):
             node_priority, pruning_node = _nodes_list[index]
@@ -139,6 +142,8 @@ class Manager():
                             Event: current_event,
                         },
                     )
+                    _node.event_state = event_state
+
                     if _node.name not in self.node_state:
                         node_state = _node.__init_state__()
                         if node_state is not None:
@@ -176,6 +181,8 @@ class Manager():
                 next_index = index + 1
             else:
                 next_index = index + 1
+            
+            event_state = _node.event_state if _node.event_state is not None else event_state
 
             if next_index is not None:
                 index = next_index
@@ -186,16 +193,10 @@ class Manager():
             await _hook_func(current_event)
 
         self.bot.logger.info("Event Finished")
-    
-    async def _handle_should_exit(self, cancel_scope: anyio.CancelScope) -> None:
-        """当 should_exit 被设置时取消当前的 task group。"""
-        await self._cancel_condition.wait()
-        cancel_scope.cancel()
 
     async def shutdown(self) -> None:
         """关闭并清理事件。"""
-        async with self._cancel_condition:
-            self._cancel_condition.notify_all()
+        self._cancel_event.set()
         self.node_state.clear()
 
     @overload
@@ -257,7 +258,7 @@ class Manager():
 
         try_times = 0
         start_time = time.time()
-        while not self.bot.should_exit.is_set():
+        while not self.bot._should_exit.is_set():
             if max_try_times is not None and try_times > max_try_times:
                 break
             if timeout is not None and time.time() - start_time > timeout:

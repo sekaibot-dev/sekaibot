@@ -154,6 +154,8 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
                 default,
             )
         return default
+    
+    event_state: StateT = None
 
     @final
     def stop(self) -> NoReturn:
@@ -178,12 +180,22 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
     @property
     def node_state(self) -> StateT:
         """节点状态。"""
-        return self.bot.node_state[self.name]
+        return self.bot.manager.node_state[self.name]
 
     @node_state.setter
     @final
     def node_state(self, value: StateT) -> None:
-        self.bot.node_state[self.name] = value
+        self.bot.manager.node_state[self.name] = value
+
+    @property
+    def global_state(self) -> StateT:
+        """通用状态。"""
+        return self.bot.manager.global_state
+
+    @global_state.setter
+    @final
+    def global_state(self, value: StateT) -> None:
+        self.bot.manager.global_state = value
 
     @abstractmethod
     async def handle(self) -> None:

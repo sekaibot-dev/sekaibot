@@ -1,6 +1,7 @@
 """SekaiBot 内部使用的实用工具。"""
 
 import asyncio
+import anyio
 import importlib
 import inspect
 import json
@@ -54,6 +55,7 @@ __all__ = [
     "sync_func_wrapper",
     "sync_ctx_manager_wrapper",
     "wrap_get_func",
+    "cancel_on_exit",
     "get_annotations",
 ]
 
@@ -349,6 +351,28 @@ def wrap_get_func(
     if not asyncio.iscoroutinefunction(func):
         return sync_func_wrapper(func)  # type: ignore
     return func
+
+import anyio
+from typing import Union
+
+async def cancel_on_exit(
+    condition: anyio.Event | anyio.Condition,
+    cancel_scope: anyio.CancelScope
+) -> None:
+    """当 should_exit 被设置时取消当前的 task group。
+    
+    支持 `anyio.Event` 和 `anyio.Condition`。
+    """
+    if isinstance(condition, anyio.Event):
+        await condition.wait()
+    elif isinstance(condition, anyio.Condition):
+        async with condition:
+            await condition.wait()
+    else:
+        raise TypeError(f"`condition` must be anyio.Event or anyio.Condition, not {type(condition)}.")
+
+    cancel_scope.cancel()
+
 
 if sys.version_info >= (3, 10):  # pragma: no cover
     from inspect import get_annotations
