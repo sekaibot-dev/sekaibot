@@ -77,6 +77,7 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
 
     def __init_subclass__(
         cls,
+        event_type: Optional[Type[EventT]] = None,
         config: Optional[Type[ConfigT]] = None,
         init_state: Optional[StateT] = None,
         **_kwargs: Any,
@@ -94,11 +95,17 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
             origin_class = get_origin(orig_base)
             if inspect.isclass(origin_class) and issubclass(origin_class, Node):
                 try:
-                    _event_t, state_t, config_t = cast(
+                    event_t, state_t, config_t = cast(
                         Tuple[EventT, StateT, ConfigT], get_args(orig_base)
                     )
                 except ValueError:  # pragma: no cover
                     continue
+                if (
+                    event_type is None
+                    and inspect.isclass(event_t)
+                    and issubclass(event_t, Event)
+                ):
+                    event_type = event_t
                 if (
                     config is None
                     and inspect.isclass(config_t)
