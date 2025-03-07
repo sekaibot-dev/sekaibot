@@ -57,16 +57,17 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
     """
 
     children: List[str] = 0
-    event_type: ClassVar[Optional[str | Type[Event]]] = None
     block: ClassVar[bool] = False
 
     # 不能使用 ClassVar 因为 PEP 526 不允许这样做
+    EventType: Type[Event] | Tuple[Type[Event]]
     Config: Type[ConfigT]
 
     __node_load_type__: ClassVar[NodeLoadType]
     __node_file_path__: ClassVar[Optional[str]]
 
     if TYPE_CHECKING:
+        event: EventT
         bot: "Bot"
     else:
         bot = Depends(Bot)
@@ -85,6 +86,7 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
         """初始化子类。
 
         Args:
+            event_type: 事件类型。
             config: 配置类。
             init_state: 初始状态。
         """
@@ -100,12 +102,15 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
                     )
                 except ValueError:  # pragma: no cover
                     continue
-                if (
-                    event_type is None
-                    and inspect.isclass(event_t)
-                    and issubclass(event_t, Event)
-                ):
-                    event_type = event_t
+                if event_type is None:
+                    if (
+                        inspect.isclass(event_t)
+                        and issubclass(event_t, Event)
+                    ):
+                        event_type = event_t
+                    else:
+                        _event_t = tuple(filter(lambda e: inspect.isclass(e) and issubclass(e, Event), get_args(event_t)))
+                        event_type = _event_t[0] if len(_event_t) == 1 else _event_t if len(_event_t) >0 else None
                 if (
                     config is None
                     and inspect.isclass(config_t)
@@ -119,6 +124,8 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
                 ):
                     init_state = state_t.__metadata__[0]  # pyright: ignore
 
+        if not hasattr(cls, "EventType") and event_type is None:
+            cls.EventType = event_type
         if not hasattr(cls, "Config") and config is not None:
             cls.Config = config
         if cls.__init_state__ is Node.__init_state__ and init_state is not None:

@@ -129,9 +129,14 @@ class NodeManager():
         while index < len(_nodes_list):
             node_priority, pruning_node = _nodes_list[index]
             self.bot.logger.debug("Checking for matching nodes", priority=node_priority)
-            if not validate_instance(obj=current_event, type_check=node_priority.event_type):
-                continue
             try:
+                # 事件类型与节点要求的类型不匹配，剪枝
+                if not (
+                    hasattr(node_priority, "EventType") 
+                    and isinstance(current_event, node_priority.EventType)
+                ):
+                    raise PruningException
+                
                 async with AsyncExitStack() as stack:
                     _node = await solve_dependencies(
                         node_priority,
