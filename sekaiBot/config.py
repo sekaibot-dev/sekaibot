@@ -174,4 +174,4 @@ class MainConfig(ConfigModel):
     bot: BotConfig = BotConfig()
     agent: AgentConfig = AgentConfig()
     node: NodeConfig = NodeConfig()
-    database: DatabaseConfig = DatabaseConfig()
+    #database: DatabaseConfig = DatabaseConfig()

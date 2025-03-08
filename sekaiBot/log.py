@@ -5,7 +5,7 @@ from typing import (
 )
 
 if TYPE_CHECKING:
-    from .bot import Bot
+    from sekaibot.bot import Bot
 
 class Logger:
 

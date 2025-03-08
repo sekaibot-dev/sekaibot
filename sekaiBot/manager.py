@@ -19,20 +19,20 @@ from typing import (
     overload,
 )
 
-from .exceptions import (
+from sekaibot.exceptions import (
     GetEventTimeout,
     StopException,
     SkipException,
     PruningException,
     JumpToException,
 )
-from ._types import EventT, StateT
-from .utils import validate_instance, wrap_get_func, cancel_on_exit
-from .dependencies import solve_dependencies
-from .event import Event, EventHandleOption
+from sekaibot._types import EventT, StateT
+from sekaibot.utils import validate_instance, wrap_get_func, cancel_on_exit
+from sekaibot.dependencies import solve_dependencies
+from sekaibot.event import Event, EventHandleOption
 
 if TYPE_CHECKING:
-    from .bot import Bot
+    from sekaibot.bot import Bot
 
 class NodeManager():
     bot: "Bot"

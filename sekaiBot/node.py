@@ -22,15 +22,15 @@ from typing import (
 ) # type: ignore
 from typing_extensions import Annotated, get_args, get_origin
 
-from .config import ConfigModel
-from .dependencies import Depends
-from .event import Event
-from .exceptions import SkipException, JumpToException, PruningException, StopException
-from ._types import ConfigT, EventT, StateT
-from .utils import is_config_class
+from sekaibot.config import ConfigModel
+from sekaibot.dependencies import Depends
+from sekaibot.event import Event
+from sekaibot.exceptions import SkipException, JumpToException, PruningException, StopException
+from sekaibot._types import ConfigT, EventT, StateT
+from sekaibot.utils import is_config_class
 
 if TYPE_CHECKING:
-    from .bot import Bot
+    from sekaibot.bot import Bot
 
 __all__ = ["Node", "NodeLoadType"]
 
@@ -70,9 +70,10 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
 
     if TYPE_CHECKING:
         event: EventT
-        bot: "Bot"
+        #bot: "Bot"
     else:
-        bot = Depends(Bot)
+        event = Depends(Event)
+        #bot = Depends(Bot)
 
 
     def __init_state__(self) -> Optional[StateT]:

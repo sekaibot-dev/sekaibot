@@ -6,9 +6,6 @@ import threading
 import json
 from collections import defaultdict
 from itertools import chain
-from config import ConfigModel, MainConfig, NodeConfig
-from log import Logger
-from core.agent_executor import ChatAgentExecutor
 import sys
 from pathlib import Path
 
@@ -25,16 +22,15 @@ from typing import (
     Union,
     DefaultDict
 ) # type: ignore
-
-from .exceptions import (
-    LoadModuleError,
-)
-
 from pydantic import (
     ValidationError,
     create_model,  # pyright: ignore[reportUnknownVariableType]
 )
-from .utils import (
+
+from sekaibot.exceptions import (
+    LoadModuleError,
+)
+from sekaibot.utils import (
     ModulePathFinder,
     ModuleType,
     TreeType,
@@ -45,10 +41,12 @@ from .utils import (
     samefile,
     validate_instance
 )
-
-from .node import Node, NodeLoadType
-from .manager import NodeManager
-from ._types import BotHook, EventHook
+from sekaibot.config import ConfigModel, MainConfig, NodeConfig
+from sekaibot.log import Logger
+#from sekaibot.core.agent_executor import ChatAgentExecutor
+from sekaibot.node import Node, NodeLoadType
+from sekaibot.manager import NodeManager
+from sekaibot._types import BotHook, EventHook
 
 HANDLED_SIGNALS = (
     signal.SIGINT,  # Unix signal 2. Sent by Ctrl+C.
@@ -162,7 +160,7 @@ class Bot():
     
     def run(self) -> None:
         """运行 SekaiBot。"""
-        anyio.run(self.arun())
+        anyio.run(self.arun)
 
     async def arun(self) -> None:
         """异步运行 SekaiBot。"""

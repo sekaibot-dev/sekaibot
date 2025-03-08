@@ -17,9 +17,9 @@ from typing import (
 
 if TYPE_CHECKING:
     from typing import Any # type: ignore
-    from .bot import Bot
-    from .config import ConfigModel
-    from .event import Event, EventHandleOption
+    from sekaibot.bot import Bot
+    from sekaibot.config import ConfigModel
+    from sekaibot.event import Event, EventHandleOption
 
 __all__ = [
     "TreeType",

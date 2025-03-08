@@ -20,7 +20,7 @@ from typing import (
     cast,
 )
 
-from .utils import get_annotations, sync_ctx_manager_wrapper
+from sekaibot.utils import get_annotations, sync_ctx_manager_wrapper
 
 _T = TypeVar("_T")
 Dependency = Union[
