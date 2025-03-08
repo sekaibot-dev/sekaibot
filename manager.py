@@ -38,7 +38,7 @@ class NodeManager():
     bot: "Bot"
 
     node_state: Dict[str, Any]
-    global_state: StateT
+    global_state: dict
 
     _condition: anyio.Condition
     _cancel_event: anyio.Event
@@ -147,7 +147,7 @@ class NodeManager():
                             Event: current_event,
                         },
                     )
-                    _node.event_state = event_state
+                    _node.state = event_state
 
                     if _node.name not in self.node_state:
                         node_state = _node.__init_state__()
@@ -187,7 +187,7 @@ class NodeManager():
             else:
                 next_index = index + 1
             
-            event_state = _node.event_state if _node.event_state is not None else event_state
+            event_state = _node.state if _node.state is not None else event_state
 
             if next_index is not None:
                 index = next_index

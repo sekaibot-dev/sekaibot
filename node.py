@@ -56,7 +56,9 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
             否则为定义节点在的 Python 模块的位置。
     """
 
-    children: List[str] = 0
+    parent: ClassVar[str] = None
+    priority: ClassVar[int] = 0
+    sand_box: ClassVar[bool] = False
     block: ClassVar[bool] = False
 
     # 不能使用 ClassVar 因为 PEP 526 不允许这样做
@@ -169,7 +171,7 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
             )
         return default
     
-    event_state: StateT = None
+    state: StateT = None
 
     @final
     def stop(self) -> NoReturn:
@@ -202,13 +204,13 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
         self.bot.manager.node_state[self.name] = value
 
     @property
-    def global_state(self) -> StateT:
+    def global_state(self) -> dict:
         """通用状态。"""
         return self.bot.manager.global_state
 
     @global_state.setter
     @final
-    def global_state(self, value: StateT) -> None:
+    def global_state(self, value: dict) -> None:
         self.bot.manager.global_state = value
 
     @abstractmethod

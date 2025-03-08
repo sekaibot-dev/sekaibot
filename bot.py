@@ -4,7 +4,7 @@ import signal
 import pkgutil
 import threading
 import json
-
+from collections import defaultdict
 from itertools import chain
 from config import ConfigModel, MainConfig, NodeConfig
 from log import Logger
@@ -322,6 +322,7 @@ class Bot():
         *nodes: Tuple[Type[Node[Any, Any, Any]], NodeLoadType, str | None],
     ) -> None:
         """加载节点类，并构建树"""
+        # 构建节点字典
         nodes_dict: Dict[str, Type[Node[Any, Any, Any]]] = {
             _node.__name__: _node for _node in (self.nodes or [])
         }
@@ -330,19 +331,37 @@ class Bot():
             node_class.__node_file_path__ = file_path
             if node_class.__name__ in nodes_dict:
                 self.logger.warning(
-                    "Already have a same name node", name=node_class.__name__
+                    "Already have a same name node", 
+                    name=node_class.__name__
                 )
             nodes_dict[node_class.__name__] = node_class
-
+        # 构建节点集合和根节点集合
         all_nodes = set(nodes_dict.values())
-        all_children = {nodes_dict[child] for node_class in all_nodes for child in node_class.children if child in nodes_dict}
-
-        def build_tree(node_class: Type[Node[Any, Any, Any]]) -> Dict[str, Any]:
-            return {child: build_tree(nodes_dict[child]) for child in node_class.children if child in nodes_dict}
-        
-        roots = all_nodes - all_children
+        roots = {
+            _node for _node in all_nodes if not _node.parent
+        }
+        #构建 节点-子节点 映射表
+        parent_map: DefaultDict[Type[Node[Any, Any, Any]], List[Type[Node[Any, Any, Any]]]] = defaultdict(list)
+        for _node in all_nodes - roots:
+            if _node.parent not in nodes_dict:
+                self.logger.warning(
+                    "Parent node not found",
+                    parent_name=_node.parent,
+                    node_name=_node.__name__,
+                )
+                continue
+            parent_map[nodes_dict[_node.parent]].append(_node)
+        #  递归建树
+        def build_tree(
+            node_class: Type[Node[Any, Any, Any]]
+        ) -> Dict[str, Any]:
+            return {
+                child: build_tree(child) for child in parent_map[node_class]
+            }
+        # 加载到类属性
         self.nodes_tree = {root: build_tree(root) for root in roots}
         self.nodes_list = flatten_tree_with_jumps(self.nodes_tree)
+        # 记录节点加载信息
         for _node, _, _ in nodes:
             self.logger.info(
                 "Succeeded to load node from class",
