@@ -36,7 +36,7 @@ EventT = TypeVar("EventT", bound="Event")
 StateT = TypeVar("StateT")
 ConfigT = TypeVar("ConfigT", bound=Optional["ConfigModel"])
 NodeT = TypeVar("NodeT", bound="Node")
-RuleCheckerT = Callable[[Bot, Event, StateT], Union[bool, Awaitable[bool]]]
+RuleCheckerT = Callable[["Bot", "Event[Any]", StateT], Union[bool, Awaitable[bool]]]
 
 BotHook = Callable[["Bot"], Awaitable[None]]
 EventHook = Callable[["Event[Any]"], Awaitable[None]]

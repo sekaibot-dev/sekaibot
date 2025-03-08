@@ -27,7 +27,7 @@ from sekaibot.exceptions import (
     JumpToException,
 )
 from sekaibot.typing import EventT, StateT
-from sekaibot.utils import validate_instance, wrap_get_func, cancel_on_exit
+from sekaibot.utils import wrap_get_func, cancel_on_exit
 from sekaibot.dependencies import solve_dependencies
 from sekaibot.event import Event, EventHandleOption
 

@@ -138,19 +138,24 @@ async def solve_dependencies(
         else:
             depend = depend_obj
     elif inspect.iscoroutinefunction(dependent) or inspect.isfunction(dependent):
-        # 处理普通 `def` 和 `async def` 函数
+        # type of dependent is Callable[..., T] | Callable[..., Awaitable[T]]
         func_params = inspect.signature(dependent).parameters
         func_args = {}
-
         for param_name, param in func_params.items():
             param_type = get_type_hints(dependent).get(param_name)
-            if param_type in dependency_cache:
-                func_args[param_name] = dependency_cache[param_type]
+            if isinstance(param.default, InnerDepends):
+                func_args[param_name] = await solve_dependencies(
+                    param.default.dependency, 
+                    use_cache=param.default.use_cache,
+                    stack=stack, 
+                    dependency_cache=dependency_cache
+                )
             elif param.default is not inspect.Parameter.empty:
                 func_args[param_name] = param.default
+            elif param_type in dependency_cache:
+                func_args[param_name] = dependency_cache[param_type]
             else:
-                raise TypeError(f"无法解析 {dependent.__name__} 的参数 {param_name}")
-
+                raise TypeError(f"cannot resolve parameter '{param_name}' for dependency '{dependent.__name__}'")
         if inspect.iscoroutinefunction(dependent):
             depend = await dependent(**func_args)
         else:
