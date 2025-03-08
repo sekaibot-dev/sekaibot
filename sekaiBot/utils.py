@@ -124,20 +124,6 @@ def remove_none_attributes(model: Type[BaseModel], exclude: Optional[Set[str]] =
     model.__dict__.update(cleaned_data)
     return model
 
-def validate_instance(obj: Any, type_check: Union[Type[Any], Tuple[Type[Any]]]) -> bool:
-    """检查对象是否是指定类型的实例，支持单一类型或多个类型的情况。
-    
-    Args:
-        obj: 要检查的对象。
-        type_check: 目标类型，可以是一个类型或多个类型的元组。
-
-    Returns: 
-        如果 obj 是 type_check 中任意一个类型的实例，则返回 True，否则返回 False。
-    """
-    if isinstance(type_check, tuple):
-        return any(obj.__class__.__name__ == t if isinstance(t, str) else isinstance(obj, t) for t in type_check)
-    return obj.__class__.__name__ == type_check if isinstance(type_check, str) else isinstance(obj, type_check)
-
 def get_classes_from_module(module: ModuleType, super_class: _TypeT) -> List[_TypeT]:
     """从模块中查找指定类型的类。
 

@@ -39,7 +39,6 @@ from sekaibot.utils import (
     is_config_class,
     cancel_on_exit,
     samefile,
-    validate_instance
 )
 from sekaibot.config import ConfigModel, MainConfig, NodeConfig
 from sekaibot.log import Logger
