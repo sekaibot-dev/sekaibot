@@ -26,7 +26,7 @@ from sekaibot.exceptions import (
     PruningException,
     JumpToException,
 )
-from sekaibot._types import EventT, StateT
+from sekaibot.typing import EventT, StateT
 from sekaibot.utils import validate_instance, wrap_get_func, cancel_on_exit
 from sekaibot.dependencies import solve_dependencies
 from sekaibot.event import Event, EventHandleOption
@@ -127,24 +127,25 @@ class NodeManager():
         event_state = None
         index = 0
         while index < len(_nodes_list):
-            node_priority, pruning_node = _nodes_list[index]
-            self.bot.logger.debug("Checking for matching nodes", priority=node_priority)
+            node_class, pruning_node = _nodes_list[index]
+            self.bot.logger.debug("Checking for matching nodes", priority=node_class)
             try:
                 # 事件类型与节点要求的类型不匹配，剪枝
                 if not (
-                    hasattr(node_priority, "EventType") 
-                    and isinstance(current_event, node_priority.EventType)
+                    hasattr(node_class, "EventType") 
+                    and isinstance(current_event, node_class.EventType)
                 ):
                     raise PruningException
                 
                 async with AsyncExitStack() as stack:
                     _node = await solve_dependencies(
-                        node_priority,
+                        node_class,
                         use_cache=True,
                         stack=stack,
                         dependency_cache={
                             Bot: self,
                             Event: current_event,
+                            StateT: self.node_state[node_class.__name__]
                         },
                     )
                     _node.state = event_state
@@ -153,6 +154,8 @@ class NodeManager():
                         node_state = _node.__init_state__()
                         if node_state is not None:
                             self.node_state[_node.name] = node_state
+                    for rule_func in _node.__node_rule_func__:
+                        if not await rule_func(current_event): continue
                     if await _node.rule():
                         self.bot.logger.info("Event will be handled by node", node=_node)
                         try:
@@ -182,7 +185,7 @@ class NodeManager():
                     self.bot.logger.warning("The node to jump to does not exist", node_name=jump_to_node.node)
                     next_index = index + 1
             except Exception:
-                self.bot.logger.exception("Exception in node", node=node_priority)
+                self.bot.logger.exception("Exception in node", node=node_class)
                 next_index = index + 1
             else:
                 next_index = index + 1

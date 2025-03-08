@@ -45,7 +45,7 @@ from sekaibot.log import Logger
 #from sekaibot.core.agent_executor import ChatAgentExecutor
 from sekaibot.node import Node, NodeLoadType
 from sekaibot.manager import NodeManager
-from sekaibot._types import BotHook, EventHook
+from sekaibot.typing import BotHook, EventHook
 
 HANDLED_SIGNALS = (
     signal.SIGINT,  # Unix signal 2. Sent by Ctrl+C.

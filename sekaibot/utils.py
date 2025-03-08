@@ -40,7 +40,7 @@ from typing_extensions import ParamSpec, TypeAlias, TypeGuard
 from pydantic import BaseModel
 
 from sekaibot.config import ConfigModel
-from sekaibot._types import EventT
+from sekaibot.typing import EventT
 
 if TYPE_CHECKING:
     from os import PathLike

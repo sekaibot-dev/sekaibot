@@ -75,6 +75,9 @@ def Depends(  # noqa: N802 # pylint: disable=invalid-name
     return InnerDepends(dependency=dependency, use_cache=use_cache)  # type: ignore
 
 
+import inspect
+from typing import get_type_hints
+
 async def solve_dependencies(
     dependent: Dependency[_T],
     *,
@@ -134,6 +137,24 @@ async def solve_dependencies(
             )
         else:
             depend = depend_obj
+    elif inspect.iscoroutinefunction(dependent) or inspect.isfunction(dependent):
+        # 处理普通 `def` 和 `async def` 函数
+        func_params = inspect.signature(dependent).parameters
+        func_args = {}
+
+        for param_name, param in func_params.items():
+            param_type = get_type_hints(dependent).get(param_name)
+            if param_type in dependency_cache:
+                func_args[param_name] = dependency_cache[param_type]
+            elif param.default is not inspect.Parameter.empty:
+                func_args[param_name] = param.default
+            else:
+                raise TypeError(f"无法解析 {dependent.__name__} 的参数 {param_name}")
+
+        if inspect.iscoroutinefunction(dependent):
+            depend = await dependent(**func_args)
+        else:
+            depend = dependent(**func_args)
     elif inspect.isasyncgenfunction(dependent):
         # type of dependent is Callable[[], AsyncGenerator[T, None]]
         cm = asynccontextmanager(dependent)()

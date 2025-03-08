@@ -15,6 +15,8 @@ from typing import (
     Generic,
     NoReturn,
     Optional,
+    Callable,
+    Awaitable,
     Tuple,
     Type,
     cast,
@@ -26,7 +28,7 @@ from sekaibot.config import ConfigModel
 from sekaibot.dependencies import Depends
 from sekaibot.event import Event
 from sekaibot.exceptions import SkipException, JumpToException, PruningException, StopException
-from sekaibot._types import ConfigT, EventT, StateT
+from sekaibot.typing import ConfigT, EventT, StateT
 from sekaibot.utils import is_config_class
 
 if TYPE_CHECKING:
@@ -65,6 +67,7 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
     EventType: Type[Event] | Tuple[Type[Event]]
     Config: Type[ConfigT]
 
+    __node_rule_func__: ClassVar[List[Callable[[EventT], Awaitable[bool]]]]
     __node_load_type__: ClassVar[NodeLoadType]
     __node_file_path__: ClassVar[Optional[str]]
 

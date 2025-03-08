@@ -20,12 +20,14 @@ if TYPE_CHECKING:
     from sekaibot.bot import Bot
     from sekaibot.config import ConfigModel
     from sekaibot.event import Event, EventHandleOption
+    from sekaibot.node import Node
 
 __all__ = [
     "TreeType",
     "EventT",
     "StateT",
     "ConfigT",
+    "RuleCheckerT",
     "BotHook",
     "EventHook"
 ]
@@ -33,6 +35,8 @@ __all__ = [
 EventT = TypeVar("EventT", bound="Event")
 StateT = TypeVar("StateT")
 ConfigT = TypeVar("ConfigT", bound=Optional["ConfigModel"])
+NodeT = TypeVar("NodeT", bound="Node")
+RuleCheckerT = Callable[[Bot, Event, StateT], Union[bool, Awaitable[bool]]]
 
 BotHook = Callable[["Bot"], Awaitable[None]]
 EventHook = Callable[["Event[Any]"], Awaitable[None]]
