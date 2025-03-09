@@ -1,6 +1,6 @@
-"""KafuBot 节点。
+"""SekaiBot 节点。
 
-所有 KafuBot 节点的基类。所有用户编写的节点必须继承自 `Node` 类。
+所有 SekaiBot 节点的基类。所有用户编写的节点必须继承自 `Node` 类。
 """
 
 import inspect
@@ -47,13 +47,13 @@ class NodeLoadType(Enum):
 
 
 class Node(ABC, Generic[EventT, StateT, ConfigT]):
-    """所有 KafuBot 节点的基类。
+    """所有 SekaiBot 节点的基类。
 
     Attributes:
         event: 当前正在被此节点处理的事件。
         priority: 节点的优先级，数字越小表示优先级越高，默认为 0。
         block: 节点执行结束后是否阻止事件的传播。`True` 表示阻止。
-        __node_load_type__: 节点加载类型，由 KafuBot 自动设置，反映了此节点是如何被加载的。
+        __node_load_type__: 节点加载类型，由 SekaiBot 自动设置，反映了此节点是如何被加载的。
         __node_file_path__: 当节点加载类型为 `NodeLoadType.CLASS` 时为 `None`，
             否则为定义节点在的 Python 模块的位置。
     """
@@ -219,13 +219,12 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
 
     @abstractmethod
     async def handle(self) -> None:
-        """处理事件的方法。当 `rule()` 方法返回 `True` 时 KafuBot 会调用此方法。每个节点必须实现此方法。"""
+        """处理事件的方法。当 `rule()` 方法返回 `True` 时 SekaiBot 会调用此方法。每个节点必须实现此方法。"""
         raise NotImplementedError
 
-    @abstractmethod
     async def rule(self) -> bool:
-        """匹配事件的方法。事件处理时，会按照节点的优先级依次调用此方法，当此方法返回 `True` 时将事件交由此节点处理。每个节点必须实现此方法。
+        """匹配事件的方法。事件处理时，会按照节点的优先级依次调用此方法，当此方法返回 `True` 时将事件交由此节点处理。每个节点不一定要实现此方法。
 
         注意：不建议直接在此方法内实现对事件的处理，事件的具体处理请交由 `handle()` 方法。
         """
-        raise NotImplementedError
+        return True

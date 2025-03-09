@@ -1,4 +1,4 @@
-from contextlib import AsyncExitStack
+'''from contextlib import AsyncExitStack
 from typing import ClassVar, NoReturn, Optional, Union
 
 import anyio
@@ -120,4 +120,4 @@ class Rule:
             return Rule(other, *self.checkers)
 
     def __or__(self, other: object) -> NoReturn:
-        raise RuntimeError("Or operation between rules is not allowed.")
+        raise RuntimeError("Or operation between rules is not allowed.")'''

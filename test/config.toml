@@ -1,0 +1,16 @@
+[bot]
+# 这里是 KafuBot 自身的配置
+nodes = []
+node_dirs = ["./test/nodes"]
+
+[bot.log]
+# 这里是 KafuBot 自身日志相关的配置
+level = "INFO"
+verbose_exception = true
+
+[adapter.cqhttp]
+# 这里是 CQHTTP 适配器的配置
+adapter_type = "reverse-ws"
+host = "127.0.0.1"
+port = 8080
+url = "/cqhttp/ws"

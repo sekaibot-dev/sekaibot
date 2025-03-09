@@ -1,4 +1,4 @@
-"""AliceBot 事件。
+"""SekaiBot 事件。
 
 事件类的基类。适配器开发者应实现此事件类基类的子类。
 """
@@ -9,7 +9,7 @@ from typing_extensions import Self, override
 
 from pydantic import BaseModel, ConfigDict
 
-from alicebot.typing import AdapterT
+from sekaibot.typing import AdapterT
 
 __all__ = ["Event", "EventHandleOption", "MessageEvent"]
 

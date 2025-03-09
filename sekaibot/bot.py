@@ -334,26 +334,29 @@ class Bot():
             nodes_dict[node_class.__name__] = node_class
         # 构建节点集合和根节点集合
         all_nodes = set(nodes_dict.values())
-        roots = {
+        roots = [
             _node for _node in all_nodes if not _node.parent
-        }
+        ]
         #构建 节点-子节点 映射表
         parent_map: DefaultDict[Type[Node[Any, Any, Any]], List[Type[Node[Any, Any, Any]]]] = defaultdict(list)
-        for _node in all_nodes - roots:
+        for _node in all_nodes - set(roots):
             if _node.parent not in nodes_dict:
                 self.logger.warning(
                     "Parent node not found",
                     parent_name=_node.parent,
                     node_name=_node.__name__,
                 )
+                _node.parent = None
+                roots.append(_node)
                 continue
             parent_map[nodes_dict[_node.parent]].append(_node)
+        roots.sort(key=lambda _node: getattr(_node, "priority", 0))
         #  递归建树
         def build_tree(
             node_class: Type[Node[Any, Any, Any]]
         ) -> Dict[str, Any]:
             return {
-                child: build_tree(child) for child in parent_map[node_class]
+                child: build_tree(child) for child in sorted(parent_map[node_class], key=lambda _node: getattr(_node, "priority", 0))
             }
         # 加载到类属性
         self.nodes_tree = {root: build_tree(root) for root in roots}
@@ -372,8 +375,7 @@ class Bot():
         node_load_type: NodeLoadType,
         reload: bool = False,
     ) -> None:
-        """从模块名称中节点模块。"""
-        
+        """从模块名称中节点模块。"""       
         node_classes: List[Tuple[Type[Node], ModuleType]] = []
         for name in module_name:
             try:
