@@ -10,6 +10,7 @@ from typing import (
     AsyncContextManager,
     AsyncGenerator,
     Callable,
+    Awaitable,
     ContextManager,
     Dict,
     Generator,
@@ -18,17 +19,21 @@ from typing import (
     TypeVar,
     Union,
     cast,
+    get_type_hints
 )
 
 from sekaibot.utils import get_annotations, sync_ctx_manager_wrapper
 
 _T = TypeVar("_T")
 Dependency = Union[
-    # Class
+    # Class-based dependencies
     Type[Union[_T, AsyncContextManager[_T], ContextManager[_T]]],
-    # GeneratorContextManager
+    # Generator-based dependencies
     Callable[[], AsyncGenerator[_T, None]],
     Callable[[], Generator[_T, None, None]],
+    # Function-based dependencies (带参数)
+    Callable[..., _T],
+    Callable[..., Awaitable[_T]],
 ]
 
 
@@ -74,9 +79,6 @@ def Depends(  # noqa: N802 # pylint: disable=invalid-name
     """
     return InnerDepends(dependency=dependency, use_cache=use_cache)  # type: ignore
 
-
-import inspect
-from typing import get_type_hints
 
 async def solve_dependencies(
     dependent: Dependency[_T],
@@ -155,7 +157,7 @@ async def solve_dependencies(
             elif param_type in dependency_cache:
                 func_args[param_name] = dependency_cache[param_type]
             else:
-                raise TypeError(f"cannot resolve parameter '{param_name}' for dependency '{dependent.__name__}'")
+                raise TypeError(f"Cannot resolve parameter '{param_name}' for dependency '{dependent.__name__}'")
         if inspect.iscoroutinefunction(dependent):
             depend = await dependent(**func_args)
         else:

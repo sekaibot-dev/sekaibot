@@ -1,17 +1,12 @@
-'''from contextlib import AsyncExitStack
-from typing import ClassVar, NoReturn, Optional, Union
+from contextlib import AsyncExitStack
+from typing import NoReturn, Optional, Union, Dict, Any
 
 import anyio
 from exceptiongroup import BaseExceptionGroup, catch
 
-from nonebot.dependencies import Dependent
-from nonebot.exception import SkippedException
-from nonebot.typing import T_DependencyCache
-
-from sekaibot.bot import Bot
-from sekaibot.event import Event
-from sekaibot.typing import StateT, RuleCheckerT
-from .params import BotParam, DefaultParam, DependParam, EventParam, Param, StateParam
+from sekaibot.dependencies import Dependency, InnerDepends, Depends, solve_dependencies
+from sekaibot.exceptions import SkipException
+from sekaibot.typing import RuleCheckerT
 
 
 class Rule:
@@ -32,22 +27,12 @@ class Rule:
 
     __slots__ = ("checkers",)
 
-    HANDLER_PARAM_TYPES: ClassVar[list[type[Param]]] = [
-        DependParam,
-        BotParam,
-        EventParam,
-        StateParam,
-        DefaultParam,
-    ]
-
-    def __init__(self, *checkers: Union[RuleCheckerT, Dependent[bool]]) -> None:
-        self.checkers: set[Dependent[bool]] = {
+    def __init__(self, *checkers: Union[RuleCheckerT, Dependency[bool]]) -> None:
+        self.checkers: set[Dependency[bool]] = {
             (
                 checker
-                if isinstance(checker, Dependent)
-                else Dependent[bool].parse(
-                    call=checker, allow_types=self.HANDLER_PARAM_TYPES
-                )
+                if isinstance(checker, InnerDepends)
+                else Depends(checker) 
             )
             for checker in checkers
         }
@@ -58,11 +43,8 @@ class Rule:
 
     async def __call__(
         self,
-        bot: Bot,
-        event: Event,
-        state: StateT,
         stack: Optional[AsyncExitStack] = None,
-        dependency_cache: Optional[T_DependencyCache] = None,
+        dependency_cache: Optional[Dict[Dependency[Any], Any]] = None,
     ) -> bool:
         """检查是否符合所有规则
 
@@ -79,24 +61,23 @@ class Rule:
         result = True
 
         def _handle_skipped_exception(
-            exc_group: BaseExceptionGroup[SkippedException],
+            exc_group: BaseExceptionGroup[SkipException],
         ) -> None:
             nonlocal result
             result = False
 
-        async def _run_checker(checker: Dependent[bool]) -> None:
+        async def _run_checker(checker: Dependency[bool]) -> None:
             nonlocal result
             # calculate the result first to avoid data racing
-            is_passed = await checker(
-                bot=bot,
-                event=event,
-                state=state,
+            is_passed = solve_dependencies(
+                checker,
+                use_cache=False,
                 stack=stack,
                 dependency_cache=dependency_cache,
             )
             result &= is_passed
 
-        with catch({SkippedException: _handle_skipped_exception}):
+        with catch({SkipException: _handle_skipped_exception}):
             async with anyio.create_task_group() as tg:
                 for checker in self.checkers:
                     tg.start_soon(_run_checker, checker)
@@ -120,4 +101,4 @@ class Rule:
             return Rule(other, *self.checkers)
 
     def __or__(self, other: object) -> NoReturn:
-        raise RuntimeError("Or operation between rules is not allowed.")'''
+        raise RuntimeError("Or operation between rules is not allowed.")

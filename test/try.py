@@ -20,12 +20,12 @@ class B:
 
 async def main():
     query_result = await solve_dependencies(
-        B, 
+        query_db, 
         use_cache=True, 
         stack=AsyncExitStack(), 
         dependency_cache=dependency_cache
     )
-    print(query_result.a.query_db)
+    print(query_result)
 
 anyio.run(main)
 
