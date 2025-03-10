@@ -24,7 +24,7 @@ class HelloWorldNode2(Node):
     parent = "HelloWorldNode"
     priority = 2
     async def handle(self):
-        return None
+        pass
     
     async def rule(self):
         return True
@@ -39,33 +39,5 @@ class HelloWorldNode1_1(Node):
     async def rule(self):
         return True
     
-class HelloWorldNode2_1(Node):
-    """Hello, World! 示例节点。"""
-    parent = "HelloWorldNode1"
-    priority = 2
-    async def handle(self):
-        return None
-    
-    async def rule(self):
-        return True
-    
-class HelloWorldNode1_2(Node):
-    """Hello, World! 示例节点。"""
-    parent = "HelloWorldNode2"
-    priority = 1
-    async def handle(self):
-        return None
-    
-    async def rule(self):
-        return True
-    
-class HelloWorldNode2_2(Node):
-    """Hello, World! 示例节点。"""
-    parent = "HelloWorldNode2"
-    priority = 2
-    async def handle(self):
-        return None
-    
-    async def rule(self):
-        return True
+
     

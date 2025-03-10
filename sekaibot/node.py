@@ -189,7 +189,7 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
         raise SkipException
     
     @final
-    def jump_to(self, node: Type[Self]) -> NoReturn:
+    def jump_to(self, node: str) -> NoReturn:
         """跳过自身并将事件转发到下一个节点。"""
         raise JumpToException(node)
     
