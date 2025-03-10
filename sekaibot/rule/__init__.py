@@ -1,12 +1,16 @@
 from contextlib import AsyncExitStack
-from typing import NoReturn, Optional, Union, Dict, Any
+from typing import TYPE_CHECKING, NoReturn, Optional, Union, Dict, Any
 
 import anyio
 from exceptiongroup import BaseExceptionGroup, catch
 
-from sekaibot.dependencies import Dependency, InnerDepends, Depends, solve_dependencies
+from sekaibot.dependencies import Dependency, InnerDepends, Depends, solve_dependencies_in_bot
 from sekaibot.exceptions import SkipException
-from sekaibot.typing import RuleCheckerT
+from sekaibot.event import Event
+from sekaibot.typing import RuleCheckerT, StateT
+
+if TYPE_CHECKING:
+    from sekaibot.bot import Bot
 
 
 class Rule:
@@ -43,6 +47,9 @@ class Rule:
 
     async def __call__(
         self,
+        bot: "Bot",
+        event: Event,
+        state: StateT,
         stack: Optional[AsyncExitStack] = None,
         dependency_cache: Optional[Dict[Dependency[Any], Any]] = None,
     ) -> bool:
@@ -68,14 +75,18 @@ class Rule:
 
         async def _run_checker(checker: Dependency[bool]) -> None:
             nonlocal result
-            # calculate the result first to avoid data racing
-            is_passed = solve_dependencies(
+            is_passed = await solve_dependencies_in_bot(
                 checker,
+                bot=bot,
+                event=event,
+                state=state,
                 use_cache=False,
                 stack=stack,
                 dependency_cache=dependency_cache,
             )
-            result &= is_passed
+            if not is_passed:
+                result = False
+                tg.cancel_scope.cancel()
 
         with catch({SkipException: _handle_skipped_exception}):
             async with anyio.create_task_group() as tg:
@@ -102,3 +113,17 @@ class Rule:
 
     def __or__(self, other: object) -> NoReturn:
         raise RuntimeError("Or operation between rules is not allowed.")
+    
+    def __add__(self, other: Union["Rule", RuleCheckerT]) -> "Rule":
+        if other is None:
+            return self
+        elif isinstance(other, Rule):
+            return Rule(*self.checkers, *other.checkers)
+        else:
+            return Rule(other, *self.checkers)
+        
+    def __iadd__(self, other: Union["Rule", RuleCheckerT]) -> "Rule":
+        return self.__add__(other)
+    
+    def __sub__(self, other: Union["Rule", RuleCheckerT]) -> NoReturn:
+        raise RuntimeError("Subtraction operation between rules is not allowed.")

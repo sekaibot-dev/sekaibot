@@ -30,6 +30,7 @@ from sekaibot.event import Event
 from sekaibot.exceptions import SkipException, JumpToException, PruningException, StopException
 from sekaibot.typing import ConfigT, EventT, StateT
 from sekaibot.utils import is_config_class
+from sekaibot.rule import Rule
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
@@ -67,7 +68,7 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
     EventType: Type[Event] | Tuple[Type[Event]]
     Config: Type[ConfigT]
 
-    __node_rule_func__: ClassVar[List[Callable[[EventT], Awaitable[bool]]]]
+    __node_rule_func__: ClassVar[Rule] = Rule()
     __node_load_type__: ClassVar[NodeLoadType]
     __node_file_path__: ClassVar[Optional[str]]
 

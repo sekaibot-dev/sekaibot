@@ -6,6 +6,7 @@
 import inspect
 from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
 from typing import (
+    TYPE_CHECKING,
     Any,
     AsyncContextManager,
     AsyncGenerator,
@@ -23,6 +24,10 @@ from typing import (
 )
 
 from sekaibot.utils import get_annotations, sync_ctx_manager_wrapper
+from sekaibot.event import Event
+from sekaibot.typing import ConfigT, EventT, StateT
+if TYPE_CHECKING:
+    from sekaibot.bot import Bot
 
 _T = TypeVar("_T")
 Dependency = Union[
@@ -78,7 +83,6 @@ def Depends(  # noqa: N802 # pylint: disable=invalid-name
         返回内部子依赖对象。
     """
     return InnerDepends(dependency=dependency, use_cache=use_cache)  # type: ignore
-
 
 async def solve_dependencies(
     dependent: Dependency[_T],
@@ -175,3 +179,24 @@ async def solve_dependencies(
 
     dependency_cache[dependent] = depend
     return depend  # pyright: ignore
+
+async def solve_dependencies_in_bot(
+    dependent: Dependency[_T],
+    *,
+    bot: "Bot",
+    event: Event,
+    state: StateT,
+    use_cache: bool = True,
+    stack: AsyncExitStack = AsyncExitStack(),
+    dependency_cache: Dict[Dependency[Any], Any] = {},
+) -> _T:
+    """解析子依赖。
+        使用此方法强制需要bot、event、state作为参数，更加严谨。
+    """
+    from sekaibot.bot import Bot
+    dependency_cache |= {
+        Bot: bot,
+        Event: event,
+        StateT: state,
+    }
+    return await solve_dependencies(dependent, use_cache=use_cache, stack=stack, dependency_cache=dependency_cache)

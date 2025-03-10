@@ -129,6 +129,7 @@ class Bot():
         """
         self.config = MainConfig()
         self.logger = Logger(self)
+        self.manager = NodeManager(self)
         self.nodes_tree = {}
         self.nodes_list = []
         self.global_state = {}
@@ -207,6 +208,16 @@ class Bot():
             await bot_run_hook_func(self)
 
         try:
+            await self.manager.startup()
+            from sekaibot.event import Event
+            class AEvent(Event):
+                """"""
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(self.manager.run)
+                tg.start_soon(self.manager.handle_event, AEvent(
+                    type = "a_event",
+                    adapter = "test_adapter"
+                ))
             """启动各种task
                 _agent_task = asyncio.create_task(_agent.safe_run())
                 self._agent_tasks.add(_agent_task)
@@ -214,13 +225,13 @@ class Bot():
             """
 
             await self._should_exit.wait()
-            
         finally:
             """执行结束方法
                 结束各个任务
                 while self._agent_tasks:
                     await asyncio.sleep(0)
             """
+            await self.manager.shutdown()
 
             # 执行退出钩子
             for bot_exit_hook_func in self._bot_exit_hooks:
