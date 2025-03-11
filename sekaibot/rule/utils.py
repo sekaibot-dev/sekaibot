@@ -36,7 +36,7 @@ from pygtrie import CharTrie
 
 from sekaibot import get_driver
 from sekaibot.bot import Bot
-from sekaibot.event import Event, Message, MessageSegment
+from sekaibot.internal.event import Event, Message, MessageSegment
 from nonebot.consts import (
     CMD_ARG_KEY,
     CMD_KEY,

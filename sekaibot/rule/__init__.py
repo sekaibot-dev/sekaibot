@@ -6,7 +6,7 @@ from exceptiongroup import BaseExceptionGroup, catch
 
 from sekaibot.dependencies import Dependency, InnerDepends, Depends, solve_dependencies_in_bot
 from sekaibot.exceptions import SkipException
-from sekaibot.event import Event
+from sekaibot.internal.event import Event
 from sekaibot.typing import RuleCheckerT, StateT
 
 if TYPE_CHECKING:

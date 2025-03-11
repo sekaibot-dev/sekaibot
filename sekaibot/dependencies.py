@@ -24,7 +24,7 @@ from typing import (
 )
 
 from sekaibot.utils import get_annotations, sync_ctx_manager_wrapper
-from sekaibot.event import Event
+from sekaibot.internal.event import Event
 from sekaibot.typing import ConfigT, EventT, StateT
 if TYPE_CHECKING:
     from sekaibot.bot import Bot

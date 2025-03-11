@@ -29,7 +29,7 @@ from sekaibot.exceptions import (
 from sekaibot.typing import EventT, StateT
 from sekaibot.utils import wrap_get_func, cancel_on_exit
 from sekaibot.dependencies import solve_dependencies_in_bot
-from sekaibot.event import Event, EventHandleOption
+from sekaibot.internal.event import Event, EventHandleOption
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot

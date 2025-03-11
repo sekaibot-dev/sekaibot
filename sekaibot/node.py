@@ -26,7 +26,7 @@ from typing_extensions import Annotated, get_args, get_origin
 
 from sekaibot.config import ConfigModel
 from sekaibot.dependencies import Depends
-from sekaibot.event import Event
+from sekaibot.internal.event import Event
 from sekaibot.exceptions import SkipException, JumpToException, PruningException, StopException
 from sekaibot.typing import ConfigT, EventT, StateT
 from sekaibot.utils import is_config_class

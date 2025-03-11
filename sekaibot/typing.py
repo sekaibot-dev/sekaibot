@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from typing import Any # type: ignore
     from sekaibot.bot import Bot
     from sekaibot.config import ConfigModel
-    from sekaibot.event import Event, EventHandleOption
+    from sekaibot.internal.event import Event, EventHandleOption
     from sekaibot.node import Node
 
 __all__ = [

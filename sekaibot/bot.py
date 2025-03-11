@@ -209,7 +209,7 @@ class Bot():
 
         try:
             await self.manager.startup()
-            from sekaibot.event import Event
+            from sekaibot.internal.event import Event
             class AEvent(Event):
                 """"""
             async with anyio.create_task_group() as tg:

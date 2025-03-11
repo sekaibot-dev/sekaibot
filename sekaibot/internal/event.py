@@ -11,6 +11,8 @@ from pydantic import BaseModel, ConfigDict
 
 from sekaibot.typing import AdapterT
 
+from .message import Message
+
 __all__ = ["Event", "EventHandleOption", "MessageEvent"]
 
 
