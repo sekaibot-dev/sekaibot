@@ -53,7 +53,7 @@ from nonebot.consts import (
     STARTSWITH_KEY,
 )
 from nonebot.exception import ParserExit
-from nonebot.internal.rule import Rule as Rule
+from . import Rule
 from sekaibot.log import logger
 from nonebot.params import Command, CommandArg, CommandWhitespace, EventToMe
 from sekaibot.typing import StateT

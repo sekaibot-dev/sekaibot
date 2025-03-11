@@ -1,5 +1,5 @@
 from contextlib import AsyncExitStack
-from typing import TYPE_CHECKING, NoReturn, Optional, Union, Dict, Any
+from typing import TYPE_CHECKING, NoReturn, Optional, Union, Dict, Any, Self
 
 import anyio
 from exceptiongroup import BaseExceptionGroup, catch
@@ -95,7 +95,7 @@ class Rule:
 
         return result
 
-    def __and__(self, other: Optional[Union["Rule", RuleCheckerT]]) -> "Rule":
+    def __and__(self, other: Optional[Union[Self, RuleCheckerT]]) -> Self:
         if other is None:
             return self
         elif isinstance(other, Rule):
@@ -103,7 +103,7 @@ class Rule:
         else:
             return Rule(*self.checkers, other)
 
-    def __rand__(self, other: Optional[Union["Rule", RuleCheckerT]]) -> "Rule":
+    def __rand__(self, other: Optional[Union[Self, RuleCheckerT]]) -> Self:
         if other is None:
             return self
         elif isinstance(other, Rule):
@@ -114,7 +114,7 @@ class Rule:
     def __or__(self, other: object) -> NoReturn:
         raise RuntimeError("Or operation between rules is not allowed.")
     
-    def __add__(self, other: Union["Rule", RuleCheckerT]) -> "Rule":
+    def __add__(self, other: Union[Self, RuleCheckerT]) -> Self:
         if other is None:
             return self
         elif isinstance(other, Rule):
@@ -122,8 +122,8 @@ class Rule:
         else:
             return Rule(other, *self.checkers)
         
-    def __iadd__(self, other: Union["Rule", RuleCheckerT]) -> "Rule":
+    def __iadd__(self, other: Union[Self, RuleCheckerT]) -> Self:
         return self.__add__(other)
     
-    def __sub__(self, other: Union["Rule", RuleCheckerT]) -> NoReturn:
+    def __sub__(self, other: Union[Self, RuleCheckerT]) -> NoReturn:
         raise RuntimeError("Subtraction operation between rules is not allowed.")
