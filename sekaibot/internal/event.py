@@ -61,21 +61,23 @@ class Event(ABC, BaseModel, Generic[AdapterT]):
         异常:
             NoLogException: 希望 NoneBot 隐藏该事件日志
         """
-        return f"[{self.get_event_name()}]: {self.get_event_description()}"
+        return f"[{self.get_event_name()}]: {self.get_event_description()}"'''
 
     @abstractmethod
-    def get_user_id(self) -> str:
+    @property
+    def user_id(self) -> str:
         """获取事件主体 id 的方法，通常是用户 id 。"""
         raise NotImplementedError
 
     @abstractmethod
-    def get_session_id(self) -> str:
+    @property
+    def session_id(self) -> str:
         """获取会话 id 的方法，用于判断当前事件属于哪一个会话，
         通常是用户 id、群组 id 组合。
         """
         raise NotImplementedError
 
-    @abstractmethod
+    '''@abstractmethod
     def get_message(self) -> "Message":
         """获取事件消息内容的方法。"""
         raise NotImplementedError

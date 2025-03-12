@@ -28,6 +28,7 @@ __all__ = [
     "StateT",
     "ConfigT",
     "RuleCheckerT",
+    "PermissionCheckerT",
     "BotHook",
     "EventHook"
 ]
@@ -37,7 +38,9 @@ StateT = TypeVar("StateT")
 ConfigT = TypeVar("ConfigT", bound=Optional["ConfigModel"])
 AdapterT = TypeVar("AdapterT")
 NodeT = TypeVar("NodeT", bound="Node")
+
 RuleCheckerT = Callable[["Bot", "Event[Any]", StateT], Union[bool, Awaitable[bool]]]
+PermissionCheckerT = Callable[["Bot", "Event[Any]", StateT], Union[bool, Awaitable[bool]]]
 
 BotHook = Callable[["Bot"], Awaitable[None]]
 EventHook = Callable[["Event[Any]"], Awaitable[None]]

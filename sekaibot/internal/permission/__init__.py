@@ -7,7 +7,7 @@ from exceptiongroup import BaseExceptionGroup, catch
 from sekaibot.dependencies import Dependency, InnerDepends, Depends, solve_dependencies_in_bot
 from sekaibot.exceptions import SkipException
 from sekaibot.internal.event import Event
-from sekaibot.typing import RuleCheckerT, StateT
+from sekaibot.typing import PermissionCheckerT, StateT
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
@@ -31,28 +31,22 @@ class Permission:
 
     __slots__ = ("checkers",)
 
-    def __init__(self, *checkers: Union[T_PermissionChecker, Dependent[bool]]) -> None:
-        self.checkers: set[Dependent[bool]] = {
-            (
-                checker
-                if isinstance(checker, Dependent)
-                else Dependent[bool].parse(
-                    call=checker, allow_types=self.HANDLER_PARAM_TYPES
-                )
-            )
-            for checker in checkers
+    def __init__(self, *checkers: Union[PermissionCheckerT, Dependency[bool]]) -> None:
+        self.checkers: set[Dependency[bool]] = {
+            checker for checker in checkers
         }
         """存储 `PermissionChecker`"""
 
     def __repr__(self) -> str:
         return f"Permission({', '.join(repr(checker) for checker in self.checkers)})"
-
+    
     async def __call__(
         self,
-        bot: Bot,
+        bot: "Bot",
         event: Event,
+        state: StateT,
         stack: Optional[AsyncExitStack] = None,
-        dependency_cache: Optional[T_DependencyCache] = None,
+        dependency_cache: Optional[Dict[Dependency[Any], Any]] = None,
     ) -> bool:
         """检查是否满足某个权限。
 
@@ -67,21 +61,31 @@ class Permission:
 
         result = False
 
-        async def _run_checker(checker: Dependent[bool]) -> None:
+        def _handle_skipped_exception(
+            exc_group: BaseExceptionGroup[SkipException],
+        ) -> None:
             nonlocal result
-            # calculate the result first to avoid data racing
-            is_passed = await run_coro_with_catch(
-                checker(
-                    bot=bot, event=event, stack=stack, dependency_cache=dependency_cache
-                ),
-                (SkippedException,),
-                False,
-            )
-            result |= is_passed
+            result = False
 
-        async with anyio.create_task_group() as tg:
-            for checker in self.checkers:
-                tg.start_soon(_run_checker, checker)
+        async def _run_checker(checker: Dependency[bool]) -> None:
+            nonlocal result
+            is_passed = await solve_dependencies_in_bot(
+                checker,
+                bot=bot,
+                event=event,
+                state=state,
+                use_cache=False,
+                stack=stack,
+                dependency_cache=dependency_cache,
+            )
+            if is_passed:
+                result = True
+                tg.cancel_scope.cancel()
+
+        with catch({SkipException: _handle_skipped_exception}):
+            async with anyio.create_task_group() as tg:
+                for checker in self.checkers:
+                    tg.start_soon(_run_checker, checker)
 
         return result
 
@@ -89,8 +93,8 @@ class Permission:
         raise RuntimeError("And operation between Permissions is not allowed.")
 
     def __or__(
-        self, other: Optional[Union["Permission", T_PermissionChecker]]
-    ) -> "Permission":
+        self, other: Optional[Union[Self, PermissionCheckerT]]
+    ) -> Self:
         if other is None:
             return self
         elif isinstance(other, Permission):
@@ -99,14 +103,28 @@ class Permission:
             return Permission(*self.checkers, other)
 
     def __ror__(
-        self, other: Optional[Union["Permission", T_PermissionChecker]]
-    ) -> "Permission":
+        self, other: Optional[Union[Self, PermissionCheckerT]]
+    ) -> Self:
         if other is None:
             return self
         elif isinstance(other, Permission):
             return Permission(*other.checkers, *self.checkers)
         else:
             return Permission(other, *self.checkers)
+        
+    def __add__(self, other: Union[Self, PermissionCheckerT]) -> Self:
+        if other is None:
+            return self
+        elif isinstance(other, Permission):
+            return Permission(*self.checkers, *other.checkers)
+        else:
+            return Permission(other, *self.checkers)
+        
+    def __iadd__(self, other: Union[Self, PermissionCheckerT]) -> Self:
+        return self.__add__(other)
+    
+    def __sub__(self, other: Union[Self, PermissionCheckerT]) -> NoReturn:
+        raise RuntimeError("Subtraction operation between permissions is not allowed.")
 
 
 class User:
@@ -134,7 +152,7 @@ class User:
 
     async def __call__(self, bot: Bot, event: Event) -> bool:
         try:
-            session = event.get_session_id()
+            session = event.session_id
         except Exception:
             return False
         return bool(
@@ -159,7 +177,7 @@ class User:
             event: Event 对象
             perm: 需同时满足的权限
         """
-        return cls((event.get_session_id(),), perm=perm and cls._clean_permission(perm))
+        return cls((event.session_id,), perm=perm and cls._clean_permission(perm))
 
     @classmethod
     def from_permission(cls, *users: str, perm: Optional[Permission] = None) -> Self:
