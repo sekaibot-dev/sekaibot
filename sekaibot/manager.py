@@ -155,14 +155,14 @@ class NodeManager():
                         node_state = _node.__init_state__()
                         if node_state is not None:
                             self.node_state[_node.name] = node_state
-                    if not await _node.__node_rule_func__(
-                        bot=self.bot,
-                        event=current_event,
-                        state=self.node_state[node_class.__name__],
-                        stack=stack,
-                        dependency_cache=_dependency_cache,
-                    ): continue
-                    if await _node.rule():
+                    if (
+                        await _node.__node_rule_func__(
+                            bot=self.bot, event=current_event, state=self.node_state[node_class.__name__],
+                            stack=stack,
+                            dependency_cache=_dependency_cache,
+                        ) 
+                        and await _node.rule()
+                    ):
                         self.bot.logger.info("Event will be handled by node", node=_node)
                         try:
                             await _node.handle()

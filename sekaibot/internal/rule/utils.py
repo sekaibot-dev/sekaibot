@@ -180,19 +180,6 @@ class StartswithRule:
         return False
 
 
-def startswith(msg: Union[str, tuple[str, ...]], ignorecase: bool = False) -> Rule:
-    """匹配消息纯文本开头。
-
-    参数:
-        msg: 指定消息开头字符串元组
-        ignorecase: 是否忽略大小写
-    """
-    if isinstance(msg, str):
-        msg = (msg,)
-
-    return Rule(StartswithRule(msg, ignorecase))
-
-
 class EndswithRule:
     """检查消息纯文本是否以指定字符串结尾。
 
@@ -233,19 +220,6 @@ class EndswithRule:
             state[ENDSWITH_KEY] = match.group()
             return True
         return False
-
-
-def endswith(msg: Union[str, tuple[str, ...]], ignorecase: bool = False) -> Rule:
-    """匹配消息纯文本结尾。
-
-    参数:
-        msg: 指定消息开头字符串元组
-        ignorecase: 是否忽略大小写
-    """
-    if isinstance(msg, str):
-        msg = (msg,)
-
-    return Rule(EndswithRule(msg, ignorecase))
 
 
 class FullmatchRule:
@@ -289,19 +263,6 @@ class FullmatchRule:
         return False
 
 
-def fullmatch(msg: Union[str, tuple[str, ...]], ignorecase: bool = False) -> Rule:
-    """完全匹配消息。
-
-    参数:
-        msg: 指定消息全匹配字符串元组
-        ignorecase: 是否忽略大小写
-    """
-    if isinstance(msg, str):
-        msg = (msg,)
-
-    return Rule(FullmatchRule(msg, ignorecase))
-
-
 class KeywordsRule:
     """检查消息纯文本是否包含指定关键字。
 
@@ -336,16 +297,6 @@ class KeywordsRule:
             state[KEYWORD_KEY] = key
             return True
         return False
-
-
-def keyword(*keywords: str) -> Rule:
-    """匹配消息纯文本关键词。
-
-    参数:
-        keywords: 指定关键字元组
-    """
-
-    return Rule(KeywordsRule(*keywords))
 
 
 class CommandRule:
@@ -696,30 +647,6 @@ class RegexRule:
             return False
 
 
-def regex(regex: str, flags: Union[int, re.RegexFlag] = 0) -> Rule:
-    """匹配符合正则表达式的消息字符串。
-
-    可以通过 {ref}`nonebot.params.RegexStr` 获取匹配成功的字符串，
-    通过 {ref}`nonebot.params.RegexGroup` 获取匹配成功的 group 元组，
-    通过 {ref}`nonebot.params.RegexDict` 获取匹配成功的 group 字典。
-
-    参数:
-        regex: 正则表达式
-        flags: 正则表达式标记
-
-    :::tip 提示
-    正则表达式匹配使用 search 而非 match，如需从头匹配请使用 `r"^xxx"` 来确保匹配开头
-    :::
-
-    :::tip 提示
-    正则表达式匹配使用 `EventMessage` 的 `str` 字符串，
-    而非 `EventMessage` 的 `PlainText` 纯文本字符串
-    :::
-    """
-
-    return Rule(RegexRule(regex, flags))
-
-
 class ToMeRule:
     """检查事件是否与机器人有关。"""
 
@@ -736,12 +663,6 @@ class ToMeRule:
 
     async def __call__(self, to_me: bool = EventToMe()) -> bool:
         return to_me
-
-
-def to_me() -> Rule:
-    """匹配与机器人有关的事件。"""
-
-    return Rule(ToMeRule())
 
 
 class IsTypeRule:
@@ -763,16 +684,6 @@ class IsTypeRule:
 
     async def __call__(self, event: Event) -> bool:
         return isinstance(event, self.types)
-
-
-def is_type(*types: type[Event]) -> Rule:
-    """匹配事件类型。
-
-    参数:
-        types: 事件类型
-    """
-
-    return Rule(IsTypeRule(*types))
 
 
 __autodoc__ = {

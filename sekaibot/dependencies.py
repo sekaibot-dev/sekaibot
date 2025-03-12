@@ -84,6 +84,37 @@ def Depends(  # noqa: N802 # pylint: disable=invalid-name
     """
     return InnerDepends(dependency=dependency, use_cache=use_cache)  # type: ignore
 
+async def _execute_callable(
+    dependent: Callable[..., Any], 
+    stack: AsyncExitStack, 
+    dependency_cache: Dict[Dependency[Any], Any]
+) -> Any:
+    """执行可调用对象（函数或 __call__ 方法），并注入参数。"""
+    func_params = inspect.signature(dependent).parameters
+    func_args = {}
+
+    for param_name, param in func_params.items():
+        param_type = get_type_hints(dependent).get(param_name)
+        if isinstance(param.default, InnerDepends):
+            func_args[param_name] = await solve_dependencies(
+                param.default.dependency, 
+                use_cache=param.default.use_cache,
+                stack=stack, 
+                dependency_cache=dependency_cache
+            )
+        elif param.default is not inspect.Parameter.empty:
+            func_args[param_name] = param.default
+        elif param_type in dependency_cache:
+            func_args[param_name] = dependency_cache[param_type]
+        else:
+            raise TypeError(
+                f"Cannot resolve parameter '{param_name}' for dependency '{dependent.__name__}'"
+            )
+
+    if inspect.iscoroutinefunction(dependent):
+        return await dependent(**func_args)
+    return dependent(**func_args)
+
 async def solve_dependencies(
     dependent: Dependency[_T],
     *,
@@ -91,25 +122,28 @@ async def solve_dependencies(
     stack: AsyncExitStack,
     dependency_cache: Dict[Dependency[Any], Any],
 ) -> _T:
-    """解析子依赖。
+    """解析子依赖，包括 `__call__` 方法的可调用类实例。
 
     Args:
-        dependent: 依赖类。
-        use_cache: 是否使用缓存。
-        stack: `AsyncExitStack` 对象。
-        dependency_cache: 依赖缓存。
+        dependent: 依赖对象，可能是类、类实例、函数、生成器等。
+        use_cache: 是否使用缓存，避免重复解析。
+        stack: `AsyncExitStack` 对象，用于管理上下文依赖。
+        dependency_cache: 已解析的依赖缓存。
 
     Raises:
-        TypeError: 解析错误。
+        TypeError: `dependent` 解析失败。
 
     Returns:
-        解析完成子依赖的对象。
+        解析完成依赖的对象。
     """
+    if dependent is None:
+        raise TypeError("dependent cannot be None")
+
     if use_cache and dependent in dependency_cache:
         return dependency_cache[dependent]
 
     if isinstance(dependent, type):
-        # type of dependent is Type[T]
+        # type of dependent is Type[T] (Class, not instance)
         values: Dict[str, Any] = {}
         ann = get_annotations(dependent)
         for name, sub_dependent in inspect.getmembers(
@@ -119,7 +153,7 @@ async def solve_dependencies(
             if sub_dependent.dependency is None:
                 dependent_ann = ann.get(name)
                 if dependent_ann is None:
-                    raise TypeError("can not solve dependent")
+                    raise TypeError(f"can not resolve dependency for attribute '{name}' in {dependent}")
                 sub_dependent.dependency = dependent_ann
             values[name] = await solve_dependencies(
                 sub_dependent.dependency,
@@ -133,7 +167,7 @@ async def solve_dependencies(
         )
         for key, value in values.items():
             setattr(depend_obj, key, value)
-        depend_obj.__init__()  # type: ignore[misc] # pylint: disable=unnecessary-dunder-call
+        await _execute_callable(depend_obj.__init__, stack, dependency_cache)
 
         if isinstance(depend_obj, AsyncContextManager):
             depend = await stack.enter_async_context(depend_obj)  # pyright: ignore
@@ -143,42 +177,35 @@ async def solve_dependencies(
             )
         else:
             depend = depend_obj
+
+    elif isinstance(dependent, object) and hasattr(dependent, "__call__") and callable(dependent):
+        # type of dependent is an instance with __call__ method (Callable class instance)
+        call_method = dependent.__call__
+        if inspect.iscoroutinefunction(call_method) or inspect.isfunction(call_method):
+            depend = await _execute_callable(call_method, stack, dependency_cache)
+        else:
+            raise TypeError(f"__call__ method in {dependent.__class__.__name__} is not a valid function")
+
     elif inspect.iscoroutinefunction(dependent) or inspect.isfunction(dependent):
         # type of dependent is Callable[..., T] | Callable[..., Awaitable[T]]
-        func_params = inspect.signature(dependent).parameters
-        func_args = {}
-        for param_name, param in func_params.items():
-            param_type = get_type_hints(dependent).get(param_name)
-            if isinstance(param.default, InnerDepends):
-                func_args[param_name] = await solve_dependencies(
-                    param.default.dependency, 
-                    use_cache=param.default.use_cache,
-                    stack=stack, 
-                    dependency_cache=dependency_cache
-                )
-            elif param.default is not inspect.Parameter.empty:
-                func_args[param_name] = param.default
-            elif param_type in dependency_cache:
-                func_args[param_name] = dependency_cache[param_type]
-            else:
-                raise TypeError(f"Cannot resolve parameter '{param_name}' for dependency '{dependent.__name__}'")
-        if inspect.iscoroutinefunction(dependent):
-            depend = await dependent(**func_args)
-        else:
-            depend = dependent(**func_args)
+        depend = await _execute_callable(dependent, stack, dependency_cache)
+
     elif inspect.isasyncgenfunction(dependent):
         # type of dependent is Callable[[], AsyncGenerator[T, None]]
         cm = asynccontextmanager(dependent)()
         depend = cast(_T, await stack.enter_async_context(cm))
+
     elif inspect.isgeneratorfunction(dependent):
         # type of dependent is Callable[[], Generator[T, None, None]]
         cm = sync_ctx_manager_wrapper(contextmanager(dependent)())
         depend = cast(_T, await stack.enter_async_context(cm))
+
     else:
-        raise TypeError("dependent is not a class or generator function")
+        raise TypeError(f"Dependent {dependent} is not a class, function, or generator")
 
     dependency_cache[dependent] = depend
     return depend  # pyright: ignore
+
 
 async def solve_dependencies_in_bot(
     dependent: Dependency[_T],

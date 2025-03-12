@@ -33,12 +33,7 @@ class Rule:
 
     def __init__(self, *checkers: Union[RuleCheckerT, Dependency[bool]]) -> None:
         self.checkers: set[Dependency[bool]] = {
-            (
-                checker
-                if isinstance(checker, InnerDepends)
-                else Depends(checker) 
-            )
-            for checker in checkers
+            checker for checker in checkers
         }
         """存储 `RuleChecker`"""
 

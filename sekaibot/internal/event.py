@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict
 
 from sekaibot.typing import AdapterT
 
-from .message import Message
+#from .message import Message
 
 __all__ = ["Event", "EventHandleOption", "MessageEvent"]
 
@@ -36,13 +36,13 @@ class Event(ABC, BaseModel, Generic[AdapterT]):
 
     @override
     def __str__(self) -> str:
-        return f"Event<{self.type}>: {self.get_event_description()}"
+        return f"Event<{self.type}>"#: {self.get_event_description()}
 
     @override
     def __repr__(self) -> str:
         return self.__str__()
 
-    @abstractmethod
+    '''@abstractmethod
     def get_event_name(self) -> str:
         """获取事件名称的方法。"""
         raise NotImplementedError
@@ -90,7 +90,7 @@ class Event(ABC, BaseModel, Generic[AdapterT]):
     @abstractmethod
     def is_tome(self) -> bool:
         """获取事件是否与机器人有关的方法。"""
-        raise NotImplementedError
+        raise NotImplementedError'''
 
 
 class EventHandleOption(NamedTuple):

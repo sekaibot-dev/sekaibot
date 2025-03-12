@@ -1,5 +1,7 @@
 from sekaibot import Node, Bot, Depends
 from MainNode import HelloWorldNode1
+from sekaibot.rule import rule
+
 
 class HelloWorldNode2_1(Node):
     """Hello, World! 示例节点。"""
