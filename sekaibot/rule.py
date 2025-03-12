@@ -3,14 +3,11 @@ from typing import (
     Callable,
     Self
 )
-from functools import wraps
-import inspect
 import re
 
 from sekaibot.internal.event import Event
-from sekaibot.typing import EventT, NodeT, RuleCheckerT, StateT
+from sekaibot.typing import NodeT, RuleCheckerT
 from sekaibot.dependencies import Dependency
-from sekaibot.utils import wrap_get_func
 from sekaibot.internal.rule import Rule
 from sekaibot.internal.rule.utils import (
     StartswithRule,
