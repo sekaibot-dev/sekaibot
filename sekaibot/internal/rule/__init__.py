@@ -1,5 +1,5 @@
 from contextlib import AsyncExitStack
-from typing import TYPE_CHECKING, NoReturn, Optional, Union, Dict, Any, Self
+from typing import TYPE_CHECKING, NoReturn, Optional, Union, Dict, Any, Self, Tuple
 
 import anyio
 from exceptiongroup import BaseExceptionGroup, catch
@@ -8,6 +8,7 @@ from sekaibot.dependencies import Dependency, InnerDepends, Depends, solve_depen
 from sekaibot.exceptions import SkipException
 from sekaibot.internal.event import Event
 from sekaibot.typing import RuleCheckerT, StateT
+from sekaibot.consts import NODERULESTATE
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
@@ -74,7 +75,7 @@ class Rule:
                 checker,
                 bot=bot,
                 event=event,
-                state=state,
+                state=state[NODERULESTATE],
                 use_cache=False,
                 stack=stack,
                 dependency_cache=dependency_cache,

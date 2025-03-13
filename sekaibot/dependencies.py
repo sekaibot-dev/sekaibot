@@ -4,6 +4,7 @@
 """
 
 import inspect
+import sys
 from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
 from typing import (
     TYPE_CHECKING,
@@ -84,6 +85,18 @@ def Depends(  # noqa: N802 # pylint: disable=invalid-name
     """
     return InnerDepends(dependency=dependency, use_cache=use_cache)  # type: ignore
 
+def get_dependency_name(dependency: Dependency[Any]) -> str:
+    """获取 Dependency[Any] 的名称，正确区分类、函数、实例等"""
+
+    if isinstance(dependency, type):
+        return dependency.__name__
+    if callable(dependency):
+        if hasattr(dependency, "__name__"):
+            return dependency.__name__ if dependency.__name__ != "<lambda>" else "lambda"
+        return dependency.__class__.__name__
+    return dependency.__class__.__name__
+
+
 async def _execute_callable(
     dependent: Callable[..., Any], 
     stack: AsyncExitStack, 
@@ -106,6 +119,16 @@ async def _execute_callable(
             func_args[param_name] = param.default
         elif param_type in dependency_cache:
             func_args[param_name] = dependency_cache[param_type]
+        elif isinstance(param_type, str):
+            name_cache = {get_dependency_name(_cache): _cache for _cache in dependency_cache.keys()}
+            if param_type in name_cache:
+                func_args[param_name] = name_cache[param_type]
+            else:
+                try:
+                    class_ = getattr(sys.modules[__name__], param_type)
+                    func_args[param_name] = await solve_dependencies(class_, use_cache=True, stack=stack, dependency_cache=dependency_cache)
+                except AttributeError:
+                    raise TypeError(f"Class '{param_type}' not found in the current module")
         else:
             raise TypeError(
                 f"Cannot resolve parameter '{param_name}' for dependency '{dependent.__name__}'"
@@ -167,7 +190,7 @@ async def solve_dependencies(
         )
         for key, value in values.items():
             setattr(depend_obj, key, value)
-        await _execute_callable(depend_obj.__init__, stack, dependency_cache)
+        depend_obj.__init__()#await _execute_callable(depend_obj.__init__, stack, dependency_cache)
 
         if isinstance(depend_obj, AsyncContextManager):
             depend = await stack.enter_async_context(depend_obj)  # pyright: ignore
@@ -200,6 +223,16 @@ async def solve_dependencies(
         cm = sync_ctx_manager_wrapper(contextmanager(dependent)())
         depend = cast(_T, await stack.enter_async_context(cm))
 
+    elif isinstance(dependent, str):
+        name_cache = {get_dependency_name(_cache): _cache for _cache in dependency_cache.keys()}
+        if dependent in name_cache:
+            depend = name_cache[dependent]
+        else:
+            try:
+                class_ = getattr(sys.modules[__name__], dependent)
+                depend = await solve_dependencies(class_, use_cache=True, stack=stack, dependency_cache=dependency_cache)
+            except AttributeError:
+                raise TypeError(f"Class '{dependent}' not found in the current module")
     else:
         raise TypeError(f"Dependent {dependent} is not a class, function, or generator")
 

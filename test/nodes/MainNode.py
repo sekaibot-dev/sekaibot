@@ -1,8 +1,8 @@
 from sekaibot import Node
-from sekaibot.rule import rule
+#from sekaibot.rule import rule
 #from sekaibot.rule import rule_at_me
 
-@rule.startswith("Hello")
+#@rule.startswith("Hello")
 class HelloWorldNode(Node):
     """Hello, World! 示例节点。"""
     priority = 0
@@ -15,6 +15,7 @@ class HelloWorldNode1(Node):
     parent = "HelloWorldNode"
     priority = 5
     async def handle(self):
+        print(self.bot.config.model_dump_json(indent=4))
         return None
     
     async def rule(self):

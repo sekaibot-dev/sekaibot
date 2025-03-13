@@ -36,8 +36,9 @@ from pygtrie import CharTrie
 
 from sekaibot import get_driver
 from sekaibot.bot import Bot
-from sekaibot.internal.event import Event, Message, MessageSegment
-from nonebot.consts import (
+from sekaibot.internal.event import Event
+from sekaibot.internal.message import Message, MessageSegment
+from sekaibot.consts import (
     CMD_ARG_KEY,
     CMD_KEY,
     CMD_START_KEY,
@@ -52,11 +53,12 @@ from nonebot.consts import (
     SHELL_ARGV,
     STARTSWITH_KEY,
 )
-from nonebot.exception import ParserExit
+#from nonebot.exception import ParserExit
 from . import Rule
 from sekaibot.log import logger
-from nonebot.params import Command, CommandArg, CommandWhitespace, EventToMe
+#from nonebot.params import Command, CommandArg, CommandWhitespace, EventToMe
 from sekaibot.typing import StateT
+logger = ''
 
 T = TypeVar("T")
 

@@ -41,7 +41,7 @@ from sekaibot.utils import (
     samefile,
 )
 from sekaibot.config import ConfigModel, MainConfig, NodeConfig
-from sekaibot.log import Logger
+from sekaibot.log import logger, configure_logging
 #from sekaibot.core.agent_executor import ChatAgentExecutor
 from sekaibot.node import Node, NodeLoadType
 from sekaibot.manager import NodeManager
@@ -82,7 +82,6 @@ def is_private_message(event: dict) -> bool:
 class Bot():
 
     config: MainConfig
-    logger: Logger
     manager: NodeManager
 
     nodes_tree: TreeType[Type[Node[Any, Any, Any]]]
@@ -128,7 +127,6 @@ class Bot():
             _handle_signals: 是否处理结束信号，默认为 `True`。
         """
         self.config = MainConfig()
-        self.logger = Logger(self)
         self.manager = NodeManager(self)
         self.nodes_tree = {}
         self.nodes_list = []
@@ -181,7 +179,7 @@ class Bot():
 
     def restart(self) -> None:
         """退出并重新运行 SekaiBot。"""
-        self.logger.info("Restarting SekaiBot...")
+        logger.info("Restarting SekaiBot...")
         self._restart_flag = True
         self._should_exit.set()
 
@@ -201,7 +199,7 @@ class Bot():
     async def _run(self) -> None:
         """运行 SekaiBot。"""
         # 启动 SekaiBot
-        self.logger.info("Running SekaiBot...")
+        logger.info("Running SekaiBot...")
 
         #执行启动钩子
         for bot_run_hook_func in self._bot_run_hooks:
@@ -255,9 +253,9 @@ class Bot():
         
     def shutdown(self, *_args: Any):
         """当机器人收到退出信号时，根据情况进行处理。"""
-        self.logger.info("Stopping SekaiBot...")
+        logger.info("Stopping SekaiBot...")
         if self._should_exit.is_set():
-            self.logger.warning("Force Exit SekaiBot...")
+            logger.warning("Force Exit SekaiBot...")
             sys.exit()
         else:
             self._should_exit.set()
@@ -292,7 +290,7 @@ class Bot():
             __base__=MainConfig,
         )(**self._raw_config_dict)
 
-        self.logger._reload_logger()
+        configure_logging(self.config.bot.log.level, self.config.bot.log.verbose_exception)
 
     def _load_config_dict(self) -> None:
         """重新加载配置文件。"""
@@ -308,20 +306,20 @@ class Bot():
                     elif self._config_file.endswith(".toml"):
                         self._raw_config_dict = tomllib.load(f)
                     else:
-                        self.logger.error(
+                        logger.error(
                             "Read config file failed: "
                             "Unable to determine config file type"
                         )
             except OSError:
-                self.logger.exception("Can not open config file:")
+                logger.exception("Can not open config file:")
             except (ValueError, json.JSONDecodeError, tomllib.TOMLDecodeError):
-                self.logger.exception("Read config file failed:")
+                logger.exception("Read config file failed:")
 
         try:
             self.config = MainConfig(**self._raw_config_dict)
         except ValidationError:
             self.config = MainConfig()
-            self.logger.exception("Config dict parse error")
+            logger.exception("Config dict parse error")
         
         self._update_config()
 
@@ -338,7 +336,7 @@ class Bot():
             node_class.__node_load_type__ = load_type
             node_class.__node_file_path__ = file_path
             if node_class.__name__ in nodes_dict:
-                self.logger.warning(
+                logger.warning(
                     "Already have a same name node", 
                     name=node_class.__name__
                 )
@@ -352,7 +350,7 @@ class Bot():
         parent_map: DefaultDict[Type[Node[Any, Any, Any]], List[Type[Node[Any, Any, Any]]]] = defaultdict(list)
         for _node in all_nodes - set(roots):
             if _node.parent not in nodes_dict:
-                self.logger.warning(
+                logger.warning(
                     "Parent node not found",
                     parent_name=_node.parent,
                     node_name=_node.__name__,
@@ -374,7 +372,7 @@ class Bot():
         self.nodes_list = flatten_tree_with_jumps(self.nodes_tree)
         # 记录节点加载信息
         for _node, _, _ in nodes:
-            self.logger.info(
+            logger.info(
                 "Succeeded to load node from class",
                 name=_node.__name__,
                 node_class=_node,
@@ -393,7 +391,7 @@ class Bot():
                 classes = get_classes_from_module_name(name, Node, reload=reload)
                 node_classes.extend(classes)
             except ImportError as e:
-                self.logger.exception("Import module failed", module_name=name)
+                logger.exception("Import module failed", module_name=name)
         if node_classes:
             nodes = [(node_class, node_load_type, module.__file__) for node_class, module in node_classes]
             self._load_node_classes(*nodes)
@@ -426,10 +424,10 @@ class Bot():
                     node_classes.append(node_)
                 elif isinstance(node_, str):
                     # 字符串直接作为模块名称加入列表
-                    self.logger.info("Loading nodes from module", module_name=node_)
+                    logger.info("Loading nodes from module", module_name=node_)
                     module_names.append(node_)
                 elif isinstance(node_, Path):
-                    self.logger.info("Loading nodes from path", path=node_)
+                    logger.info("Loading nodes from path", path=node_)
                     if not node_.is_file():
                         raise LoadModuleError(
                             f'The node path "{node_}" must be a file'
@@ -462,7 +460,7 @@ class Bot():
                 else:
                     raise TypeError(f"{node_} can not be loaded as node")
             except Exception:
-                self.logger.exception("Load node failed:", node=node_)
+                logger.exception("Load node failed:", node=node_)
         
         # 如果有节点类，则调用新的 _load_node_class 批量加载
         if node_classes:
@@ -502,7 +500,7 @@ class Bot():
                 例如：`pathlib.Path("path/of/nodes/")` 。
         """
         dir_list = [str(x.resolve()) for x in dirs]
-        self.logger.info("Loading nodes from dirs", dirs=", ".join(map(str, dir_list)))
+        logger.info("Loading nodes from dirs", dirs=", ".join(map(str, dir_list)))
         self._module_path_finder.path.extend(dir_list)
         module_name = list(
             filter(lambda name: not name.startswith("_"), 

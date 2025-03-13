@@ -26,7 +26,9 @@ from sekaibot.exceptions import (
     PruningException,
     JumpToException,
 )
-from sekaibot.typing import EventT, StateT
+from sekaibot.log import logger
+from sekaibot.consts import NODESTATE
+from sekaibot.typing import EventT
 from sekaibot.utils import wrap_get_func, cancel_on_exit
 from sekaibot.dependencies import solve_dependencies_in_bot
 from sekaibot.internal.event import Event, EventHandleOption
@@ -37,7 +39,7 @@ if TYPE_CHECKING:
 class NodeManager():
     bot: "Bot"
 
-    node_state: Dict[str, Any]
+    node_state: Dict[str, Dict[str, Any]]
     global_state: dict
 
     _condition: anyio.Condition
@@ -49,7 +51,8 @@ class NodeManager():
 
     def __init__(self, bot: "Bot"):
         self.bot = bot
-        self.node_state = defaultdict(lambda: None)
+        self.node_state = defaultdict(lambda: defaultdict(lambda: None))
+        self.global_state = {}
 
     async def startup(self) -> None:
         self._condition = anyio.Condition()
@@ -83,7 +86,7 @@ class NodeManager():
             show_log: 是否在日志中显示，默认为 `True`。
         """
         if show_log:
-            self.bot.logger.info(
+            logger.info(
                 "Event received from adapter",
                 current_event=current_event,
             )
@@ -128,7 +131,7 @@ class NodeManager():
         index = 0
         while index < len(_nodes_list):
             node_class, pruning_node = _nodes_list[index]
-            self.bot.logger.debug("Checking for matching nodes", priority=node_class)
+            logger.debug("Checking for matching nodes", priority=node_class)
             try:
                 # 事件类型与节点要求的类型不匹配，剪枝
                 if (
@@ -144,7 +147,7 @@ class NodeManager():
                         node_class,
                         bot=self.bot,
                         event=current_event,
-                        state=self.node_state[node_class.__name__],
+                        state=self.node_state[node_class.__name__][NODESTATE],
                         use_cache=True,
                         stack=stack,
                         dependency_cache=_dependency_cache,
@@ -154,16 +157,16 @@ class NodeManager():
                     if _node.name not in self.node_state:
                         node_state = _node.__init_state__()
                         if node_state is not None:
-                            self.node_state[_node.name] = node_state
+                            self.node_state[_node.name][NODESTATE] = node_state
                     if (
                         await _node.__node_rule_func__(
-                            bot=self.bot, event=current_event, state=self.node_state[node_class.__name__],
+                            bot=self.bot, event=current_event, state=self.node_state[node_class.__name__][NODESTATE],
                             stack=stack,
                             dependency_cache=_dependency_cache,
                         ) 
                         and await _node.rule()
                     ):
-                        self.bot.logger.info("Event will be handled by node", node=_node)
+                        logger.info("Event will be handled by node", node=_node)
                         try:
                             await _node.handle()
                         finally:
@@ -186,13 +189,13 @@ class NodeManager():
                     if jump_to_index > index:
                         next_index = jump_to_index
                     else:
-                        self.bot.logger.warning("The node to jump to is before the current node", node=_nodes_list[jump_to_index])
+                        logger.warning("The node to jump to is before the current node", node=_nodes_list[jump_to_index])
                         next_index = index + 1
                 else:
-                    self.bot.logger.warning("The node to jump to does not exist", node_name=jump_to_node.node)
+                    logger.warning("The node to jump to does not exist", node_name=jump_to_node.node)
                     next_index = index + 1
             except Exception:
-                self.bot.logger.exception("Exception in node", node=node_class)
+                logger.exception("Exception in node", node=node_class)
                 next_index = index + 1
             else:
                 next_index = index + 1
@@ -205,7 +208,7 @@ class NodeManager():
         for _hook_func in self.bot._event_postprocessor_hooks:
             await _hook_func(current_event)
 
-        self.bot.logger.info("Event Finished")
+        logger.info("Event Finished")
 
     async def shutdown(self) -> None:
         """关闭并清理事件。"""

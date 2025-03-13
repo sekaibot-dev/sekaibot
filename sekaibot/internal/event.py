@@ -63,7 +63,7 @@ class Event(ABC, BaseModel, Generic[AdapterT]):
         """
         return f"[{self.get_event_name()}]: {self.get_event_description()}"'''
 
-    @abstractmethod
+    '''@abstractmethod
     @property
     def user_id(self) -> str:
         """获取事件主体 id 的方法，通常是用户 id 。"""
@@ -75,7 +75,7 @@ class Event(ABC, BaseModel, Generic[AdapterT]):
         """获取会话 id 的方法，用于判断当前事件属于哪一个会话，
         通常是用户 id、群组 id 组合。
         """
-        raise NotImplementedError
+        raise NotImplementedError'''
 
     '''@abstractmethod
     def get_message(self) -> "Message":

@@ -74,10 +74,10 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
 
     if TYPE_CHECKING:
         event: EventT
-        #bot: "Bot"
+        bot: "Bot"
     else:
         event = Depends(Event)
-        #bot = Depends(Bot)
+        bot = Depends("Bot")
 
 
     def __init_state__(self) -> Optional[StateT]:
@@ -201,7 +201,7 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
     @property
     def node_state(self) -> StateT:
         """节点状态。"""
-        return self.bot.manager.node_state[self.name]
+        return self.bot.manager.node_state[self.name].get()
 
     @node_state.setter
     @final
