@@ -27,7 +27,7 @@ from sekaibot.exceptions import (
     JumpToException,
 )
 from sekaibot.log import logger
-from sekaibot.consts import NODESTATE
+from sekaibot.consts import NODE_STATE
 from sekaibot.typing import EventT
 from sekaibot.utils import wrap_get_func, cancel_on_exit
 from sekaibot.dependencies import solve_dependencies_in_bot
@@ -147,7 +147,7 @@ class NodeManager():
                         node_class,
                         bot=self.bot,
                         event=current_event,
-                        state=self.node_state[node_class.__name__][NODESTATE],
+                        state=self.node_state[node_class.__name__][NODE_STATE],
                         use_cache=True,
                         stack=stack,
                         dependency_cache=_dependency_cache,
@@ -157,10 +157,10 @@ class NodeManager():
                     if _node.name not in self.node_state:
                         node_state = _node.__init_state__()
                         if node_state is not None:
-                            self.node_state[_node.name][NODESTATE] = node_state
+                            self.node_state[_node.name][NODE_STATE] = node_state
                     if (
                         await _node.__node_rule_func__(
-                            bot=self.bot, event=current_event, state=self.node_state[node_class.__name__][NODESTATE],
+                            bot=self.bot, event=current_event, state=self.node_state[node_class.__name__][NODE_STATE],
                             stack=stack,
                             dependency_cache=_dependency_cache,
                         ) 

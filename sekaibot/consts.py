@@ -5,8 +5,8 @@ from typing import (
     Literal
 )
 
-NODESTATE: Literal["NODESTATE"] = "NODESTATE"
-NODERULESTATE: Literal["NODERULESTATE"] = "NODERULESTATE"
+NODE_STATE: Literal["node_state"] = "node_state"
+NODE_RULE_STATE: Literal["node_rule_state"] = "node_rule_state"
 
 # used by Matcher
 RECEIVE_KEY: Literal["_receive_{id}"] = "_receive_{id}"

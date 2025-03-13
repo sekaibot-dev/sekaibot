@@ -46,7 +46,7 @@ class Permission:
         event: Event,
         state: StateT,
         stack: Optional[AsyncExitStack] = None,
-        dependency_cache: Optional[Dict[Dependency[Any], Any]] = None,
+        dependency_cache: Optional[dict[Dependency[Any], Any]] = None,
     ) -> bool:
         """检查是否满足某个权限。
 

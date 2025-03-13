@@ -122,7 +122,7 @@ async def _execute_callable(
         elif isinstance(param_type, str):
             name_cache = {get_dependency_name(_cache): _cache for _cache in dependency_cache.keys()}
             if param_type in name_cache:
-                func_args[param_name] = name_cache[param_type]
+                func_args[param_name] = dependency_cache[name_cache[param_type]]
             else:
                 try:
                     class_ = getattr(sys.modules[__name__], param_type)
@@ -200,7 +200,6 @@ async def solve_dependencies(
             )
         else:
             depend = depend_obj
-
     elif isinstance(dependent, object) and hasattr(dependent, "__call__") and callable(dependent):
         # type of dependent is an instance with __call__ method (Callable class instance)
         call_method = dependent.__call__
@@ -208,25 +207,21 @@ async def solve_dependencies(
             depend = await _execute_callable(call_method, stack, dependency_cache)
         else:
             raise TypeError(f"__call__ method in {dependent.__class__.__name__} is not a valid function")
-
     elif inspect.iscoroutinefunction(dependent) or inspect.isfunction(dependent):
         # type of dependent is Callable[..., T] | Callable[..., Awaitable[T]]
         depend = await _execute_callable(dependent, stack, dependency_cache)
-
     elif inspect.isasyncgenfunction(dependent):
         # type of dependent is Callable[[], AsyncGenerator[T, None]]
         cm = asynccontextmanager(dependent)()
         depend = cast(_T, await stack.enter_async_context(cm))
-
     elif inspect.isgeneratorfunction(dependent):
         # type of dependent is Callable[[], Generator[T, None, None]]
         cm = sync_ctx_manager_wrapper(contextmanager(dependent)())
         depend = cast(_T, await stack.enter_async_context(cm))
-
     elif isinstance(dependent, str):
         name_cache = {get_dependency_name(_cache): _cache for _cache in dependency_cache.keys()}
         if dependent in name_cache:
-            depend = name_cache[dependent]
+            depend = dependency_cache[name_cache[dependent]]
         else:
             try:
                 class_ = getattr(sys.modules[__name__], dependent)

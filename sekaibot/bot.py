@@ -84,29 +84,29 @@ class Bot():
     config: MainConfig
     manager: NodeManager
 
-    nodes_tree: TreeType[Type[Node[Any, Any, Any]]]
-    nodes_list: List[Tuple[Type[Node[Any, Any, Any]], int]]
-    global_state: Dict[Any, Any]
+    nodes_tree: TreeType[type[Node[Any, Any, Any]]]
+    nodes_list: list[tuple[type[Node[Any, Any, Any]], int]]
+    global_state: dict[Any, Any]
 
     _should_exit: anyio.Event
     _restart_flag: bool  # 重启标记    
     _module_path_finder: ModulePathFinder  # 用于查找 nodes 的模块元路径查找器
-    _raw_config_dict: Dict[str, Any]  # 原始配置字典
+    _raw_config_dict: dict[str, Any]  # 原始配置字典
 
     _config_file: str | None  # 配置文件
-    _config_dict: Dict[str, Any] | None  # 配置
+    _config_dict: dict[str, Any] | None  # 配置
     _handle_signals: bool  # 是否处理信号
 
-    _extend_nodes: List[
-        Type[Node[Any, Any, Any]] | str | Path
+    _extend_nodes: list[
+        type[Node[Any, Any, Any]] | str | Path
     ]  # 使用 load_nodes() 方法程序化加载的节点列表
-    _extend_node_dirs: List[
+    _extend_node_dirs: list[
         Path
     ]  # 使用 load_nodes_from_dirs() 方法程序化加载的节点路径列表
 
     #钩子
-    _bot_run_hooks: List[BotHook]
-    _bot_exit_hooks: List[BotHook]
+    _bot_run_hooks: list[BotHook]
+    _bot_exit_hooks: list[BotHook]
     _event_preprocessor_hooks: list[EventHook]
     _event_postprocessor_hooks: list[EventHook]
 
@@ -114,7 +114,7 @@ class Bot():
         self,
         *,
         config_file: str | None = "config.toml",
-        config_dict: Dict[str, Any] | None = None,
+        config_dict: dict[str, Any] | None = None,
         handle_signals: bool = True,
     ):
         """初始化 SekaiBot，读取配置文件，创建配置。
@@ -149,7 +149,7 @@ class Bot():
 
 
     @property
-    def nodes(self) -> List[Type[Node[Any, Any, Any]]]:
+    def nodes(self) -> list[type[Node[Any, Any, Any]]]:
         """当前已经加载的节点的列表。"""
         if self.nodes_tree and not self.nodes_list:
             self.nodes_list = flatten_tree_with_jumps(self.nodes_tree)
@@ -264,11 +264,11 @@ class Bot():
         """更新 config，合并入来自 Node 和 Adapter 的 Config。"""
 
         def update_config(
-            source: List[Type[Node[Any, Any, Any]]],
+            source: list[type[Node[Any, Any, Any]]],
             name: str,
-            base: Type[ConfigModel],
-        ) -> Tuple[Type[ConfigModel], ConfigModel]:
-            config_update_dict: Dict[str, Any] = {}
+            base: type[ConfigModel],
+        ) -> tuple[type[ConfigModel], ConfigModel]:
+            config_update_dict: dict[str, Any] = {}
             for i in source:
                 config_class = getattr(i, "Config", None)
                 if is_config_class(config_class):
@@ -325,11 +325,11 @@ class Bot():
 
     def _load_node_classes(
         self,
-        *nodes: Tuple[Type[Node[Any, Any, Any]], NodeLoadType, str | None],
+        *nodes: tuple[type[Node[Any, Any, Any]], NodeLoadType, str | None],
     ) -> None:
         """加载节点类，并构建树"""
         # 构建节点字典
-        nodes_dict: Dict[str, Type[Node[Any, Any, Any]]] = {
+        nodes_dict: dict[str, type[Node[Any, Any, Any]]] = {
             _node.__name__: _node for _node in (self.nodes or [])
         }
         for node_class, load_type, file_path in nodes:
@@ -347,7 +347,7 @@ class Bot():
             _node for _node in all_nodes if not _node.parent
         ]
         #构建 节点-子节点 映射表
-        parent_map: DefaultDict[Type[Node[Any, Any, Any]], List[Type[Node[Any, Any, Any]]]] = defaultdict(list)
+        parent_map: DefaultDict[type[Node[Any, Any, Any]], list[type[Node[Any, Any, Any]]]] = defaultdict(list)
         for _node in all_nodes - set(roots):
             if _node.parent not in nodes_dict:
                 logger.warning(
@@ -362,8 +362,8 @@ class Bot():
         roots.sort(key=lambda _node: getattr(_node, "priority", 0))
         #  递归建树
         def build_tree(
-            node_class: Type[Node[Any, Any, Any]]
-        ) -> Dict[str, Any]:
+            node_class: type[Node[Any, Any, Any]]
+        ) -> dict[str, Any]:
             return {
                 child: build_tree(child) for child in sorted(parent_map[node_class], key=lambda _node: getattr(_node, "priority", 0))
             }
@@ -385,7 +385,7 @@ class Bot():
         reload: bool = False,
     ) -> None:
         """从模块名称中节点模块。"""       
-        node_classes: List[Tuple[Type[Node], ModuleType]] = []
+        node_classes: list[tuple[type[Node], ModuleType]] = []
         for name in module_name:
             try:
                 classes = get_classes_from_module_name(name, Node, reload=reload)
@@ -398,15 +398,15 @@ class Bot():
 
     def _load_nodes(
         self,
-        *nodes: Type[Node[Any, Any, Any]] | str | Path,
+        *nodes: type[Node[Any, Any, Any]] | str | Path,
         node_load_type: NodeLoadType | None = None,
         reload: bool = False,
     ) -> None:
         """加载节点。
 
         Args:
-            *nodes: 节点类、节点模块名称或者节点模块文件路径。类型可以是 `Type[Node]`, `str` 或 `pathlib.Path`。
-                如果为 `Type[Node]` 类型时，将作为节点类进行加载。
+            *nodes: 节点类、节点模块名称或者节点模块文件路径。类型可以是 `type[Node]`, `str` 或 `pathlib.Path`。
+                如果为 `type[Node]` 类型时，将作为节点类进行加载。
                 如果为 `str` 类型时，将作为节点模块名称进行加载，格式和 Python `import` 语句相同。
                     例如：`path.of.node`。
                 如果为 `pathlib.Path` 类型时，将作为节点模块文件路径进行加载。
@@ -476,14 +476,14 @@ class Bot():
             )
 
     def load_nodes(
-        self, *nodes: Type[Node[Any, Any, Any]] | str | Path
+        self, *nodes: type[Node[Any, Any, Any]] | str | Path
     ) -> None:
         """加载节点。
 
         Args:
             *nodes: 节点类、节点模块名称或者节点模块文件路径。
-                类型可以是 `Type[Node]`, `str` 或 `pathlib.Path`。
-                如果为 `Type[Node]` 类型时，将作为节点类进行加载。
+                类型可以是 `type[Node]`, `str` 或 `pathlib.Path`。
+                如果为 `type[Node]` 类型时，将作为节点类进行加载。
                 如果为 `str` 类型时，将作为节点模块名称进行加载，格式和 Python `import` 语句相同。
                     例如：`path.of.node`。
                 如果为 `pathlib.Path` 类型时，将作为节点模块文件路径进行加载。

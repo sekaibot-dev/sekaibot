@@ -10,8 +10,7 @@ from typing_extensions import Self, override
 from pydantic import BaseModel, ConfigDict
 
 from sekaibot.typing import AdapterT
-
-#from .message import Message
+from .message import Message
 
 __all__ = ["Event", "EventHandleOption", "MessageEvent"]
 
@@ -42,12 +41,12 @@ class Event(ABC, BaseModel, Generic[AdapterT]):
     def __repr__(self) -> str:
         return self.__str__()
 
-    '''@abstractmethod
+    #@abstractmethod
     def get_event_name(self) -> str:
         """获取事件名称的方法。"""
         raise NotImplementedError
 
-    @abstractmethod
+    #@abstractmethod
     def get_event_description(self) -> str:
         """获取事件描述的方法，通常为事件具体内容。"""
         raise NotImplementedError
@@ -61,23 +60,23 @@ class Event(ABC, BaseModel, Generic[AdapterT]):
         异常:
             NoLogException: 希望 NoneBot 隐藏该事件日志
         """
-        return f"[{self.get_event_name()}]: {self.get_event_description()}"'''
+        return f"[{self.get_event_name()}]: {self.get_event_description()}"
 
-    '''@abstractmethod
+    #@abstractmethod
     @property
     def user_id(self) -> str:
         """获取事件主体 id 的方法，通常是用户 id 。"""
         raise NotImplementedError
 
-    @abstractmethod
+    #@abstractmethod
     @property
     def session_id(self) -> str:
         """获取会话 id 的方法，用于判断当前事件属于哪一个会话，
         通常是用户 id、群组 id 组合。
         """
-        raise NotImplementedError'''
+        raise NotImplementedError
 
-    '''@abstractmethod
+    #@abstractmethod
     def get_message(self) -> "Message":
         """获取事件消息内容的方法。"""
         raise NotImplementedError
@@ -87,12 +86,12 @@ class Event(ABC, BaseModel, Generic[AdapterT]):
 
         通常不需要修改，默认通过 `get_message().extract_plain_text` 获取。
         """
-        return self.get_message().extract_plain_text()
+        return self.get_message().get_plain_text()
 
-    @abstractmethod
+    #@abstractmethod
     def is_tome(self) -> bool:
         """获取事件是否与机器人有关的方法。"""
-        raise NotImplementedError'''
+        raise NotImplementedError
 
 
 class EventHandleOption(NamedTuple):

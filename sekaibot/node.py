@@ -24,6 +24,7 @@ from typing import (
 ) # type: ignore
 from typing_extensions import Annotated, get_args, get_origin
 
+from sekaibot.consts import NODE_STATE, NODE_RULE_STATE
 from sekaibot.config import ConfigModel
 from sekaibot.dependencies import Depends
 from sekaibot.internal.event import Event
@@ -178,35 +179,20 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
     
     state: StateT = None
 
-    @final
-    def stop(self) -> NoReturn:
-        """停止当前事件传播。"""
-        raise StopException
-
-    @final
-    def skip(self) -> NoReturn:
-        """跳过自身继续当前事件传播。"""
-        raise SkipException
-    
-    @final
-    def jump_to(self, node: str) -> NoReturn:
-        """跳过自身并将事件转发到下一个节点。"""
-        raise JumpToException(node)
-    
-    @final
-    def prune(self) -> NoReturn:
-        """中断事件的传播并将事件转发到下一个节点，即剪枝。"""
-        raise PruningException
-
     @property
     def node_state(self) -> StateT:
         """节点状态。"""
-        return self.bot.manager.node_state[self.name].get()
+        return self.bot.manager.node_state[self.name][NODE_STATE]
 
     @node_state.setter
     @final
     def node_state(self, value: StateT) -> None:
-        self.bot.manager.node_state[self.name] = value
+        self.bot.manager.node_state[self.name][NODE_STATE] = value
+
+    @property
+    def checker_state(self) -> dict:
+        """节点状态。"""
+        return self.bot.manager.node_state[self.name][NODE_RULE_STATE]
 
     @property
     def global_state(self) -> dict:
@@ -229,3 +215,23 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
         注意：不建议直接在此方法内实现对事件的处理，事件的具体处理请交由 `handle()` 方法。
         """
         return True
+    
+    @final
+    def stop(self) -> NoReturn:
+        """停止当前事件传播。"""
+        raise StopException
+
+    @final
+    def skip(self) -> NoReturn:
+        """跳过自身继续当前事件传播。"""
+        raise SkipException
+    
+    @final
+    def jump_to(self, node: str) -> NoReturn:
+        """跳过自身并将事件转发到下一个节点。"""
+        raise JumpToException(node)
+    
+    @final
+    def prune(self) -> NoReturn:
+        """中断事件的传播并将事件转发到下一个节点，即剪枝。"""
+        raise PruningException

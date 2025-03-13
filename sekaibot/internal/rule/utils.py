@@ -28,16 +28,17 @@ from typing import (
     TypedDict,
     TypeVar,
     Union,
+    Self,
     cast,
     overload,
 )
 
 from pygtrie import CharTrie
 
-from sekaibot import get_driver
-from sekaibot.bot import Bot
+#from sekaibot import get_driver
+
 from sekaibot.internal.event import Event
-from sekaibot.internal.message import Message, MessageSegment
+from sekaibot.internal.message import Message, MessageSegment, MessageT, MessageSegmentT
 from sekaibot.consts import (
     CMD_ARG_KEY,
     CMD_KEY,
@@ -58,7 +59,9 @@ from . import Rule
 from sekaibot.log import logger
 #from nonebot.params import Command, CommandArg, CommandWhitespace, EventToMe
 from sekaibot.typing import StateT
-logger = ''
+
+if TYPE_CHECKING:
+    from sekaibot.bot import Bot
 
 T = TypeVar("T")
 
@@ -83,14 +86,14 @@ class TrieRule:
     prefix: CharTrie = CharTrie()
 
     @classmethod
-    def add_prefix(cls, prefix: str, value: TRIE_VALUE) -> None:
+    def add_prefix(cls: Self, prefix: str, value: TRIE_VALUE) -> None:
         if prefix in cls.prefix:
             logger.warning(f'Duplicated prefix rule "{prefix}"')
             return
         cls.prefix[prefix] = value
 
     @classmethod
-    def get_value(cls, bot: Bot, event: Event, state: StateT) -> CMD_RESULT:
+    def get_value(cls, bot: "Bot", event: Event, state: StateT) -> CMD_RESULT:
         prefix = CMD_RESULT(
             command=None,
             raw_command=None,
@@ -99,7 +102,7 @@ class TrieRule:
             command_whitespace=None,
         )
         state[PREFIX_KEY] = prefix
-        if event.get_type() != "message":
+        if event.type != "message":
             return prefix
 
         message = event.get_message()
@@ -169,15 +172,14 @@ class StartswithRule:
 
     async def __call__(self, event: Event, state: StateT) -> bool:
         try:
-            text = event.get_plaintext()
+            message = event.get_message()
         except Exception:
             return False
-        if match := re.match(
-            f"^(?:{'|'.join(re.escape(prefix) for prefix in self.msg)})",
-            text,
-            re.IGNORECASE if self.ignorecase else 0,
+        if match := message.startswith(
+            self.msg,
+            ignorecase=self.ignorecase
         ):
-            state[STARTSWITH_KEY] = match.group()
+            state[STARTSWITH_KEY] = match
             return True
         return False
 
@@ -192,7 +194,7 @@ class EndswithRule:
 
     __slots__ = ("ignorecase", "msg")
 
-    def __init__(self, msg: tuple[str, ...], ignorecase: bool = False):
+    def __init__(self, msg: tuple[Union[str, MessageSegmentT]], ignorecase: bool = False):
         self.msg = msg
         self.ignorecase = ignorecase
 
@@ -211,15 +213,14 @@ class EndswithRule:
 
     async def __call__(self, event: Event, state: StateT) -> bool:
         try:
-            text = event.get_plaintext()
+            message = event.get_message()
         except Exception:
             return False
-        if match := re.search(
-            f"(?:{'|'.join(re.escape(suffix) for suffix in self.msg)})$",
-            text,
-            re.IGNORECASE if self.ignorecase else 0,
+        if match := message.endswith(
+            self.msg, 
+            ignorecase=self.ignorecase
         ):
-            state[ENDSWITH_KEY] = match.group()
+            state[ENDSWITH_KEY] = match
             return True
         return False
 
@@ -301,6 +302,64 @@ class KeywordsRule:
         return False
 
 
+class ToMeRule:
+    """检查事件是否与机器人有关。"""
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "ToMe()"
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, ToMeRule)
+
+    def __hash__(self) -> int:
+        return hash((self.__class__,))
+
+    async def __call__(self, event: Event) -> bool:
+        return event.is_tome()
+
+
+class RegexRule:
+    """检查消息字符串是否符合指定正则表达式。
+
+    参数:
+        regex: 正则表达式
+        flags: 正则表达式标记
+    """
+
+    __slots__ = ("flags", "regex")
+
+    def __init__(self, regex: str, flags: int = 0):
+        self.regex = regex
+        self.flags = flags
+
+    def __repr__(self) -> str:
+        return f"Regex(regex={self.regex!r}, flags={self.flags})"
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            isinstance(other, RegexRule)
+            and self.regex == other.regex
+            and self.flags == other.flags
+        )
+
+    def __hash__(self) -> int:
+        return hash((self.regex, self.flags))
+
+    async def __call__(self, event: Event, state: StateT) -> bool:
+        try:
+            msg = event.get_message()
+        except Exception:
+            return False
+        if matched := re.search(self.regex, str(msg), self.flags):
+            state[REGEX_MATCHED] = matched
+            return True
+        else:
+            return False
+
+
+'''
 class CommandRule:
     """检查消息是否为指定命令。
 
@@ -608,85 +667,7 @@ def shell_command(
                 )
 
     return Rule(ShellCommandRule(commands, parser))
-
-
-class RegexRule:
-    """检查消息字符串是否符合指定正则表达式。
-
-    参数:
-        regex: 正则表达式
-        flags: 正则表达式标记
-    """
-
-    __slots__ = ("flags", "regex")
-
-    def __init__(self, regex: str, flags: int = 0):
-        self.regex = regex
-        self.flags = flags
-
-    def __repr__(self) -> str:
-        return f"Regex(regex={self.regex!r}, flags={self.flags})"
-
-    def __eq__(self, other: object) -> bool:
-        return (
-            isinstance(other, RegexRule)
-            and self.regex == other.regex
-            and self.flags == other.flags
-        )
-
-    def __hash__(self) -> int:
-        return hash((self.regex, self.flags))
-
-    async def __call__(self, event: Event, state: StateT) -> bool:
-        try:
-            msg = event.get_message()
-        except Exception:
-            return False
-        if matched := re.search(self.regex, str(msg), self.flags):
-            state[REGEX_MATCHED] = matched
-            return True
-        else:
-            return False
-
-
-class ToMeRule:
-    """检查事件是否与机器人有关。"""
-
-    __slots__ = ()
-
-    def __repr__(self) -> str:
-        return "ToMe()"
-
-    def __eq__(self, other: object) -> bool:
-        return isinstance(other, ToMeRule)
-
-    def __hash__(self) -> int:
-        return hash((self.__class__,))
-
-    async def __call__(self, to_me: bool = EventToMe()) -> bool:
-        return to_me
-
-
-class IsTypeRule:
-    """检查事件类型是否为指定类型。"""
-
-    __slots__ = ("types",)
-
-    def __init__(self, *types: type[Event]):
-        self.types = types
-
-    def __repr__(self) -> str:
-        return f"IsType(types={tuple(type.__name__ for type in self.types)})"
-
-    def __eq__(self, other: object) -> bool:
-        return isinstance(other, IsTypeRule) and self.types == other.types
-
-    def __hash__(self) -> int:
-        return hash((self.types,))
-
-    async def __call__(self, event: Event) -> bool:
-        return isinstance(event, self.types)
-
+'''
 
 __autodoc__ = {
     "Rule": True,

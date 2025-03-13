@@ -9,17 +9,16 @@ from sekaibot.internal.event import Event
 from sekaibot.typing import NodeT, RuleCheckerT
 from sekaibot.dependencies import Dependency
 from sekaibot.internal.rule import Rule
-'''from sekaibot.internal.rule.utils import (
+from sekaibot.internal.rule.utils import (
     StartswithRule,
     EndswithRule,
     FullmatchRule,
     KeywordsRule,
-    CommandRule,
-    ShellCommandRule,
+    #CommandRule,
+    #ShellCommandRule,
     RegexRule,
     ToMeRule,
-    IsTypeRule
-)'''
+)
 
 __all__ = [
     "to_rule",
@@ -51,7 +50,7 @@ class rule:
             cls.__node_rule_func__ += Rule(rule)
         return cls
     
-    '''@staticmethod
+    @staticmethod
     def startswith(
         msg: Union[str, tuple[str, ...]], ignorecase: bool = False
     ) -> Callable[[NodeT], NodeT]:
@@ -164,19 +163,3 @@ class rule:
             return rule()(target_cls, rule=ToMeRule())
 
         return decorator
-    
-
-    @staticmethod
-    def is_type(
-        *types: type[Event]
-    ) -> Callable[[NodeT], NodeT]:
-        """匹配事件类型。
-
-        参数:
-            types: 事件类型
-        """
-
-        def decorator(target_cls: NodeT) -> NodeT:
-            return rule()(target_cls, rule=IsTypeRule(*types))
-
-        return decorator'''

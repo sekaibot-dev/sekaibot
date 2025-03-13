@@ -8,7 +8,7 @@ from sekaibot.dependencies import Dependency, InnerDepends, Depends, solve_depen
 from sekaibot.exceptions import SkipException
 from sekaibot.internal.event import Event
 from sekaibot.typing import RuleCheckerT, StateT
-from sekaibot.consts import NODERULESTATE
+from sekaibot.consts import NODE_RULE_STATE
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
@@ -75,7 +75,7 @@ class Rule:
                 checker,
                 bot=bot,
                 event=event,
-                state=state[NODERULESTATE],
+                state=state[NODE_RULE_STATE],
                 use_cache=False,
                 stack=stack,
                 dependency_cache=dependency_cache,
