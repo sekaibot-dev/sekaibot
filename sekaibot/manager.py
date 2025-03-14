@@ -28,9 +28,10 @@ from sekaibot.exceptions import (
 )
 from sekaibot.log import logger
 from sekaibot.consts import NODE_STATE
-from sekaibot.typing import EventT
+from sekaibot.typing import EventT, StateT
+from sekaibot.node import Node
 from sekaibot.utils import wrap_get_func, cancel_on_exit
-from sekaibot.dependencies import solve_dependencies_in_bot
+from sekaibot.dependencies import solve_dependencies_in_bot, Dependency
 from sekaibot.internal.event import Event, EventHandleOption
 
 if TYPE_CHECKING:
@@ -119,6 +120,56 @@ class NodeManager():
             current_event = self._current_event
         await self._handle_event(current_event)
 
+    async def _check_node(
+        self,
+        node: type[Node],
+        event: Event,
+        state: StateT,
+        stack: Optional[AsyncExitStack] = None,
+        dependency_cache: Optional[Dependency] = None,
+    ) -> bool:
+        """检查事件响应器是否符合运行条件。
+
+        请注意，过时的事件响应器将被**销毁**。对于未过时的事件响应器，将会一次检查其响应类型、权限和规则。
+
+        参数:
+            Matcher: 要检查的事件响应器
+            bot: Bot 对象
+            event: Event 对象
+            state: 会话状态
+            stack: 异步上下文栈
+            dependency_cache: 依赖缓存
+
+        返回:
+            bool: 是否符合运行条件
+        """
+        '''if node.expire_time and datetime.now() > node.expire_time:
+            with contextlib.suppress(Exception):
+                node.destroy()
+            return False'''
+
+        try:
+            if not await node.check_perm(self.bot, event, stack, dependency_cache):
+                logger.info(f"permission conditions not met", node=node.__name__)
+                return False
+        except Exception as e:
+            logger.error(
+                f"permission check failed", node=node.__name__
+            )
+            return False
+
+        try:
+            if not await node.check_rule(self.bot, event, state, stack, dependency_cache):
+                logger.info(f"rule conditions not met", node=node.__name__)
+                return False
+        except Exception as e:
+            logger.error(
+                f"rule check failed", node=node.__name__
+            )
+            return False
+
+        return True
+
     async def _handle_event(self, current_event: Event[Any]) -> None:
         if current_event.__handled__:
             return
@@ -134,13 +185,12 @@ class NodeManager():
             logger.debug("Checking for matching nodes", priority=node_class)
             try:
                 # 事件类型与节点要求的类型不匹配，剪枝
-                if (
-                    hasattr(node_class, "EventType") 
-                    and node_class.EventType
+                if not await self._check_node(
+                    node_class,
+                    current_event,
+                    self.node_state[node_class.__name__][NODE_STATE],
                 ):
-                    if not isinstance(current_event, node_class.EventType):
-                        raise PruningException
-                
+                    raise PruningException
                 async with AsyncExitStack() as stack:
                     _dependency_cache = {}
                     _node = await solve_dependencies_in_bot(
@@ -158,14 +208,7 @@ class NodeManager():
                         node_state = _node.__init_state__()
                         if node_state is not None:
                             self.node_state[_node.name][NODE_STATE] = node_state
-                    if (
-                        await _node.__node_rule_func__(
-                            bot=self.bot, event=current_event, state=self.node_state[node_class.__name__][NODE_STATE],
-                            stack=stack,
-                            dependency_cache=_dependency_cache,
-                        ) 
-                        and await _node.rule()
-                    ):
+                    if await _node.rule():
                         logger.info("Event will be handled by node", node=_node)
                         try:
                             await _node.handle()
@@ -240,7 +283,7 @@ class NodeManager():
         self,
         func: Callable[[EventT], bool | Awaitable[bool]] | None = None,
         *,
-        event_type: Type[EventT],
+        event_type: type[EventT],
         max_try_times: int | None = None,
         timeout: int | float | None = None,
     ) -> EventT: ...
@@ -249,7 +292,7 @@ class NodeManager():
         self,
         func: Callable[[Any], bool | Awaitable[bool]] | None = None,
         *,
-        event_type: Type[Event] | None = None,
+        event_type: type[Event] | None = None,
         max_try_times: int | None = None,
         timeout: int | float | None = None,
     ) -> EventT:

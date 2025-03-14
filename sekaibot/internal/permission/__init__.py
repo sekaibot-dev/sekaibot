@@ -44,7 +44,6 @@ class Permission:
         self,
         bot: "Bot",
         event: Event,
-        state: StateT,
         stack: Optional[AsyncExitStack] = None,
         dependency_cache: Optional[dict[Dependency[Any], Any]] = None,
     ) -> bool:
@@ -73,7 +72,6 @@ class Permission:
                 checker,
                 bot=bot,
                 event=event,
-                state=state,
                 use_cache=False,
                 stack=stack,
                 dependency_cache=dependency_cache,

@@ -123,12 +123,6 @@ async def _execute_callable(
             name_cache = {get_dependency_name(_cache): _cache for _cache in dependency_cache.keys()}
             if param_type in name_cache:
                 func_args[param_name] = dependency_cache[name_cache[param_type]]
-            else:
-                try:
-                    class_ = getattr(sys.modules[__name__], param_type)
-                    func_args[param_name] = await solve_dependencies(class_, use_cache=True, stack=stack, dependency_cache=dependency_cache)
-                except AttributeError:
-                    raise TypeError(f"Class '{param_type}' not found in the current module")
         else:
             raise TypeError(
                 f"Cannot resolve parameter '{param_name}' for dependency '{dependent.__name__}'"
@@ -222,12 +216,6 @@ async def solve_dependencies(
         name_cache = {get_dependency_name(_cache): _cache for _cache in dependency_cache.keys()}
         if dependent in name_cache:
             depend = dependency_cache[name_cache[dependent]]
-        else:
-            try:
-                class_ = getattr(sys.modules[__name__], dependent)
-                depend = await solve_dependencies(class_, use_cache=True, stack=stack, dependency_cache=dependency_cache)
-            except AttributeError:
-                raise TypeError(f"Class '{dependent}' not found in the current module")
     else:
         raise TypeError(f"Dependent {dependent} is not a class, function, or generator")
 
@@ -240,7 +228,7 @@ async def solve_dependencies_in_bot(
     *,
     bot: "Bot",
     event: Event,
-    state: StateT,
+    state: Optional[StateT] = None,
     use_cache: bool = True,
     stack: AsyncExitStack = AsyncExitStack(),
     dependency_cache: Dict[Dependency[Any], Any] = {},
@@ -252,6 +240,7 @@ async def solve_dependencies_in_bot(
     dependency_cache |= {
         Bot: bot,
         Event: event,
+    } | {
         StateT: state,
-    }
+    } if state is not None else {}
     return await solve_dependencies(dependent, use_cache=use_cache, stack=stack, dependency_cache=dependency_cache)

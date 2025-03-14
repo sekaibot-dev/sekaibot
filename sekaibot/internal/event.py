@@ -35,7 +35,7 @@ class Event(ABC, BaseModel, Generic[AdapterT]):
 
     @override
     def __str__(self) -> str:
-        return f"Event<{self.type}>"#: {self.get_event_description()}
+        return f"Event<{self.type}>: {self.get_event_description()}"
 
     @override
     def __repr__(self) -> str:
@@ -81,10 +81,10 @@ class Event(ABC, BaseModel, Generic[AdapterT]):
         """获取事件消息内容的方法。"""
         raise NotImplementedError
 
-    def get_plaintext(self) -> str:
+    def get_plain_text(self) -> str:
         """获取消息纯文本的方法。
 
-        通常不需要修改，默认通过 `get_message().extract_plain_text` 获取。
+        通常不需要修改，默认通过 `get_message().get_plain_text` 获取。
         """
         return self.get_message().get_plain_text()
 

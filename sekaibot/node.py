@@ -23,15 +23,17 @@ from typing import (
     final,
 ) # type: ignore
 from typing_extensions import Annotated, get_args, get_origin
+from contextlib import AsyncExitStack
 
 from sekaibot.consts import NODE_STATE, NODE_RULE_STATE
 from sekaibot.config import ConfigModel
-from sekaibot.dependencies import Depends
+from sekaibot.dependencies import Depends, Dependency, solve_dependencies_in_bot
 from sekaibot.internal.event import Event
 from sekaibot.exceptions import SkipException, JumpToException, PruningException, StopException
 from sekaibot.typing import ConfigT, EventT, StateT
 from sekaibot.utils import is_config_class
 from sekaibot.rule import Rule
+from sekaibot.permission import Permission
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
@@ -66,10 +68,12 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
     block: ClassVar[bool] = False
 
     # 不能使用 ClassVar 因为 PEP 526 不允许这样做
-    EventType: Type[Event] | Tuple[Type[Event]]
-    Config: Type[ConfigT]
+    EventType: str | type[Event] | tuple[type[Event]]
+    Config: type[ConfigT]
 
-    __node_rule_func__: ClassVar[Rule] = Rule()
+    __node_rule__: ClassVar[Rule] = Rule()
+    __node_perm__: ClassVar[Permission] = Permission()
+
     __node_load_type__: ClassVar[NodeLoadType]
     __node_file_path__: ClassVar[Optional[str]]
 
@@ -86,8 +90,8 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
 
     def __init_subclass__(
         cls,
-        event_type: Optional[Type[EventT]] = None,
-        config: Optional[Type[ConfigT]] = None,
+        event_type: Optional[type[EventT]] = None,
+        config: Optional[type[ConfigT]] = None,
         init_state: Optional[StateT] = None,
         **_kwargs: Any,
     ) -> None:
@@ -100,13 +104,13 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
         """
         super().__init_subclass__()
 
-        orig_bases: Tuple[type, ...] = getattr(cls, "__orig_bases__", ())
+        orig_bases: tuple[type, ...] = getattr(cls, "__orig_bases__", ())
         for orig_base in orig_bases:
             origin_class = get_origin(orig_base)
             if inspect.isclass(origin_class) and issubclass(origin_class, Node):
                 try:
                     event_t, state_t, config_t = cast(
-                        Tuple[EventT, StateT, ConfigT], get_args(orig_base)
+                        tuple[EventT, StateT, ConfigT], get_args(orig_base)
                     )
                 except ValueError:  # pragma: no cover
                     continue
@@ -203,6 +207,43 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
     @final
     def global_state(self, value: dict) -> None:
         self.bot.manager.global_state = value
+
+    @final
+    @classmethod
+    async def check_perm(
+        cls,
+        bot: Bot,
+        event: Event,
+        stack: Optional[AsyncExitStack] = None,
+        dependency_cache: Optional[Dependency] = None,
+    ) -> bool:
+        return (
+            isinstance(cls.EventType, str) and event.type == (cls.EventType or event.type)
+            or isinstance(event, cls.EventType)
+        ) and await cls.__node_perm__(
+            bot=bot, event=event,
+            stack=stack,
+            dependency_cache=dependency_cache,
+        )
+
+    @final
+    @classmethod
+    async def check_rule(
+        cls,
+        bot: Bot,
+        event: Event,
+        state: StateT,
+        stack: Optional[AsyncExitStack] = None,
+        dependency_cache: Optional[Dependency] = None,
+    ) -> bool:
+        return (
+            isinstance(cls.EventType, str) and event.type == (cls.EventType or event.type)
+            or isinstance(event, cls.EventType)
+        ) and await cls.__node_rule__(
+            bot=bot, event=event, state=state,
+            stack=stack,
+            dependency_cache=dependency_cache,
+        )
 
     @abstractmethod
     async def handle(self) -> None:

@@ -7,6 +7,7 @@ from exceptiongroup import BaseExceptionGroup, catch
 from sekaibot.dependencies import Dependency, InnerDepends, Depends, solve_dependencies_in_bot
 from sekaibot.exceptions import SkipException
 from sekaibot.internal.event import Event
+from itertools import chain
 from sekaibot.typing import RuleCheckerT, StateT
 from sekaibot.consts import NODE_RULE_STATE
 
@@ -32,10 +33,11 @@ class Rule:
 
     __slots__ = ("checkers",)
 
-    def __init__(self, *checkers: Union[RuleCheckerT, Dependency[bool]]) -> None:
-        self.checkers: set[Dependency[bool]] = {
-            checker for checker in checkers
-        }
+    def __init__(self, *checkers: Union[Self,RuleCheckerT, Dependency[bool]]) -> None:
+        self.checkers: set[Dependency[bool]] = set(chain.from_iterable(
+            checker.checkers if isinstance(checker, Rule) else {checker}
+            for checker in checkers
+        ))
         """存储 `RuleChecker`"""
 
     def __repr__(self) -> str:
@@ -116,7 +118,7 @@ class Rule:
         elif isinstance(other, Rule):
             return Rule(*self.checkers, *other.checkers)
         else:
-            return Rule(other, *self.checkers)
+            return Rule(*self.checkers, other)
         
     def __iadd__(self, other: Union[Self, RuleCheckerT]) -> Self:
         return self.__add__(other)

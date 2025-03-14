@@ -145,8 +145,10 @@ class TrieRule:
 
 class StartswithRule:
     """检查消息纯文本是否以指定字符串开头。
+        注意，此处仅匹配字符串，但是Message提供了匹配MessageSegment的方法，
+        若需要请在rule函数中调用startswith方法。
 
-    参数:
+    Args:
         msg: 指定消息开头字符串元组
         ignorecase: 是否忽略大小写
     """
@@ -186,15 +188,17 @@ class StartswithRule:
 
 class EndswithRule:
     """检查消息纯文本是否以指定字符串结尾。
+        注意，此处仅匹配字符串，但是Message提供了匹配MessageSegment的方法，
+        若需要请在rule函数中调用endswith方法。
 
-    参数:
+    Args:
         msg: 指定消息结尾字符串元组
         ignorecase: 是否忽略大小写
     """
 
     __slots__ = ("ignorecase", "msg")
 
-    def __init__(self, msg: tuple[Union[str, MessageSegmentT]], ignorecase: bool = False):
+    def __init__(self, msg: tuple[str, ...], ignorecase: bool = False):
         self.msg = msg
         self.ignorecase = ignorecase
 
@@ -228,7 +232,7 @@ class EndswithRule:
 class FullmatchRule:
     """检查消息纯文本是否与指定字符串全匹配。
 
-    参数:
+    Args:
         msg: 指定消息全匹配字符串元组
         ignorecase: 是否忽略大小写
     """
@@ -254,7 +258,7 @@ class FullmatchRule:
 
     async def __call__(self, event: Event, state: StateT) -> bool:
         try:
-            text = event.get_plaintext()
+            text = event.get_plain_text()
         except Exception:
             return False
         if not text:
@@ -269,7 +273,7 @@ class FullmatchRule:
 class KeywordsRule:
     """检查消息纯文本是否包含指定关键字。
 
-    参数:
+    Args:
         keywords: 指定关键字元组
     """
 
@@ -291,7 +295,7 @@ class KeywordsRule:
 
     async def __call__(self, event: Event, state: StateT) -> bool:
         try:
-            text = event.get_plaintext()
+            text = event.get_plain_text()
         except Exception:
             return False
         if not text:
@@ -323,7 +327,7 @@ class ToMeRule:
 class RegexRule:
     """检查消息字符串是否符合指定正则表达式。
 
-    参数:
+    Args:
         regex: 正则表达式
         flags: 正则表达式标记
     """
@@ -363,7 +367,7 @@ class RegexRule:
 class CommandRule:
     """检查消息是否为指定命令。
 
-    参数:
+    Args:
         cmds: 指定命令元组列表
         force_whitespace: 是否强制命令后必须有指定空白符
     """
@@ -417,7 +421,7 @@ def command(
     通过 {ref}`nonebot.params.RawCommand` 获取匹配成功的原始命令文本（例: `"/test"`），
     通过 {ref}`nonebot.params.CommandArg` 获取匹配成功的命令参数。
 
-    参数:
+    Args:
         cmds: 命令文本或命令元组
         force_whitespace: 是否强制命令后必须有指定空白符
 
@@ -537,7 +541,7 @@ class ArgumentParser(ArgParser):
 class ShellCommandRule:
     """检查消息是否为指定 shell 命令。
 
-    参数:
+    Args:
         cmds: 指定命令元组列表
         parser: 可选参数解析器
     """
@@ -623,7 +627,7 @@ def shell_command(
     获取的将是 {ref}`nonebot.exception.ParserExit` 异常。
     :::
 
-    参数:
+    Args:
         cmds: 命令文本或命令元组
         parser: {ref}`nonebot.rule.ArgumentParser` 对象
 
