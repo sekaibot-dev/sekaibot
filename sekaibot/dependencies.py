@@ -153,6 +153,10 @@ async def solve_dependencies(
     Returns:
         解析完成依赖的对象。
     """
+    if isinstance(dependent, InnerDepends):
+        use_cache = dependent.use_cache
+        dependent = dependent.dependency
+        
     if dependent is None:
         raise TypeError("dependent cannot be None")
 
@@ -184,7 +188,7 @@ async def solve_dependencies(
         )
         for key, value in values.items():
             setattr(depend_obj, key, value)
-        depend_obj.__init__()#await _execute_callable(depend_obj.__init__, stack, dependency_cache)
+        depend_obj.__init__()
 
         if isinstance(depend_obj, AsyncContextManager):
             if stack is None:

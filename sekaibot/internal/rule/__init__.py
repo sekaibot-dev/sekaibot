@@ -140,27 +140,30 @@ class RuleChecker(ABC):
         """将检查器添加到 Node 类中。"""
         if not isinstance(cls, type):
             raise TypeError(f"class should be NodeT, not `{type(cls)}`.")
-        if not hasattr(cls, "__node_rule_func__"):
-            setattr(cls, "__node_rule_func__", Rule())
+        if not hasattr(cls, "__node_rule__"):
+            setattr(cls, "__node_rule__", Rule())
         cls.__node_rule__ += self.__rule__
         return cls
     
-    async def check(
+    async def check_rule(
         self,
         bot: "Bot",
         event: Event,
         state: StateT,
-    ):
+    ) -> bool:
         """直接运行检查器并获取结果。"""
         return await self.__rule__(bot, event, state, None, {})
     
+    def Checker(self):
+        """在依赖注入里获取检查器的结果。"""
+        return Depends(self.check_rule, use_cache=False)
+    
     @abstractmethod
-    def param(self) -> Any:
+    @classmethod
+    async def rule_param(cls) -> Any:
         """获取检查器的数据。"""
 
-    def Param(self) -> InnerDepends:
-        async def check_and_return_param(bot: "Bot", event: Event, state: StateT) -> Any:
-            if not self.param():
-                await self.check(bot, event, state)
-            return self.param()
-        return Depends(check_and_return_param, use_cache=False)
+    @classmethod
+    def Param(cls) -> InnerDepends:
+        """在依赖注入里获取检查器的数据。"""
+        return Depends(cls.rule_param, use_cache=False)

@@ -47,7 +47,8 @@ class StartsWith(RuleChecker):
         msg: 指定消息开头字符串元组
         ignorecase: 是否忽略大小写
     """
-    def __init__(self, 
+    def __init__(
+        self,
         msg: Union[str, tuple[str,...]], ignorecase: bool = False
     ) -> None:
         if isinstance(msg, str):
@@ -55,7 +56,8 @@ class StartsWith(RuleChecker):
 
         super().__init__(StartswithRule(msg, ignorecase)) 
     
-    def param(self, state: StateT) -> str:
+    @classmethod
+    def rule_param(cls, state: StateT) -> str:
         return state[NODE_RULE_STATE][STARTSWITH_KEY]
 
 class EndsWith(RuleChecker):
@@ -65,7 +67,8 @@ class EndsWith(RuleChecker):
         msg: 指定消息开头字符串元组
         ignorecase: 是否忽略大小写
     """
-    def __init__( 
+    def __init__(
+        self,
         msg: Union[str, tuple[str, ...]], ignorecase: bool = False
     ) -> None:
         if isinstance(msg, str):
@@ -73,7 +76,8 @@ class EndsWith(RuleChecker):
 
         super().__init__(EndswithRule(msg, ignorecase)) 
     
-    def param(self, state: StateT) -> str:
+    @classmethod
+    def rule_param(cls, state: StateT) -> str:
         return state[NODE_RULE_STATE][ENDSWITH_KEY]
 
 class FullMatch(RuleChecker):
@@ -84,6 +88,7 @@ class FullMatch(RuleChecker):
         ignorecase: 是否忽略大小写
     """
     def __init__(
+        self,
         msg: Union[str, tuple[str, ...]], ignorecase: bool = False
     ) -> None:
         if isinstance(msg, str):
@@ -91,7 +96,8 @@ class FullMatch(RuleChecker):
         
         super().__init__(FullmatchRule(msg, ignorecase)) 
 
-    def param(self, state: StateT) -> str:
+    @classmethod
+    def rule_param(cls, state: StateT) -> str:
         return state[NODE_RULE_STATE][FULLMATCH_KEY]
 
 class Keyword(RuleChecker):
@@ -101,11 +107,13 @@ class Keyword(RuleChecker):
         keywords: 指定关键字元组
     """
     def __init__(
+        self,
         *keywords: str
     ) -> None:
         super().__init__(KeywordsRule(*keywords))
 
-    def param(self, state: StateT) -> tuple[str,...]:
+    @classmethod
+    def rule_param(cls, state: StateT) -> tuple[str,...]:
         return state[NODE_RULE_STATE][KEYWORD_KEY]
 
 class Regex(RuleChecker):
@@ -129,11 +137,13 @@ class Regex(RuleChecker):
     :::
     """
     def __init__(
+        self,
         regex: str, flags: Union[int, re.RegexFlag] = 0
     ) -> Rule:
         super().__init__(RegexRule(regex, flags))
 
-    def param(self, state: StateT) -> re.Match[str]:
+    @classmethod
+    def rule_param(cls, state: StateT) -> re.Match[str]:
         return state[NODE_RULE_STATE][REGEX_MATCHED]
 
 class ToMe(RuleChecker):
@@ -141,5 +151,6 @@ class ToMe(RuleChecker):
     def __init__(self) -> None:
         super().__init__(ToMeRule())
 
-    def param(self, event: Event) -> bool:
+    @classmethod
+    def rule_param(cls, event: Event) -> bool:
         return event.is_tome()

@@ -153,7 +153,9 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
         self,
         dependent: Dependency[_T],
     ) -> _T:
-        """在节点内运行 SekaiBot 内置的，或自定义的函数，以及具有 `__call__` 的类。"""
+        """在节点内运行 SekaiBot 内置的，或自定义的函数，以及具有 `__call__` 的类。
+            这些函数只能含有 Bot, Event, State 三个参数。
+        """
         return await solve_dependencies_in_bot(
             dependent,
             bot=self.bot,

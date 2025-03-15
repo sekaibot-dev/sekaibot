@@ -2,17 +2,17 @@ from sekaibot import Node
 from sekaibot.rule import StartsWith
 #from sekaibot.rule import rule_at_me
 
-startswith_rule = StartsWith("Hello world")
-
-@startswith_rule
+@StartsWith("Hello world")
 class HelloWorldNode(Node):
 
-    if_startswith = startswith_rule.Param()
+    if_startswith = StartsWith.Param()
 
     """Hello, World! 示例节点。"""
     priority = 0
     async def handle(self):
-        print(startswith_rule.param)
+        if self.run(StartsWith("Hello world").Checker):
+            param = self.run(StartsWith.Param)
+            print(param)
         return None
     
     
