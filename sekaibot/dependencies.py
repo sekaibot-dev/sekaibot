@@ -136,7 +136,7 @@ async def solve_dependencies(
     dependent: Dependency[_T],
     *,
     use_cache: bool,
-    stack: AsyncExitStack,
+    stack: Optional[AsyncExitStack] = None,
     dependency_cache: Dict[Dependency[Any], Any],
 ) -> _T:
     """解析子依赖，包括 `__call__` 方法的可调用类实例。
@@ -187,8 +187,12 @@ async def solve_dependencies(
         depend_obj.__init__()#await _execute_callable(depend_obj.__init__, stack, dependency_cache)
 
         if isinstance(depend_obj, AsyncContextManager):
+            if stack is None:
+                raise TypeError("stack cannot be None when entering an async context")
             depend = await stack.enter_async_context(depend_obj)  # pyright: ignore
         elif isinstance(depend_obj, ContextManager):
+            if stack is None:
+                raise TypeError("stack cannot be None when entering a sync context")
             depend = await stack.enter_async_context(  # pyright: ignore
                 sync_ctx_manager_wrapper(depend_obj)
             )
@@ -206,10 +210,14 @@ async def solve_dependencies(
         depend = await _execute_callable(dependent, stack, dependency_cache)
     elif inspect.isasyncgenfunction(dependent):
         # type of dependent is Callable[[], AsyncGenerator[T, None]]
+        if stack is None:
+            raise TypeError("stack cannot be None when entering an async generator context")
         cm = asynccontextmanager(dependent)()
         depend = cast(_T, await stack.enter_async_context(cm))
     elif inspect.isgeneratorfunction(dependent):
         # type of dependent is Callable[[], Generator[T, None, None]]
+        if stack is None:
+            raise TypeError("stack cannot be None when entering a generator context")
         cm = sync_ctx_manager_wrapper(contextmanager(dependent)())
         depend = cast(_T, await stack.enter_async_context(cm))
     elif isinstance(dependent, str):
@@ -230,13 +238,14 @@ async def solve_dependencies_in_bot(
     event: Event,
     state: Optional[StateT] = None,
     use_cache: bool = True,
-    stack: AsyncExitStack = AsyncExitStack(),
-    dependency_cache: Dict[Dependency[Any], Any] = {},
+    stack: Optional[AsyncExitStack] = None,
+    dependency_cache: Dict[Dependency[Any], Any] = None,
 ) -> _T:
     """解析子依赖。
         使用此方法强制需要bot、event、state作为参数，更加严谨。
     """
     from sekaibot.bot import Bot
+    if not dependency_cache: dependency_cache = {}
     dependency_cache |= {
         Bot: bot,
         Event: event,

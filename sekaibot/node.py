@@ -27,7 +27,7 @@ from contextlib import AsyncExitStack
 
 from sekaibot.consts import NODE_STATE, NODE_RULE_STATE
 from sekaibot.config import ConfigModel
-from sekaibot.dependencies import Depends, Dependency, solve_dependencies_in_bot
+from sekaibot.dependencies import Depends, Dependency, solve_dependencies_in_bot, _T
 from sekaibot.internal.event import Event
 from sekaibot.exceptions import SkipException, JumpToException, PruningException, StopException
 from sekaibot.typing import ConfigT, EventT, StateT
@@ -149,6 +149,19 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
         """节点类名称。"""
         return self.__class__.__name__
     
+    async def run(
+        self,
+        dependent: Dependency[_T],
+    ) -> _T:
+        """在节点内运行 SekaiBot 内置的，或自定义的函数，以及具有 `__call__` 的类。"""
+        return await solve_dependencies_in_bot(
+            dependent,
+            bot=self.bot,
+            event=self.event,
+            state=self.bot.manager.node_state,
+            stack=AsyncExitStack()
+        )
+    
     '''async def call_api(self, api: str, **params: Any):
         """调用 API，协程会等待直到获得 API 响应。
 
@@ -180,23 +193,16 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
                 default,
             )
         return default
-    
-    state: StateT = None
 
     @property
-    def node_state(self) -> StateT:
+    def state(self) -> StateT:
         """节点状态。"""
         return self.bot.manager.node_state[self.name][NODE_STATE]
 
-    @node_state.setter
+    @state.setter
     @final
-    def node_state(self, value: StateT) -> None:
+    def state(self, value: StateT) -> None:
         self.bot.manager.node_state[self.name][NODE_STATE] = value
-
-    @property
-    def checker_state(self) -> dict:
-        """节点状态。"""
-        return self.bot.manager.node_state[self.name][NODE_RULE_STATE]
 
     @property
     def global_state(self) -> dict:

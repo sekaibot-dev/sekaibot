@@ -178,7 +178,7 @@ class NodeManager():
             await _hook_func(current_event)
 
         _nodes_list = self.bot.nodes_list
-        event_state = None
+        #event_state = None
         index = 0
         while index < len(_nodes_list):
             node_class, pruning_node = _nodes_list[index]
@@ -188,7 +188,7 @@ class NodeManager():
                 if not await self._check_node(
                     node_class,
                     current_event,
-                    self.node_state[node_class.__name__][NODE_STATE],
+                    self.node_state[node_class.__name__],
                 ):
                     raise PruningException
                 async with AsyncExitStack() as stack:
@@ -202,7 +202,7 @@ class NodeManager():
                         stack=stack,
                         dependency_cache=_dependency_cache,
                     )
-                    _node.state = event_state
+                    #_node.state = event_state
 
                     if _node.name not in self.node_state:
                         node_state = _node.__init_state__()
@@ -213,7 +213,7 @@ class NodeManager():
                         try:
                             await _node.handle()
                         finally:
-                            event_state = _node.state if _node.state is not None else event_state
+                            #event_state = _node.state if _node.state is not None else event_state
                             if _node.block:
                                 break
             except SkipException:

@@ -1,12 +1,18 @@
 from sekaibot import Node
-#from sekaibot.rule import rule
+from sekaibot.rule import StartsWith
 #from sekaibot.rule import rule_at_me
 
-#@rule.startswith("Hello")
+startswith_rule = StartsWith("Hello world")
+
+@startswith_rule
 class HelloWorldNode(Node):
+
+    if_startswith = startswith_rule.Param()
+
     """Hello, World! 示例节点。"""
     priority = 0
     async def handle(self):
+        print(startswith_rule.param)
         return None
     
     
@@ -19,6 +25,7 @@ class HelloWorldNode1(Node):
         return None
     
     async def rule(self):
+        result = await StartsWith("hello")(self.bot, self.event, self.state)
         return True
     
 class HelloWorldNode2(Node):

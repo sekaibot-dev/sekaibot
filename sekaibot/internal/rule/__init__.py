@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from contextlib import AsyncExitStack
 from typing import TYPE_CHECKING, NoReturn, Optional, Union, Dict, Any, Self, Tuple
 
@@ -8,12 +9,11 @@ from sekaibot.dependencies import Dependency, InnerDepends, Depends, solve_depen
 from sekaibot.exceptions import SkipException
 from sekaibot.internal.event import Event
 from itertools import chain
-from sekaibot.typing import RuleCheckerT, StateT
+from sekaibot.typing import RuleCheckerT, StateT, NodeT
 from sekaibot.consts import NODE_RULE_STATE
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
-
 
 class Rule:
     """{ref}`nonebot.matcher.Matcher` 规则类。
@@ -125,3 +125,42 @@ class Rule:
     
     def __sub__(self, other: Union[Self, RuleCheckerT]) -> NoReturn:
         raise RuntimeError("Subtraction operation between rules is not allowed.")
+    
+
+class RuleChecker(ABC):
+    """{ref}`nonebot.matcher.Matcher` 规则检查器。
+    """
+    __rule__: Rule = Rule()
+
+    def __init__(self, rule: Rule | RuleCheckerT | Dependency) -> None:
+        """注入rule。"""
+        self.__rule__ = rule if isinstance(rule, Rule) else Rule(rule)
+
+    def __call__(self, cls: NodeT) -> NodeT:
+        """将检查器添加到 Node 类中。"""
+        if not isinstance(cls, type):
+            raise TypeError(f"class should be NodeT, not `{type(cls)}`.")
+        if not hasattr(cls, "__node_rule_func__"):
+            setattr(cls, "__node_rule_func__", Rule())
+        cls.__node_rule__ += self.__rule__
+        return cls
+    
+    async def check(
+        self,
+        bot: "Bot",
+        event: Event,
+        state: StateT,
+    ):
+        """直接运行检查器并获取结果。"""
+        return await self.__rule__(bot, event, state, None, {})
+    
+    @abstractmethod
+    def param(self) -> Any:
+        """获取检查器的数据。"""
+
+    def Param(self) -> InnerDepends:
+        async def check_and_return_param(bot: "Bot", event: Event, state: StateT) -> Any:
+            if not self.param():
+                await self.check(bot, event, state)
+            return self.param()
+        return Depends(check_and_return_param, use_cache=False)

@@ -300,8 +300,8 @@ class KeywordsRule:
             return False
         if not text:
             return False
-        if key := next((k for k in self.keywords if k in text), None):
-            state[KEYWORD_KEY] = key
+        if keys := tuple(k for k in self.keywords if k in text):
+            state[KEYWORD_KEY] = keys
             return True
         return False
 

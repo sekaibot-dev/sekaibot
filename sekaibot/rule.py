@@ -6,9 +6,9 @@ from typing import (
 import re
 
 from sekaibot.internal.event import Event
-from sekaibot.typing import NodeT, RuleCheckerT
-from sekaibot.dependencies import Dependency
-from sekaibot.internal.rule import Rule
+from sekaibot.typing import NodeT, RuleCheckerT, StateT
+from sekaibot.dependencies import Dependency, Depends
+from sekaibot.internal.rule import Rule, RuleChecker
 from sekaibot.internal.rule.utils import (
     StartswithRule,
     EndswithRule,
@@ -19,93 +19,96 @@ from sekaibot.internal.rule.utils import (
     RegexRule,
     ToMeRule,
 )
+from sekaibot.consts import (
+    NODE_RULE_STATE,
+    CMD_ARG_KEY,
+    CMD_KEY,
+    CMD_START_KEY,
+    CMD_WHITESPACE_KEY,
+    ENDSWITH_KEY,
+    FULLMATCH_KEY,
+    KEYWORD_KEY,
+    PREFIX_KEY,
+    RAW_CMD_KEY,
+    REGEX_MATCHED,
+    SHELL_ARGS,
+    SHELL_ARGV,
+    STARTSWITH_KEY,
+)
 
 __all__ = [
-    "rule"
+    "SetRule"
 ]
 
-
-class rule:
-    """一个装饰器，可以将一个 Node 类中的消息规则添加到 Node 类中。"""
-
-    def __init__(self, *rule: Rule | RuleCheckerT | Dependency[bool]) -> None:
-        self.rule = Rule(*rule)
-
-    def __call__(self, cls: NodeT) -> NodeT:
-        if not isinstance(cls, type):
-            raise TypeError(f"class should be NodeT, not `{type(cls)}`.")
-        if not hasattr(cls, "__node_rule_func__"):
-            setattr(cls, "__node_rule_func__", Rule())
-        cls.__node_rule__ += self.rule
-        return cls
-
-
-def startswith(
-    msg: Union[str, tuple[str, ...]], ignorecase: bool = False
-) -> Callable[[NodeT], NodeT]:
+class StartsWith(RuleChecker):
     """匹配消息纯文本开头。
 
     参数:
         msg: 指定消息开头字符串元组
         ignorecase: 是否忽略大小写
     """
+    def __init__(self, 
+        msg: Union[str, tuple[str,...]], ignorecase: bool = False
+    ) -> None:
+        if isinstance(msg, str):
+            msg = (msg,)
+
+        super().__init__(StartswithRule(msg, ignorecase)) 
     
-    if isinstance(msg, str):
-        msg = (msg,)
+    def param(self, state: StateT) -> str:
+        return state[NODE_RULE_STATE][STARTSWITH_KEY]
 
-    return Rule(StartswithRule(msg, ignorecase))
-
-@staticmethod
-def endswith( 
-    msg: Union[str, tuple[str, ...]], ignorecase: bool = False
-) -> Callable[[NodeT], NodeT]:
+class EndsWith(RuleChecker):
     """匹配消息纯文本结尾。
 
     参数:
         msg: 指定消息开头字符串元组
         ignorecase: 是否忽略大小写
     """
+    def __init__( 
+        msg: Union[str, tuple[str, ...]], ignorecase: bool = False
+    ) -> None:
+        if isinstance(msg, str):
+            msg = (msg,)
 
-    if isinstance(msg, str):
-        msg = (msg,)
+        super().__init__(EndswithRule(msg, ignorecase)) 
+    
+    def param(self, state: StateT) -> str:
+        return state[NODE_RULE_STATE][ENDSWITH_KEY]
 
-    return Rule(EndswithRule(msg, ignorecase))
-
-
-@staticmethod
-def fullmatch(
-    msg: Union[str, tuple[str, ...]], ignorecase: bool = False
-) -> Callable[[NodeT], NodeT]:
+class FullMatch(RuleChecker):
     """完全匹配消息。
 
     参数:
         msg: 指定消息全匹配字符串元组
         ignorecase: 是否忽略大小写
     """
+    def __init__(
+        msg: Union[str, tuple[str, ...]], ignorecase: bool = False
+    ) -> None:
+        if isinstance(msg, str):
+            msg = (msg,)
+        
+        super().__init__(FullmatchRule(msg, ignorecase)) 
 
-    if isinstance(msg, str):
-        msg = (msg,)
+    def param(self, state: StateT) -> str:
+        return state[NODE_RULE_STATE][FULLMATCH_KEY]
 
-    return Rule(FullmatchRule(msg, ignorecase))
-
-
-@staticmethod
-def keyword(
-    *keywords: str
-) -> Callable[[NodeT], NodeT]:
+class Keyword(RuleChecker):
     """匹配消息纯文本关键词。
 
     参数:
         keywords: 指定关键字元组
     """
+    def __init__(
+        *keywords: str
+    ) -> None:
+        super().__init__(KeywordsRule(*keywords))
 
-    return Rule(KeywordsRule(*keywords))
+    def param(self, state: StateT) -> tuple[str,...]:
+        return state[NODE_RULE_STATE][KEYWORD_KEY]
 
-
-@staticmethod
-def regex(
-    regex: str, flags: Union[int, re.RegexFlag] = 0
-) -> Callable[[NodeT], NodeT]:
+class Regex(RuleChecker):
     """匹配符合正则表达式的消息字符串。
 
     可以通过 {ref}`nonebot.params.RegexStr` 获取匹配成功的字符串，
@@ -125,12 +128,18 @@ def regex(
     而非 `EventMessage` 的 `PlainText` 纯文本字符串
     :::
     """
-    
-    return Rule(RegexRule(regex, flags))
+    def __init__(
+        regex: str, flags: Union[int, re.RegexFlag] = 0
+    ) -> Rule:
+        super().__init__(RegexRule(regex, flags))
 
+    def param(self, state: StateT) -> re.Match[str]:
+        return state[NODE_RULE_STATE][REGEX_MATCHED]
 
-@staticmethod
-def to_me() -> Callable[[NodeT], NodeT]:
+class ToMe(RuleChecker):
     """匹配与机器人有关的事件。"""
+    def __init__(self) -> None:
+        super().__init__(ToMeRule())
 
-    return Rule(ToMeRule())
+    def param(self, event: Event) -> bool:
+        return event.is_tome()
