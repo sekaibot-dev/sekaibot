@@ -6,7 +6,7 @@ from typing import (
 )
 
 from sekaibot.internal.event import Event
-from sekaibot.typing import NodeT, RuleCheckerT, StateT
+from sekaibot.typing import _RuleStateT
 from sekaibot.internal.rule import Rule, RuleChecker, MatchRule
 from sekaibot.internal.rule.utils import (
     StartswithRule,
@@ -19,7 +19,6 @@ from sekaibot.internal.rule.utils import (
     ToMeRule,
 )
 from sekaibot.consts import (
-    NODE_RULE_STATE,
     CMD_ARG_KEY,
     CMD_KEY,
     CMD_START_KEY,
@@ -56,8 +55,8 @@ class StartsWith(MatchRule):
     checker = StartswithRule
     
     @classmethod
-    def rule_param(cls, state: StateT) -> str:
-        return state[NODE_RULE_STATE][STARTSWITH_KEY]
+    def rule_param(cls, rule_state: _RuleStateT) -> str:
+        return rule_state[STARTSWITH_KEY]
 
 class EndsWith(MatchRule):
     """匹配消息纯文本结尾。
@@ -69,8 +68,8 @@ class EndsWith(MatchRule):
     checker = EndswithRule
     
     @classmethod
-    def param(cls, state: StateT) -> str:
-        return state[NODE_RULE_STATE][ENDSWITH_KEY]
+    def param(cls, rule_state: _RuleStateT) -> str:
+        return rule_state[ENDSWITH_KEY]
 
 class FullMatch(MatchRule):
     """完全匹配消息。
@@ -82,8 +81,8 @@ class FullMatch(MatchRule):
     checker = FullmatchRule
 
     @classmethod
-    def param(cls, state: StateT) -> str:
-        return state[NODE_RULE_STATE][FULLMATCH_KEY]
+    def param(cls, rule_state: _RuleStateT) -> str:
+        return rule_state[FULLMATCH_KEY]
 
 class Keyword(RuleChecker[tuple[list[str], bool], tuple[str,...]]):
     """匹配消息纯文本关键词。
@@ -115,8 +114,8 @@ class Keyword(RuleChecker[tuple[list[str], bool], tuple[str,...]]):
         return super().Checker(*keywords, ignorecase) 
 
     @classmethod
-    def param(cls, state: StateT) -> tuple[str,...]:
-        return state[NODE_RULE_STATE][KEYWORD_KEY]
+    def param(cls, rule_state: _RuleStateT) -> tuple[str,...]:
+        return rule_state[KEYWORD_KEY]
 
 class Regex(RuleChecker[tuple[str, re.RegexFlag], re.Match[str]]):
     """匹配符合正则表达式的消息字符串。
@@ -159,8 +158,8 @@ class Regex(RuleChecker[tuple[str, re.RegexFlag], re.Match[str]]):
         return super().Checker(regex, flags) 
 
     @classmethod
-    def param(cls, state: StateT) -> re.Match[str]:
-        return state[NODE_RULE_STATE][REGEX_MATCHED]
+    def param(cls, rule_state: _RuleStateT) -> re.Match[str]:
+        return rule_state[REGEX_MATCHED]
 
 class ToMe(RuleChecker[Any, bool]):
     """匹配与机器人有关的事件。"""

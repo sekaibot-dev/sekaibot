@@ -27,8 +27,7 @@ from sekaibot.exceptions import (
     JumpToException,
 )
 from sekaibot.log import logger
-from sekaibot.consts import NODE_STATE
-from sekaibot.typing import EventT, StateT
+from sekaibot.typing import EventT, StateT, _RuleStateT
 from sekaibot.node import Node
 from sekaibot.utils import wrap_get_func, cancel_on_exit
 from sekaibot.dependencies import solve_dependencies_in_bot, Dependency
@@ -40,8 +39,9 @@ if TYPE_CHECKING:
 class NodeManager():
     bot: "Bot"
 
-    node_state: Dict[str, Dict[str, Any]]
-    global_state: Dict[str, Dict[str, Any]]
+    node_state: Dict[str, Any]
+    global_state: Dict[str, Any]
+    _perm_state: Dict[str, Any]
 
     _condition: anyio.Condition
     _cancel_event: anyio.Event
@@ -52,8 +52,9 @@ class NodeManager():
 
     def __init__(self, bot: "Bot"):
         self.bot = bot
-        self.node_state = defaultdict(lambda: defaultdict(lambda: None))
-        self.global_state = defaultdict(lambda: defaultdict(lambda: None))
+        self.node_state = defaultdict(lambda: None)
+        self.global_state = defaultdict(lambda: None)
+        self._perm_state = defaultdict(lambda: None)
 
     async def startup(self) -> None:
         self._condition = anyio.Condition()
@@ -122,9 +123,9 @@ class NodeManager():
 
     async def _check_node(
         self,
-        node: type[Node],
-        event: Event,
-        state: StateT,
+        node_class: type[Node],
+        event: Event[Any],
+        rule_state: _RuleStateT,
         stack: Optional[AsyncExitStack] = None,
         dependency_cache: Optional[Dependency] = None,
     ) -> bool:
@@ -149,107 +150,120 @@ class NodeManager():
             return False'''
 
         try:
-            if not await node.check_perm(self.bot, event, stack, dependency_cache):
-                logger.info(f"permission conditions not met", node=node.__name__)
+            if not await node_class.check_perm(self.bot, event, self._perm_state, stack, dependency_cache):
+                logger.info(f"permission conditions not met", node=node_class.__name__)
                 return False
         except Exception as e:
             logger.error(
-                f"permission check failed", node=node.__name__
+                f"permission check failed", node=node_class.__name__
             )
             return False
 
         try:
-            if not await node.check_rule(self.bot, event, state, stack, dependency_cache):
-                logger.info(f"rule conditions not met", node=node.__name__)
+            if not await node_class.check_rule(self.bot, event, rule_state, stack, dependency_cache):
+                logger.info(f"rule conditions not met", node=node_class.__name__)
                 return False
         except Exception as e:
             logger.error(
-                f"rule check failed", node=node.__name__
+                f"rule check failed", node=node_class.__name__
             )
             return False
 
         return True
 
+    async def _run_node(
+        self,
+        node_class: type[Node],
+        current_event: Event[Any],
+        rule_state: _RuleStateT,
+        stack: Optional[AsyncExitStack] = None,
+        dependency_cache: Optional[Dependency] = None,
+    ):
+        _node = await solve_dependencies_in_bot(
+            node_class,
+            bot=self.bot, 
+            event=current_event,
+            state=self.node_state[node_class.__name__], 
+            global_state=self.global_state,
+            rule_state=rule_state, 
+            perm_state=self._perm_state,
+            use_cache=True,
+            stack=stack,
+            dependency_cache=dependency_cache,
+        )
+
+        if _node.name not in self.node_state:
+            node_state = _node.__init_state__()
+            if node_state is not None:
+                self.node_state[_node.name] = node_state
+        if await _node.rule():
+            logger.info("Event will be handled by node", node=_node)
+            try:
+                await _node.handle()
+            finally:
+                if _node.block:
+                    raise StopException
+
     async def _handle_event(self, current_event: Event[Any]) -> None:
+        """处理事件并匹配相应的节点（插件）。
+
+        此方法在 `current_event` 被处理后不会再次处理，遍历 `nodes_list`
+        来匹配事件，并根据插件的处理结果进行剪枝、跳转或停止。
+
+        Args:
+            current_event: 当前需要处理的事件对象。
+        """
         if current_event.__handled__:
             return
 
-        for _hook_func in self.bot._event_preprocessor_hooks:
-            await _hook_func(current_event)
+        for hook_func in self.bot._event_preprocessor_hooks:
+            await hook_func(current_event)
 
-        _nodes_list = self.bot.nodes_list
-        #event_state = None
+        nodes_list = self.bot.nodes_list.copy()
         index = 0
-        while index < len(_nodes_list):
-            node_class, pruning_node = _nodes_list[index]
-            logger.debug("Checking for matching nodes", priority=node_class)
-            try:
-                # 事件类型与节点要求的类型不匹配，剪枝
-                if not await self._check_node(
-                    node_class,
-                    current_event,
-                    self.node_state[node_class.__name__],
-                ):
-                    raise PruningException
-                async with AsyncExitStack() as stack:
-                    _dependency_cache = {}
-                    _node = await solve_dependencies_in_bot(
-                        node_class,
-                        bot=self.bot,
-                        event=current_event,
-                        state=self.node_state[node_class.__name__][NODE_STATE],
-                        use_cache=True,
-                        stack=stack,
-                        dependency_cache=_dependency_cache,
-                    )
-                    #_node.state = event_state
+        jump_to_index_map = {node.__name__: i for i, (node, _) in enumerate(nodes_list)}
 
-                    if _node.name not in self.node_state:
-                        node_state = _node.__init_state__()
-                        if node_state is not None:
-                            self.node_state[_node.name][NODE_STATE] = node_state
-                    if await _node.rule():
-                        logger.info("Event will be handled by node", node=_node)
-                        try:
-                            await _node.handle()
-                        finally:
-                            #event_state = _node.state if _node.state is not None else event_state
-                            if _node.block:
-                                break
+        while index < len(nodes_list):
+            node_class, pruning_node = nodes_list[index]
+            _rule_state = defaultdict(lambda: None)
+
+            logger.debug("Checking for matching nodes", priority=node_class)
+
+            next_index = index + 1 
+
+            try:
+                async with AsyncExitStack() as stack:
+                    if not await self._check_node(node_class, current_event, _rule_state, stack=stack):
+                        raise PruningException
+
+                    await self._run_node(node_class, current_event, _rule_state, stack=stack)
+
             except SkipException:
-                # 插件要求跳过自身继续当前事件传播或跳转事件
-                next_index = index + 1
+                pass
             except StopException:
-                # 插件要求停止当前事件传播
                 break
             except PruningException:
-                # 插件要求剪枝
                 next_index = pruning_node if pruning_node != -1 else None
             except JumpToException as jump_to_node:
-                # 插件要求跳转事件
-                jump_to_index = {s.__name__: i for i, (s, _) in enumerate(_nodes_list)}.get(jump_to_node.node, None)
-                if jump_to_index is not None:
-                    if jump_to_index > index:
-                        next_index = jump_to_index
-                    else:
-                        logger.warning("The node to jump to is before the current node", node=_nodes_list[jump_to_index])
-                        next_index = index + 1
-                else:
+                jump_to_index = jump_to_index_map.get(jump_to_node.node)
+
+                if jump_to_index is None:
                     logger.warning("The node to jump to does not exist", node_name=jump_to_node.node)
-                    next_index = index + 1
+                elif jump_to_index > index:
+                    next_index = jump_to_index
+                else:
+                    logger.warning("The node to jump to is before the current node", node=nodes_list[jump_to_index])
+
             except Exception:
                 logger.exception("Exception in node", node=node_class)
-                next_index = index + 1
-            else:
-                next_index = index + 1
 
             if next_index is not None:
                 index = next_index
             else:
                 break
-                
-        for _hook_func in self.bot._event_postprocessor_hooks:
-            await _hook_func(current_event)
+
+        for hook_func in self.bot._event_postprocessor_hooks:
+            await hook_func(current_event)
 
         logger.info("Event Finished")
 

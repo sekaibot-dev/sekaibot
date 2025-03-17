@@ -27,7 +27,7 @@ from typing import (
 
 from sekaibot.utils import get_annotations, sync_ctx_manager_wrapper
 from sekaibot.internal.event import Event
-from sekaibot.typing import ConfigT, EventT, StateT
+from sekaibot.typing import StateT, GlobalStateT, _RuleStateT, _PermStateT
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
 
@@ -126,6 +126,8 @@ async def _execute_callable(
             func_args[param_name] = param.default
         elif param_type in dependency_cache:
             func_args[param_name] = dependency_cache[param_type]
+        elif param_name in dependency_cache:
+            func_args[param_name] = dependency_cache[param_name]
         else:
             name_cache = {get_dependency_name(_cache): _cache for _cache in dependency_cache.keys()}
             if isinstance(param_type, str) and param_type in name_cache:
@@ -250,19 +252,25 @@ async def solve_dependencies_in_bot(
     bot: "Bot",
     event: Event,
     state: Optional[StateT] = None,
+    global_state: Optional[GlobalStateT] = None,
+    rule_state: Optional[_RuleStateT] = None,
+    perm_state: Optional[_PermStateT] = None,
     use_cache: bool = True,
     stack: Optional[AsyncExitStack] = None,
     dependency_cache: Optional[Dict[Dependency[Any], Any]] = None,
 ) -> _T:
     """解析子依赖。
     
-    此方法强制要求 `bot`、`event`、`state` 作为参数，以确保依赖解析的严谨性。
+    此方法强制要求 `bot`、`event`、`state`、`global_state` 作为参数，以确保依赖解析的严谨性。
 
     Args:
         dependent: 需要解析的依赖。
         bot: 机器人实例，必须提供。
         event: 事件对象，必须提供。
-        state: 可选的状态信息，默认为 `None`。
+        state: 为节点提供的状态信息，默认为 `None`。
+        global_state: 为节点提供的全局状态，可选，默认为 `None`。
+        rule_state: 为规则解析器提供状态，可选，默认为 `None`。
+        perm_state: 权限管理器状态，可选，默认为 `None`。
         use_cache: 是否使用缓存，默认为 `True`。
         stack: 异步上下文管理器，可选。
         dependency_cache: 依赖缓存，如果未提供，则自动创建新字典。
@@ -284,7 +292,16 @@ async def solve_dependencies_in_bot(
         StateT: state,
         "state": state,
     })
-
+    if global_state is not None: dependency_cache.update({
+        GlobalStateT: global_state,
+        "global_state": global_state,
+    })
+    if rule_state is not None: dependency_cache.update({
+        _RuleStateT: rule_state,
+    })
+    if perm_state is not None: dependency_cache.update({
+        _PermStateT: perm_state,
+    })
     return await solve_dependencies(
         dependent, use_cache=use_cache, stack=stack, dependency_cache=dependency_cache
     )
