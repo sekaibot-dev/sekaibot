@@ -41,7 +41,7 @@ class NodeManager():
     bot: "Bot"
 
     node_state: Dict[str, Dict[str, Any]]
-    global_state: dict
+    global_state: Dict[str, Dict[str, Any]]
 
     _condition: anyio.Condition
     _cancel_event: anyio.Event
@@ -53,7 +53,7 @@ class NodeManager():
     def __init__(self, bot: "Bot"):
         self.bot = bot
         self.node_state = defaultdict(lambda: defaultdict(lambda: None))
-        self.global_state = {}
+        self.global_state = defaultdict(lambda: defaultdict(lambda: None))
 
     async def startup(self) -> None:
         self._condition = anyio.Condition()

@@ -8,6 +8,3 @@ class AEvent():
 
 bot.run()
 
-
-
-

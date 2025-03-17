@@ -5,13 +5,14 @@ from sekaibot.rule import StartsWith
 @StartsWith("Hello world")
 class HelloWorldNode(Node):
 
-    if_startswith = StartsWith.Param()
+    if_startswith = StartsWith.Checker("Hello, World", True)
+    param = StartsWith.Param()
 
     """Hello, World! 示例节点。"""
     priority = 0
     async def handle(self):
-        if self.run(StartsWith("Hello world").Checker):
-            param = self.run(StartsWith.Param)
+        if key := await self.run(StartsWith.check("Hello, World")):
+            param = await self.run(StartsWith.Param)
             print(param)
         return None
     

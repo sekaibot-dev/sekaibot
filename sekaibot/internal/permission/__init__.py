@@ -1,5 +1,19 @@
 from contextlib import AsyncExitStack
-from typing import TYPE_CHECKING, NoReturn, Optional, Union, Dict, Any, Self
+from abc import ABC, abstractmethod
+from typing import (
+    TYPE_CHECKING, 
+    Any, 
+    NoReturn, 
+    Optional, 
+    Union, 
+    Dict, 
+    Self, 
+    Callable, 
+    Awaitable, 
+    Generic, 
+    TypeVar, 
+    final
+)
 
 import anyio
 from exceptiongroup import BaseExceptionGroup, catch
@@ -7,6 +21,7 @@ from exceptiongroup import BaseExceptionGroup, catch
 from sekaibot.dependencies import Dependency, InnerDepends, Depends, solve_dependencies_in_bot
 from sekaibot.exceptions import SkipException
 from sekaibot.internal.event import Event
+from itertools import chain
 from sekaibot.typing import PermissionCheckerT, StateT
 
 if TYPE_CHECKING:
@@ -31,10 +46,11 @@ class Permission:
 
     __slots__ = ("checkers",)
 
-    def __init__(self, *checkers: Union[PermissionCheckerT, Dependency[bool]]) -> None:
-        self.checkers: set[Dependency[bool]] = {
-            checker for checker in checkers
-        }
+    def __init__(self, *checkers: Union["Permission", PermissionCheckerT, Dependency[bool]]) -> None:
+        self.checkers: set[Dependency[bool]] = set(chain.from_iterable(
+            checker.checkers if isinstance(checker, Permission) else {checker}
+            for checker in checkers
+        ))
         """存储 `PermissionChecker`"""
 
     def __repr__(self) -> str:

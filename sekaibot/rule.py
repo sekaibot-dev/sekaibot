@@ -1,14 +1,13 @@
+import re
+
 from typing import (
     Union,
-    Callable,
-    Self
+    Any,
 )
-import re
 
 from sekaibot.internal.event import Event
 from sekaibot.typing import NodeT, RuleCheckerT, StateT
-from sekaibot.dependencies import Dependency, Depends
-from sekaibot.internal.rule import Rule, RuleChecker
+from sekaibot.internal.rule import Rule, RuleChecker, MatchRule
 from sekaibot.internal.rule.utils import (
     StartswithRule,
     EndswithRule,
@@ -37,70 +36,56 @@ from sekaibot.consts import (
 )
 
 __all__ = [
-    "SetRule"
+    "Startswith",
+    "EndsWith",
+    "FullMatch",
+    "Keywords",
+    #"Command",
+    #"ShellCommand",
+    "Regex",
+    "ToMe",
 ]
 
-class StartsWith(RuleChecker):
+class StartsWith(MatchRule):
     """匹配消息纯文本开头。
 
     参数:
         msg: 指定消息开头字符串元组
         ignorecase: 是否忽略大小写
     """
-    def __init__(
-        self,
-        msg: Union[str, tuple[str,...]], ignorecase: bool = False
-    ) -> None:
-        if isinstance(msg, str):
-            msg = (msg,)
-
-        super().__init__(StartswithRule(msg, ignorecase)) 
+    checker = StartswithRule
     
     @classmethod
     def rule_param(cls, state: StateT) -> str:
         return state[NODE_RULE_STATE][STARTSWITH_KEY]
 
-class EndsWith(RuleChecker):
+class EndsWith(MatchRule):
     """匹配消息纯文本结尾。
 
     参数:
         msg: 指定消息开头字符串元组
         ignorecase: 是否忽略大小写
     """
-    def __init__(
-        self,
-        msg: Union[str, tuple[str, ...]], ignorecase: bool = False
-    ) -> None:
-        if isinstance(msg, str):
-            msg = (msg,)
-
-        super().__init__(EndswithRule(msg, ignorecase)) 
+    checker = EndswithRule
     
     @classmethod
-    def rule_param(cls, state: StateT) -> str:
+    def param(cls, state: StateT) -> str:
         return state[NODE_RULE_STATE][ENDSWITH_KEY]
 
-class FullMatch(RuleChecker):
+class FullMatch(MatchRule):
     """完全匹配消息。
 
     参数:
         msg: 指定消息全匹配字符串元组
         ignorecase: 是否忽略大小写
     """
-    def __init__(
-        self,
-        msg: Union[str, tuple[str, ...]], ignorecase: bool = False
-    ) -> None:
-        if isinstance(msg, str):
-            msg = (msg,)
-        
-        super().__init__(FullmatchRule(msg, ignorecase)) 
+    checker = FullmatchRule
 
     @classmethod
-    def rule_param(cls, state: StateT) -> str:
+    def param(cls, state: StateT) -> str:
         return state[NODE_RULE_STATE][FULLMATCH_KEY]
 
-class Keyword(RuleChecker):
+class Keyword(RuleChecker[list[str], tuple[str,...]]):
     """匹配消息纯文本关键词。
 
     参数:
@@ -113,10 +98,24 @@ class Keyword(RuleChecker):
         super().__init__(KeywordsRule(*keywords))
 
     @classmethod
-    def rule_param(cls, state: StateT) -> tuple[str,...]:
+    def check(
+        cls,
+        *keywords: str
+    ):
+        return super().check(*keywords) 
+
+    @classmethod
+    def Checker(
+        cls,
+        *keywords: str
+    ):
+        return super().Checker(*keywords) 
+
+    @classmethod
+    def param(cls, state: StateT) -> tuple[str,...]:
         return state[NODE_RULE_STATE][KEYWORD_KEY]
 
-class Regex(RuleChecker):
+class Regex(RuleChecker[tuple[str, re.RegexFlag], re.Match[str]]):
     """匹配符合正则表达式的消息字符串。
 
     可以通过 {ref}`nonebot.params.RegexStr` 获取匹配成功的字符串，
@@ -143,14 +142,36 @@ class Regex(RuleChecker):
         super().__init__(RegexRule(regex, flags))
 
     @classmethod
-    def rule_param(cls, state: StateT) -> re.Match[str]:
+    def check(
+        cls,
+        regex: str, flags: Union[int, re.RegexFlag] = 0
+    ):
+        return super().check(regex, flags)
+    
+    @classmethod
+    def Checker(
+        cls,
+        regex: str, flags: Union[int, re.RegexFlag] = 0
+    ):
+        return super().Checker(regex, flags) 
+
+    @classmethod
+    def param(cls, state: StateT) -> re.Match[str]:
         return state[NODE_RULE_STATE][REGEX_MATCHED]
 
-class ToMe(RuleChecker):
+class ToMe(RuleChecker[Any, bool]):
     """匹配与机器人有关的事件。"""
     def __init__(self) -> None:
         super().__init__(ToMeRule())
 
     @classmethod
-    def rule_param(cls, event: Event) -> bool:
+    def check(cls):
+        return super().check()
+    
+    @classmethod
+    def Checker(cls):
+        return super().Checker() 
+
+    @classmethod
+    def param(cls, event: Event) -> bool:
         return event.is_tome()

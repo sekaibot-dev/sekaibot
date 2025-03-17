@@ -7,6 +7,7 @@ from typing import (
 
 NODE_STATE: Literal["node_state"] = "node_state"
 NODE_RULE_STATE: Literal["node_rule_state"] = "node_rule_state"
+NODE_GLOBAL_STATE: Literal["node_global_state"] = "node_global_state"
 
 # used by Matcher
 RECEIVE_KEY: Literal["_receive_{id}"] = "_receive_{id}"

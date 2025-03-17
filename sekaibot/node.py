@@ -4,6 +4,7 @@
 """
 
 import inspect
+import anyio
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import (
@@ -25,7 +26,7 @@ from typing import (
 from typing_extensions import Annotated, get_args, get_origin
 from contextlib import AsyncExitStack
 
-from sekaibot.consts import NODE_STATE, NODE_RULE_STATE
+from sekaibot.consts import NODE_STATE, NODE_GLOBAL_STATE
 from sekaibot.config import ConfigModel
 from sekaibot.dependencies import Depends, Dependency, solve_dependencies_in_bot, _T
 from sekaibot.internal.event import Event
@@ -164,6 +165,31 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
             stack=AsyncExitStack()
         )
     
+    async def gather(
+        self,
+        *dependencies: Dependency[_T],
+        return_exceptions: bool = False
+    ) -> tuple[_T, ...]:
+        """类似 `asyncio.gather()` 并发执行多个任务，支持 `return_exceptions`"""
+
+        results = {}
+
+        async def wrapper(dep):
+            try:
+                results[dep] = await self.run(dep)
+            except Exception as e:
+                if return_exceptions:
+                    results[dep] = e 
+                else:
+                    raise 
+
+        async with anyio.create_task_group() as tg:
+            for dependency in dependencies:
+                tg.start_soon(wrapper, dependency)
+
+        return tuple(results[dep] for dep in dependencies)
+
+    
     '''async def call_api(self, api: str, **params: Any):
         """调用 API，协程会等待直到获得 API 响应。
 
@@ -209,12 +235,12 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
     @property
     def global_state(self) -> dict:
         """通用状态。"""
-        return self.bot.manager.global_state
+        return self.bot.manager.global_state[NODE_GLOBAL_STATE]
 
     @global_state.setter
     @final
     def global_state(self, value: dict) -> None:
-        self.bot.manager.global_state = value
+        self.bot.manager.global_state[NODE_GLOBAL_STATE] = value
 
     @final
     @classmethod

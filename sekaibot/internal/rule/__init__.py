@@ -1,11 +1,25 @@
-from abc import ABC, abstractmethod
 from contextlib import AsyncExitStack
-from typing import TYPE_CHECKING, NoReturn, Optional, Union, Dict, Any, Self, Tuple
+from abc import ABC, abstractmethod
+from typing import (
+    TYPE_CHECKING, 
+    Any, 
+    NoReturn, 
+    Optional, 
+    Union, 
+    Type, 
+    Dict, 
+    Self, 
+    Callable, 
+    Awaitable, 
+    Generic, 
+    TypeVar, 
+    final
+)
 
 import anyio
 from exceptiongroup import BaseExceptionGroup, catch
 
-from sekaibot.dependencies import Dependency, InnerDepends, Depends, solve_dependencies_in_bot
+from sekaibot.dependencies import Dependency, Depends, solve_dependencies_in_bot
 from sekaibot.exceptions import SkipException
 from sekaibot.internal.event import Event
 from itertools import chain
@@ -33,7 +47,7 @@ class Rule:
 
     __slots__ = ("checkers",)
 
-    def __init__(self, *checkers: Union[Self,RuleCheckerT, Dependency[bool]]) -> None:
+    def __init__(self, *checkers: Union["Rule", RuleCheckerT, Dependency[bool]]) -> None:
         self.checkers: set[Dependency[bool]] = set(chain.from_iterable(
             checker.checkers if isinstance(checker, Rule) else {checker}
             for checker in checkers
@@ -126,15 +140,13 @@ class Rule:
     def __sub__(self, other: Union[Self, RuleCheckerT]) -> NoReturn:
         raise RuntimeError("Subtraction operation between rules is not allowed.")
     
+ArgsT = TypeVar("T")
+ParamT = TypeVar("P")
 
-class RuleChecker(ABC):
-    """{ref}`nonebot.matcher.Matcher` 规则检查器。
-    """
-    __rule__: Rule = Rule()
-
-    def __init__(self, rule: Rule | RuleCheckerT | Dependency) -> None:
-        """注入rule。"""
-        self.__rule__ = rule if isinstance(rule, Rule) else Rule(rule)
+class RuleChecker(ABC, Generic[ArgsT, ParamT]):
+    """抽象基类，匹配消息规则。"""
+    def __init__(self, rule: Rule) -> None:
+        self.__rule__ = rule
 
     def __call__(self, cls: NodeT) -> NodeT:
         """将检查器添加到 Node 类中。"""
@@ -144,8 +156,20 @@ class RuleChecker(ABC):
             setattr(cls, "__node_rule__", Rule())
         cls.__node_rule__ += self.__rule__
         return cls
+
+    @classmethod
+    def check(cls, *args: ArgsT, **kwargs) -> Callable[..., Awaitable[bool]]:
+        """默认实现检查方法，子类可覆盖。"""
+        return cls(*args, **kwargs)._check
+
+    @classmethod
+    def Checker(cls, *args: ArgsT, **kwargs) -> bool:
+        """默认实现检查方法的依赖注入方法，子类可覆盖。"""
+        return Depends(cls.check(*args, **kwargs), use_cache=False)
+
     
-    async def check_rule(
+    @final
+    async def _check(
         self,
         bot: "Bot",
         event: Event,
@@ -153,17 +177,46 @@ class RuleChecker(ABC):
     ) -> bool:
         """直接运行检查器并获取结果。"""
         return await self.__rule__(bot, event, state, None, {})
-    
-    def Checker(self):
-        """在依赖注入里获取检查器的结果。"""
-        return Depends(self.check_rule, use_cache=False)
-    
-    @abstractmethod
-    @classmethod
-    async def rule_param(cls) -> Any:
-        """获取检查器的数据。"""
 
     @classmethod
-    def Param(cls) -> InnerDepends:
+    @abstractmethod
+    def param(cls, state: StateT) -> ParamT:
+        """获取规则参数，子类需实现。"""
+        pass
+
+    @final
+    @classmethod
+    def Param(cls) -> ParamT:
         """在依赖注入里获取检查器的数据。"""
-        return Depends(cls.rule_param, use_cache=False)
+        return Depends(cls.param, use_cache=False)
+    
+class MatchRule(RuleChecker[tuple[str, bool], str]):
+    """所有匹配类 Rule 的基类。"""
+
+    checker: Type[Callable[[Union[str, tuple[str, ...]], bool], "Rule"]] = None
+
+    def __init__(
+        self,
+        msg: Union[str, tuple[str, ...]], ignorecase: bool = False
+    ) -> None:
+        if isinstance(msg, str):
+            msg = (msg,)
+
+        if self.checker is None:
+            raise NotImplementedError(f"Subclasses of MatchRule must provide a checker.")
+
+        super().__init__(Rule(self.checker(msg, ignorecase))) 
+
+    @classmethod
+    def check(
+        cls,
+        msg: Union[str, tuple[str, ...]], ignorecase: bool = False
+    ):
+        return super().check(msg, ignorecase) 
+
+    @classmethod
+    def Checker(
+        cls,
+        msg: Union[str, tuple[str, ...]], ignorecase: bool = False
+    ):
+        return super().Checker(msg, ignorecase) 

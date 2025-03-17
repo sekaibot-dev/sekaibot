@@ -20,6 +20,7 @@ from typing import (
     Type,
     TypeVar,
     Union,
+    Generic,
     cast,
     get_type_hints
 )
@@ -31,6 +32,7 @@ if TYPE_CHECKING:
     from sekaibot.bot import Bot
 
 _T = TypeVar("_T")
+
 Dependency = Union[
     # Class-based dependencies
     Type[Union[_T, AsyncContextManager[_T], ContextManager[_T]]],
@@ -56,12 +58,15 @@ class InnerDepends:
         use_cache: 是否使用缓存。默认为 `True`。
     """
 
-    dependency: Optional[Dependency[Any]]
+    dependency: Optional[Dependency]
     use_cache: bool
 
     def __init__(
-        self, dependency: Optional[Dependency[Any]] = None, *, use_cache: bool = True
+        self, dependency: Optional[Dependency] = None, *, use_cache: bool = True
     ) -> None:
+        if isinstance(dependency, InnerDepends):
+            self.dependency = dependency.dependency
+            self.use_cache = dependency.use_cache
         self.dependency = dependency
         self.use_cache = use_cache
 
@@ -88,6 +93,8 @@ def Depends(  # noqa: N802 # pylint: disable=invalid-name
 def get_dependency_name(dependency: Dependency[Any]) -> str:
     """获取 Dependency[Any] 的名称，正确区分类、函数、实例等"""
 
+    if isinstance(dependency, str):
+        return dependency
     if isinstance(dependency, type):
         return dependency.__name__
     if callable(dependency):
@@ -119,14 +126,16 @@ async def _execute_callable(
             func_args[param_name] = param.default
         elif param_type in dependency_cache:
             func_args[param_name] = dependency_cache[param_type]
-        elif isinstance(param_type, str):
-            name_cache = {get_dependency_name(_cache): _cache for _cache in dependency_cache.keys()}
-            if param_type in name_cache:
-                func_args[param_name] = dependency_cache[name_cache[param_type]]
         else:
-            raise TypeError(
-                f"Cannot resolve parameter '{param_name}' for dependency '{dependent.__name__}'"
-            )
+            name_cache = {get_dependency_name(_cache): _cache for _cache in dependency_cache.keys()}
+            if isinstance(param_type, str) and param_type in name_cache:
+                func_args[param_name] = dependency_cache[name_cache[param_type]]
+            elif param_name in name_cache:
+                func_args[param_name] = dependency_cache[name_cache[param_name]]
+            else:
+                raise TypeError(
+                    f"Cannot resolve parameter '{param_name}' for dependency '{dependent.__name__}'"
+                )
 
     if inspect.iscoroutinefunction(dependent):
         return await dependent(**func_args)
@@ -243,17 +252,39 @@ async def solve_dependencies_in_bot(
     state: Optional[StateT] = None,
     use_cache: bool = True,
     stack: Optional[AsyncExitStack] = None,
-    dependency_cache: Dict[Dependency[Any], Any] = None,
+    dependency_cache: Optional[Dict[Dependency[Any], Any]] = None,
 ) -> _T:
     """解析子依赖。
-        使用此方法强制需要bot、event、state作为参数，更加严谨。
+    
+    此方法强制要求 `bot`、`event`、`state` 作为参数，以确保依赖解析的严谨性。
+
+    Args:
+        dependent: 需要解析的依赖。
+        bot: 机器人实例，必须提供。
+        event: 事件对象，必须提供。
+        state: 可选的状态信息，默认为 `None`。
+        use_cache: 是否使用缓存，默认为 `True`。
+        stack: 异步上下文管理器，可选。
+        dependency_cache: 依赖缓存，如果未提供，则自动创建新字典。
+
+    Returns:
+        解析后的依赖对象。
     """
     from sekaibot.bot import Bot
-    if not dependency_cache: dependency_cache = {}
-    dependency_cache |= {
+
+    if dependency_cache is None:
+        dependency_cache = {}
+    dependency_cache.update({
         Bot: bot,
         Event: event,
-    } | {
+        "bot": bot,
+        "event": event,
+    })
+    if state is not None: dependency_cache.update({
         StateT: state,
-    } if state is not None else {}
-    return await solve_dependencies(dependent, use_cache=use_cache, stack=stack, dependency_cache=dependency_cache)
+        "state": state,
+    })
+
+    return await solve_dependencies(
+        dependent, use_cache=use_cache, stack=stack, dependency_cache=dependency_cache
+    )
