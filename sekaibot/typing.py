@@ -35,6 +35,7 @@ __all__ = [
 
 EventT = TypeVar("EventT", bound="Event")
 StateT = TypeVar("StateT")
+GlobalStateT = TypeVar("GlobalStateT", bound="dict")
 ConfigT = TypeVar("ConfigT", bound=Optional["ConfigModel"])
 AdapterT = TypeVar("AdapterT")
 NodeT = TypeVar("NodeT", bound="Node")

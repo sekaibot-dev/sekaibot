@@ -26,7 +26,7 @@ class HelloWorldNode1(Node):
         return None
     
     async def rule(self):
-        result = await StartsWith("hello")(self.bot, self.event, self.state)
+        result = await self.run(StartsWith.check("Hello, World"))
         return True
     
 class HelloWorldNode2(Node):

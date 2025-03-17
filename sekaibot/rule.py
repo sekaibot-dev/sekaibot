@@ -85,7 +85,7 @@ class FullMatch(MatchRule):
     def param(cls, state: StateT) -> str:
         return state[NODE_RULE_STATE][FULLMATCH_KEY]
 
-class Keyword(RuleChecker[list[str], tuple[str,...]]):
+class Keyword(RuleChecker[tuple[list[str], bool], tuple[str,...]]):
     """匹配消息纯文本关键词。
 
     参数:
@@ -93,23 +93,26 @@ class Keyword(RuleChecker[list[str], tuple[str,...]]):
     """
     def __init__(
         self,
-        *keywords: str
+        *keywords: str, 
+        ignorecase: bool = False
     ) -> None:
-        super().__init__(KeywordsRule(*keywords))
+        super().__init__(KeywordsRule(*keywords, ignorecase))
 
     @classmethod
     def check(
         cls,
-        *keywords: str
+        *keywords: str, 
+        ignorecase: bool = False
     ):
-        return super().check(*keywords) 
+        return super().check(*keywords, ignorecase) 
 
     @classmethod
     def Checker(
         cls,
-        *keywords: str
+        *keywords: str, 
+        ignorecase: bool = False
     ):
-        return super().Checker(*keywords) 
+        return super().Checker(*keywords, ignorecase) 
 
     @classmethod
     def param(cls, state: StateT) -> tuple[str,...]:

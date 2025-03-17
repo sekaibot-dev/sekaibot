@@ -277,10 +277,12 @@ class KeywordsRule:
         keywords: 指定关键字元组
     """
 
-    __slots__ = ("keywords",)
+    __slots__ = ("ignorecase", "keywords")
 
-    def __init__(self, *keywords: str):
-        self.keywords = keywords
+    def __init__(self, *keywords: str, ignorecase: bool = False):
+        self.keywords = tuple(map(str.casefold, keywords) if ignorecase else keywords)
+        self.ignorecase = ignorecase
+
 
     def __repr__(self) -> str:
         return f"Keywords(keywords={self.keywords})"
@@ -300,6 +302,7 @@ class KeywordsRule:
             return False
         if not text:
             return False
+        text = text.casefold() if self.ignorecase else text
         if keys := tuple(k for k in self.keywords if k in text):
             state[KEYWORD_KEY] = keys
             return True
