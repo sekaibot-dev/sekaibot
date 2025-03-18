@@ -65,7 +65,7 @@ class Permission:
     ) -> bool:
         """检查是否满足某个权限。
 
-        参数:
+        Args:
             bot: Bot 对象
             event: Event 对象
             stack: 异步上下文栈

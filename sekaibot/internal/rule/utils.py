@@ -149,28 +149,28 @@ class StartswithRule:
         若需要请在rule函数中调用startswith方法。
 
     Args:
-        msg: 指定消息开头字符串元组
+        msgs: 指定消息开头字符串元组
         ignorecase: 是否忽略大小写
     """
 
-    __slots__ = ("ignorecase", "msg")
+    __slots__ = ("ignorecase", "msgs")
 
-    def __init__(self, msg: tuple[str, ...], ignorecase: bool = False):
-        self.msg = msg
+    def __init__(self, *msgs: str, ignorecase: bool = False):
+        self.msgs = msgs
         self.ignorecase = ignorecase
 
     def __repr__(self) -> str:
-        return f"Startswith(msg={self.msg}, ignorecase={self.ignorecase})"
+        return f"Startswith(msg={self.msgs}, ignorecase={self.ignorecase})"
 
     def __eq__(self, other: object) -> bool:
         return (
             isinstance(other, StartswithRule)
-            and frozenset(self.msg) == frozenset(other.msg)
+            and frozenset(self.msgs) == frozenset(other.msgs)
             and self.ignorecase == other.ignorecase
         )
 
     def __hash__(self) -> int:
-        return hash((frozenset(self.msg), self.ignorecase))
+        return hash((frozenset(self.msgs), self.ignorecase))
 
     async def __call__(self, event: Event, state: StateT) -> bool:
         try:
@@ -178,7 +178,7 @@ class StartswithRule:
         except Exception:
             return False
         if match := message.startswith(
-            self.msg,
+            self.msgs,
             ignorecase=self.ignorecase
         ):
             state[STARTSWITH_KEY] = match
@@ -192,28 +192,28 @@ class EndswithRule:
         若需要请在rule函数中调用endswith方法。
 
     Args:
-        msg: 指定消息结尾字符串元组
+        msgs: 指定消息结尾字符串元组
         ignorecase: 是否忽略大小写
     """
 
-    __slots__ = ("ignorecase", "msg")
+    __slots__ = ("ignorecase", "msgs")
 
-    def __init__(self, msg: tuple[str, ...], ignorecase: bool = False):
-        self.msg = msg
+    def __init__(self, *msgs: str, ignorecase: bool = False):
+        self.msgs = msgs
         self.ignorecase = ignorecase
 
     def __repr__(self) -> str:
-        return f"Endswith(msg={self.msg}, ignorecase={self.ignorecase})"
+        return f"Endswith(msg={self.msgs}, ignorecase={self.ignorecase})"
 
     def __eq__(self, other: object) -> bool:
         return (
             isinstance(other, EndswithRule)
-            and frozenset(self.msg) == frozenset(other.msg)
+            and frozenset(self.msgs) == frozenset(other.msgs)
             and self.ignorecase == other.ignorecase
         )
 
     def __hash__(self) -> int:
-        return hash((frozenset(self.msg), self.ignorecase))
+        return hash((frozenset(self.msgs), self.ignorecase))
 
     async def __call__(self, event: Event, state: StateT) -> bool:
         try:
@@ -221,7 +221,7 @@ class EndswithRule:
         except Exception:
             return False
         if match := message.endswith(
-            self.msg, 
+            self.msgs, 
             ignorecase=self.ignorecase
         ):
             state[ENDSWITH_KEY] = match
@@ -233,28 +233,28 @@ class FullmatchRule:
     """检查消息纯文本是否与指定字符串全匹配。
 
     Args:
-        msg: 指定消息全匹配字符串元组
+        msgs: 指定消息全匹配字符串元组
         ignorecase: 是否忽略大小写
     """
 
-    __slots__ = ("ignorecase", "msg")
+    __slots__ = ("ignorecase", "msgs")
 
-    def __init__(self, msg: tuple[str, ...], ignorecase: bool = False):
-        self.msg = tuple(map(str.casefold, msg) if ignorecase else msg)
+    def __init__(self, *msgs: str, ignorecase: bool = False):
+        self.msgs = tuple(map(str.casefold, msgs) if ignorecase else msgs)
         self.ignorecase = ignorecase
 
     def __repr__(self) -> str:
-        return f"Fullmatch(msg={self.msg}, ignorecase={self.ignorecase})"
+        return f"Fullmatch(msg={self.msgs}, ignorecase={self.ignorecase})"
 
     def __eq__(self, other: object) -> bool:
         return (
             isinstance(other, FullmatchRule)
-            and frozenset(self.msg) == frozenset(other.msg)
+            and frozenset(self.msgs) == frozenset(other.msgs)
             and self.ignorecase == other.ignorecase
         )
 
     def __hash__(self) -> int:
-        return hash((frozenset(self.msg), self.ignorecase))
+        return hash((frozenset(self.msgs), self.ignorecase))
 
     async def __call__(self, event: Event, state: StateT) -> bool:
         try:
@@ -264,7 +264,7 @@ class FullmatchRule:
         if not text:
             return False
         text = text.casefold() if self.ignorecase else text
-        if text in self.msg:
+        if text in self.msgs:
             state[FULLMATCH_KEY] = text
             return True
         return False

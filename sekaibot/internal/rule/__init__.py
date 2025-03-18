@@ -67,7 +67,7 @@ class Rule:
     ) -> bool:
         """检查是否符合所有规则
 
-        参数:
+        Args:
             bot: Bot 对象
             event: Event 对象
             state: 当前 State
@@ -190,33 +190,34 @@ class RuleChecker(ABC, Generic[ArgsT, ParamT]):
         """在依赖注入里获取检查器的数据。"""
         return Depends(cls.param, use_cache=False)
     
-class MatchRule(RuleChecker[tuple[str, bool], str]):
+class MatchRule(RuleChecker[Union[str, bool], str]):
     """所有匹配类 Rule 的基类。"""
 
-    checker: Type[Callable[[Union[str, tuple[str, ...]], bool], "Rule"]] = None
+    checker: Type[Callable[[tuple[str, ...], bool], "Rule"]] = None
 
     def __init__(
         self,
-        msg: Union[str, tuple[str, ...]], ignorecase: bool = False
+        *msgs: Union[str, tuple[str, ...]], 
+        ignorecase: bool = False
     ) -> None:
-        if isinstance(msg, str):
-            msg = (msg,)
 
         if self.checker is None:
             raise NotImplementedError(f"Subclasses of MatchRule must provide a checker.")
 
-        super().__init__(Rule(self.checker(msg, ignorecase))) 
+        super().__init__(Rule(self.checker(*msgs, ignorecase))) 
 
     @classmethod
     def check(
         cls,
-        msg: Union[str, tuple[str, ...]], ignorecase: bool = False
+        *msgs: Union[str, tuple[str, ...]], 
+        ignorecase: bool = False
     ):
-        return super().check(msg, ignorecase) 
+        return super().check(*msgs, ignorecase) 
 
     @classmethod
     def Checker(
         cls,
-        msg: Union[str, tuple[str, ...]], ignorecase: bool = False
+        *msgs: Union[str, tuple[str, ...]], 
+        ignorecase: bool = False
     ):
-        return super().Checker(msg, ignorecase) 
+        return super().Checker(*msgs, ignorecase) 
