@@ -155,6 +155,7 @@ ParamT = TypeVar("P")
 
 class RuleChecker(ABC, Generic[ArgsT, ParamT]):
     """抽象基类，匹配消息规则。"""
+
     def __init__(self, rule: Rule) -> None:
         self.__rule__ = rule
 
@@ -168,14 +169,14 @@ class RuleChecker(ABC, Generic[ArgsT, ParamT]):
         return cls
 
     @classmethod
-    def check(cls, *args: ArgsT, **kwargs) -> Callable[..., Awaitable[bool]]:
+    def _rule_check(cls, *args: ArgsT, **kwargs) -> Callable[..., Awaitable[bool]]:
         """默认实现检查方法，子类可覆盖。"""
         return cls(*args, **kwargs)._check
 
     @classmethod
     def Checker(cls, *args: ArgsT, **kwargs) -> bool:
         """默认实现检查方法的依赖注入方法，子类可覆盖。"""
-        return Depends(cls.check(*args, **kwargs), use_cache=False)
+        return Depends(cls._rule_check(*args, **kwargs), use_cache=False)
 
     
     @final
@@ -193,7 +194,7 @@ class RuleChecker(ABC, Generic[ArgsT, ParamT]):
 
     @classmethod
     @abstractmethod
-    def param(cls) -> ParamT:
+    def _param(cls) -> ParamT:
         """获取规则参数，子类需实现。"""
         pass
 
@@ -201,7 +202,7 @@ class RuleChecker(ABC, Generic[ArgsT, ParamT]):
     @classmethod
     def Param(cls) -> ParamT:
         """在依赖注入里获取检查器的数据。"""
-        return Depends(cls.param, use_cache=False)
+        return Depends(cls._param, use_cache=False)
     
 class MatchRule(RuleChecker[Union[str, bool], str]):
     """所有匹配类 Rule 的基类。"""
@@ -218,14 +219,6 @@ class MatchRule(RuleChecker[Union[str, bool], str]):
             raise NotImplementedError(f"Subclasses of MatchRule must provide a checker.")
 
         super().__init__(Rule(self.checker(*msgs, ignorecase))) 
-
-    @classmethod
-    def check(
-        cls,
-        *msgs: Union[str, tuple[str, ...]], 
-        ignorecase: bool = False
-    ):
-        return super().check(*msgs, ignorecase) 
 
     @classmethod
     def Checker(

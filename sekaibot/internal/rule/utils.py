@@ -253,24 +253,6 @@ class KeywordsRule:
         return False
 
 
-class ToMeRule:
-    """检查事件是否与机器人有关。"""
-
-    __slots__ = ()
-
-    def __repr__(self) -> str:
-        return "ToMe()"
-
-    def __eq__(self, other: object) -> bool:
-        return isinstance(other, ToMeRule)
-
-    def __hash__(self) -> int:
-        return hash((self.__class__,))
-
-    async def __call__(self, event: Event) -> bool:
-        return event.is_tome()
-
-
 class RegexRule:
     """检查消息字符串是否符合指定正则表达式。
 
@@ -332,39 +314,39 @@ class Counter:
         """返回最近 `count_window` 条记录中 `True` 发生的次数。"""
         return sum(1 for v, _ in list(self.values)[-count_window:] if v)
 
-class CounterRule:
+class CountTriggerRule:
 
-    __slots__ = ("session_id", "func", "min_trigger", "time_window", "count_window", "max_size")
+    __slots__ = ("name", "func", "min_trigger", "time_window", "count_window", "max_size")
 
     def __init__(
         self,
-        session_id: str,
+        name: str,
         func: Optional[Dependency[bool]] = None,  
         min_trigger: int = 10,
-        time_window: int = None,
-        count_window: int = None,
+        time_window: int = 60,
+        count_window: int = 30,
         max_size: Optional[int] = 100
     ):
         self.func = func
-        self.session_id = session_id
+        self.name = name
         self.min_trigger = min_trigger
         self.time_window = time_window
         self.count_window = count_window
         self.max_size = max_size
 
     def __repr__(self) -> str:
-        return f"Counter(session_id={self.session_id}, time_window={self.time_window}, count_window={self.count_window})"
+        return f"Counter(session_id={self.name}, time_window={self.time_window}, count_window={self.count_window})"
 
     def __eq__(self, other: object) -> bool:
         return (
-            isinstance(other, CounterRule)
-            and self.session_id == other.session_id
+            isinstance(other, CountTriggerRule)
+            and self.name == other.name
             and self.time_window == other.time_window
             and self.count_window == other.count_window
         )
 
     def __hash__(self) -> int:
-        return hash((self.session_id, self.time_window, self.count_window))
+        return hash((self.name, self.time_window, self.count_window))
 
     async def __call__(
         self, 
@@ -374,7 +356,7 @@ class CounterRule:
         bot_state: _BotStateT
     ) -> bool:
 
-        counter: Counter = bot_state[COUNTER_STATE].setdefault(self.session_id, Counter(self.max_size))
+        counter: Counter = bot_state[COUNTER_STATE].setdefault(self.name, Counter(self.max_size))
         if self.func:
             counter.append(await solve_dependencies_in_bot(
                 self.func,
@@ -769,6 +751,22 @@ def shell_command(
 
     return Rule(ShellCommandRule(commands, parser))
 '''
+class ToMeRule:
+    """检查事件是否与机器人有关。"""
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "ToMe()"
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, ToMeRule)
+
+    def __hash__(self) -> int:
+        return hash((self.__class__,))
+
+    async def __call__(self, event: Event) -> bool:
+        return event.is_tome()
 
 
 __autodoc__ = {
