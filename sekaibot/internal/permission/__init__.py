@@ -18,11 +18,11 @@ from typing import (
 import anyio
 from exceptiongroup import BaseExceptionGroup, catch
 
-from sekaibot.dependencies import Dependency, InnerDepends, Depends, solve_dependencies_in_bot
+from sekaibot.dependencies import Dependency, solve_dependencies_in_bot
 from sekaibot.exceptions import SkipException
 from sekaibot.internal.event import Event
 from itertools import chain
-from sekaibot.typing import PermissionCheckerT, StateT
+from sekaibot.typing import PermissionCheckerT, _PermStateT
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
@@ -60,6 +60,7 @@ class Permission:
         self,
         bot: "Bot",
         event: Event,
+        perm_state: _PermStateT,
         stack: Optional[AsyncExitStack] = None,
         dependency_cache: Optional[dict[Dependency[Any], Any]] = None,
     ) -> bool:

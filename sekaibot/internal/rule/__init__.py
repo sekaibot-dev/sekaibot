@@ -23,11 +23,17 @@ from sekaibot.dependencies import Dependency, Depends, solve_dependencies_in_bot
 from sekaibot.exceptions import SkipException
 from sekaibot.internal.event import Event
 from itertools import chain
-from sekaibot.typing import RuleCheckerT, StateT, NodeT
-from sekaibot.consts import NODE_RULE_STATE
+from sekaibot.typing import RuleCheckerT, _RuleStateT, NodeT
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
+
+__all__ = [
+    "Rule",
+    "RuleChecker",
+    "MatchRule"
+]
+
 
 class Rule:
     """{ref}`nonebot.matcher.Matcher` 规则类。
@@ -61,7 +67,7 @@ class Rule:
         self,
         bot: "Bot",
         event: Event,
-        state: StateT,
+        rule_state: _RuleStateT,
         stack: Optional[AsyncExitStack] = None,
         dependency_cache: Optional[Dict[Dependency[Any], Any]] = None,
     ) -> bool:
@@ -70,7 +76,7 @@ class Rule:
         Args:
             bot: Bot 对象
             event: Event 对象
-            state: 当前 State
+            rule_state: 当前 State
             stack: 异步上下文栈
             dependency_cache: 依赖缓存
         """
@@ -91,7 +97,7 @@ class Rule:
                 checker,
                 bot=bot,
                 event=event,
-                state=state[NODE_RULE_STATE],
+                state=rule_state,
                 use_cache=False,
                 stack=stack,
                 dependency_cache=dependency_cache,
@@ -173,14 +179,16 @@ class RuleChecker(ABC, Generic[ArgsT, ParamT]):
         self,
         bot: "Bot",
         event: Event,
-        state: StateT,
+        rule_state: _RuleStateT,
+        stack: Optional[AsyncExitStack] = None,
+        dependency_cache: Optional[Dict[Dependency[Any], Any]] = None,
     ) -> bool:
         """直接运行检查器并获取结果。"""
-        return await self.__rule__(bot, event, state, None, {})
+        return await self.__rule__(bot, event, rule_state, stack, dependency_cache)
 
     @classmethod
     @abstractmethod
-    def param(cls, state: StateT) -> ParamT:
+    def param(cls) -> ParamT:
         """获取规则参数，子类需实现。"""
         pass
 

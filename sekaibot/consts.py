@@ -5,11 +5,6 @@ from typing import (
     Literal
 )
 
-NODE_STATE: Literal["node_state"] = "node_state"
-NODE_RULE_STATE: Literal["node_rule_state"] = "node_rule_state"
-GLOBAL_STATE: Literal["global_state"] = "global_state"
-NODE_GLOBAL_STATE: Literal["node_global_state"] = "node_global_state"
-
 # used by Matcher
 RECEIVE_KEY: Literal["_receive_{id}"] = "_receive_{id}"
 """`receive` 存储 key"""

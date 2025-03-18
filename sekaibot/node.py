@@ -16,6 +16,7 @@ from typing import (
     Generic,
     NoReturn,
     Optional,
+    Union,
     Callable,
     Awaitable,
     Tuple,
@@ -26,12 +27,12 @@ from typing import (
 from typing_extensions import Annotated, get_args, get_origin
 from contextlib import AsyncExitStack
 
-from sekaibot.consts import NODE_STATE, NODE_GLOBAL_STATE
 from sekaibot.config import ConfigModel
 from sekaibot.dependencies import Depends, Dependency, solve_dependencies_in_bot, _T
 from sekaibot.internal.event import Event
+from sekaibot.internal.message import BuildMessageType
 from sekaibot.exceptions import SkipException, JumpToException, PruningException, StopException
-from sekaibot.typing import ConfigT, EventT, StateT
+from sekaibot.typing import ConfigT, EventT, StateT, _PermStateT, _RuleStateT
 from sekaibot.utils import is_config_class
 from sekaibot.rule import Rule
 from sekaibot.permission import Permission
@@ -84,6 +85,7 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
     else:
         event = Depends(Event)
         bot = Depends("Bot")
+        _rule_state = Depends(_RuleStateT)
 
 
     def __init_state__(self) -> Optional[StateT]:
@@ -150,46 +152,6 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
         """节点类名称。"""
         return self.__class__.__name__
     
-    async def run(
-        self,
-        dependent: Dependency[_T],
-    ) -> _T:
-        """在节点内运行 SekaiBot 内置的，或自定义的函数，以及具有 `__call__` 的类。
-            这些函数只能含有 Bot, Event, State 三个参数。
-        """
-        return await solve_dependencies_in_bot(
-            dependent,
-            bot=self.bot,
-            event=self.event,
-            state=self.bot.manager.node_state,
-            stack=AsyncExitStack()
-        )
-    
-    async def gather(
-        self,
-        *dependencies: Dependency[_T],
-        return_exceptions: bool = False
-    ) -> tuple[_T, ...]:
-        """类似 `asyncio.gather()` 并发执行多个任务，支持 `return_exceptions`"""
-
-        results = {}
-
-        async def wrapper(dep):
-            try:
-                results[dep] = await self.run(dep)
-            except Exception as e:
-                if return_exceptions:
-                    results[dep] = e 
-                else:
-                    raise 
-
-        async with anyio.create_task_group() as tg:
-            for dependency in dependencies:
-                tg.start_soon(wrapper, dependency)
-
-        return tuple(results[dep] for dep in dependencies)
-
-    
     '''async def call_api(self, api: str, **params: Any):
         """调用 API，协程会等待直到获得 API 响应。
 
@@ -225,22 +187,22 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
     @property
     def state(self) -> StateT:
         """节点状态。"""
-        return self.bot.manager.node_state[self.name][NODE_STATE]
+        return self.bot.manager.node_state[self.name]
 
     @state.setter
     @final
     def state(self, value: StateT) -> None:
-        self.bot.manager.node_state[self.name][NODE_STATE] = value
+        self.bot.manager.node_state[self.name] = value
 
     @property
     def global_state(self) -> dict:
         """通用状态。"""
-        return self.bot.manager.global_state[NODE_GLOBAL_STATE]
+        return self.bot.manager.global_state
 
     @global_state.setter
     @final
     def global_state(self, value: dict) -> None:
-        self.bot.manager.global_state[NODE_GLOBAL_STATE] = value
+        self.bot.manager.global_state = value
 
     @final
     @classmethod
@@ -248,14 +210,18 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
         cls,
         bot: Bot,
         event: Event,
+        perm_state: _PermStateT,
         stack: Optional[AsyncExitStack] = None,
         dependency_cache: Optional[Dependency] = None,
     ) -> bool:
+        """
+        检查节点权限。
+        """
         return (
             isinstance(cls.EventType, str) and event.type == (cls.EventType or event.type)
             or isinstance(event, cls.EventType)
         ) and await cls.__node_perm__(
-            bot=bot, event=event,
+            bot=bot, event=event, perm_state=perm_state,
             stack=stack,
             dependency_cache=dependency_cache,
         )
@@ -266,15 +232,18 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
         cls,
         bot: Bot,
         event: Event,
-        state: StateT,
+        rule_state: _RuleStateT,
         stack: Optional[AsyncExitStack] = None,
         dependency_cache: Optional[Dependency] = None,
     ) -> bool:
+        """
+        检查节点规则。
+        """
         return (
             isinstance(cls.EventType, str) and event.type == (cls.EventType or event.type)
             or isinstance(event, cls.EventType)
         ) and await cls.__node_rule__(
-            bot=bot, event=event, state=state,
+            bot=bot, event=event, rule_state=rule_state,
             stack=stack,
             dependency_cache=dependency_cache,
         )
@@ -286,11 +255,62 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
 
     async def rule(self) -> bool:
         """匹配事件的方法。事件处理时，会按照节点的优先级依次调用此方法，当此方法返回 `True` 时将事件交由此节点处理。每个节点不一定要实现此方法。
-
-        注意：不建议直接在此方法内实现对事件的处理，事件的具体处理请交由 `handle()` 方法。
+            注意：不建议直接在此方法内实现对事件的处理，事件的具体处理请交由 `handle()` 方法。
         """
         return True
     
+    async def reply(self, message: BuildMessageType) -> NoReturn:
+        """回复消息。"""
+
+    async def get(
+        self,
+        *,
+        max_try_times: Optional[int] = None,
+        timeout: Optional[Union[int, float]] = None,
+    ) -> Self:
+        """获取用户回复消息。
+
+        相当于 `Bot` 的 `get()`，条件为适配器、事件类型、发送人相同。
+
+        Args:
+            max_try_times: 最大事件数。
+            timeout: 超时时间。
+
+        Returns:
+            用户回复的消息事件。
+
+        Raises:
+            GetEventTimeout: 超过最大事件数或超时。
+        """
+        return await self.bot.manager.get(
+            lambda e: e.session_id == self.event.session_id,
+            event_type=type(self.event),
+            max_try_times=max_try_times,
+            timeout=timeout,
+        )
+
+    async def ask(
+        self,
+        message: str,
+        max_try_times: Optional[int] = None,
+        timeout: Optional[Union[int, float]] = None,
+    ) -> Self:
+        """询问消息。
+
+        表示回复一个消息后获取用户的回复。
+        相当于 `reply()` 后执行 `get()`。
+
+        Args:
+            message: 回复消息的内容。
+            max_try_times: 最大事件数。
+            timeout: 超时时间。
+
+        Returns:
+            用户回复的消息事件。
+        """
+        await self.reply(message)
+        return await self.get(max_try_times=max_try_times, timeout=timeout)
+
     @final
     def stop(self) -> NoReturn:
         """停止当前事件传播。"""
@@ -310,3 +330,55 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
     def prune(self) -> NoReturn:
         """中断事件的传播并将事件转发到下一个节点，即剪枝。"""
         raise PruningException
+    
+    @final
+    def finish(self, message: Optional[BuildMessageType] = None) -> NoReturn:
+        """结束当前节点。"""
+        if message:
+            self.reply(message)
+        raise SkipException
+
+    async def run(
+        self,
+        dependent: Dependency[_T],
+    ) -> _T:
+        """在节点内运行 SekaiBot 内置的，或自定义的函数，以及具有 `__call__` 的类。
+            这些函数只能含有 Bot, Event, State 三个参数。
+        """
+        result: _T = ...
+        async with AsyncExitStack() as stack:
+            result = await solve_dependencies_in_bot(
+                dependent,
+                bot=self.bot, 
+                event=self.event,
+                state=self.bot.manager.node_state, 
+                global_state=self.bot.manager.global_state,
+                rule_state=self._rule_state, 
+                perm_state=self.bot.manager._perm_state,
+                stack=stack
+            )
+        return result
+    
+    async def gather(
+        self,
+        *dependencies: Dependency[_T],
+        return_exceptions: bool = False
+    ) -> tuple[_T, ...]:
+        """类似 `asyncio.gather()` 并发执行多个任务，支持 `return_exceptions`"""
+
+        results = {}
+
+        async def wrapper(dep):
+            try:
+                results[dep] = await self.run(dep)
+            except Exception as e:
+                if return_exceptions:
+                    results[dep] = e 
+                else:
+                    raise 
+
+        async with anyio.create_task_group() as tg:
+            for dependency in dependencies:
+                tg.start_soon(wrapper, dependency)
+
+        return tuple(results[dep] for dep in dependencies)

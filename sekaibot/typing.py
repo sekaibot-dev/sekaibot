@@ -27,6 +27,8 @@ __all__ = [
     "EventT",
     "StateT",
     "ConfigT",
+    "_RuleStateT",
+    "_PermStateT",
     "RuleCheckerT",
     "PermissionCheckerT",
     "BotHook",
@@ -34,14 +36,16 @@ __all__ = [
 ]
 
 EventT = TypeVar("EventT", bound="Event")
-StateT = TypeVar("StateT")
-GlobalStateT = TypeVar("GlobalStateT", bound="dict")
 ConfigT = TypeVar("ConfigT", bound=Optional["ConfigModel"])
 AdapterT = TypeVar("AdapterT")
 NodeT = TypeVar("NodeT", bound="Node")
+StateT = TypeVar("StateT")
+GlobalStateT = TypeVar("GlobalStateT", bound="dict")
+_RuleStateT = TypeVar("RuleStateT", bound="dict")
+_PermStateT = TypeVar("PermStateT", bound="dict")
 
-RuleCheckerT = Callable[["Bot", "Event[Any]", StateT], Union[bool, Awaitable[bool]]]
-PermissionCheckerT = Callable[["Bot", "Event[Any]", StateT], Union[bool, Awaitable[bool]]]
+RuleCheckerT = Callable[["Bot", "Event[Any]", _RuleStateT], Union[bool, Awaitable[bool]]]
+PermissionCheckerT = Callable[["Bot", "Event[Any]", _PermStateT], Union[bool, Awaitable[bool]]]
 
 BotHook = Callable[["Bot"], Awaitable[None]]
 EventHook = Callable[["Event[Any]"], Awaitable[None]]
