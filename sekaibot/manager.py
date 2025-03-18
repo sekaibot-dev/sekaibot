@@ -39,9 +39,9 @@ if TYPE_CHECKING:
 class NodeManager():
     bot: "Bot"
 
-    node_state: Dict[str, Any]
-    global_state: Dict[str, Any]
-    _perm_state: Dict[str, Any]
+    node_state: dict[str, Any]
+    global_state: dict[str, Any]
+    _bot_state: dict[str, dict[str, Any]]
 
     _condition: anyio.Condition
     _cancel_event: anyio.Event
@@ -54,7 +54,7 @@ class NodeManager():
         self.bot = bot
         self.node_state = defaultdict(lambda: None)
         self.global_state = defaultdict(lambda: None)
-        self._perm_state = defaultdict(lambda: None)
+        self._bot_state = defaultdict(lambda: defaultdict(lambda: None))
 
     async def startup(self) -> None:
         self._condition = anyio.Condition()
@@ -150,7 +150,7 @@ class NodeManager():
             return False'''
 
         try:
-            if not await node_class.check_perm(self.bot, event, self._perm_state, stack, dependency_cache):
+            if not await node_class.check_perm(self.bot, event, self._bot_state, stack, dependency_cache):
                 logger.info(f"permission conditions not met", node=node_class.__name__)
                 return False
         except Exception as e:
@@ -186,7 +186,7 @@ class NodeManager():
             state=self.node_state[node_class.__name__], 
             global_state=self.global_state,
             rule_state=rule_state, 
-            perm_state=self._perm_state,
+            bot_state=self._bot_state,
             use_cache=True,
             stack=stack,
             dependency_cache=dependency_cache,

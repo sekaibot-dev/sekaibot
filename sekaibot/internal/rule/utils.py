@@ -18,6 +18,8 @@ from collections.abc import Sequence
 from contextvars import ContextVar
 from gettext import gettext
 from itertools import chain, product
+from collections import deque
+import time as time_util
 import re
 import shlex
 from typing import (
@@ -27,6 +29,8 @@ from typing import (
     Optional,
     TypedDict,
     TypeVar,
+    Callable,
+    Awaitable,
     Union,
     Self,
     cast,
@@ -35,30 +39,31 @@ from typing import (
 
 from pygtrie import CharTrie
 
-#from sekaibot import get_driver
-
 from sekaibot.internal.event import Event
 from sekaibot.internal.message import Message, MessageSegment, MessageT, MessageSegmentT
 from sekaibot.consts import (
+    STARTSWITH_KEY,
+    ENDSWITH_KEY,
+    FULLMATCH_KEY,
+    KEYWORD_KEY,
+    REGEX_MATCHED,
+    COUNTER_INFO,
+    COUNTER_STATE,
+    PREFIX_KEY,
+    RAW_CMD_KEY,
     CMD_ARG_KEY,
     CMD_KEY,
     CMD_START_KEY,
     CMD_WHITESPACE_KEY,
-    ENDSWITH_KEY,
-    FULLMATCH_KEY,
-    KEYWORD_KEY,
-    PREFIX_KEY,
-    RAW_CMD_KEY,
-    REGEX_MATCHED,
     SHELL_ARGS,
     SHELL_ARGV,
-    STARTSWITH_KEY,
+    
 )
-#from nonebot.exception import ParserExit
+
 from . import Rule
 from sekaibot.log import logger
-#from nonebot.params import Command, CommandArg, CommandWhitespace, EventToMe
-from sekaibot.typing import StateT
+from sekaibot.typing import NOT_GIVEN, EventT, _RuleStateT, _BotStateT
+from sekaibot.dependencies import Dependency, solve_dependencies_in_bot
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
@@ -80,67 +85,6 @@ class TRIE_VALUE(NamedTuple):
 
 
 parser_message: ContextVar[str] = ContextVar("parser_message")
-
-
-class TrieRule:
-    prefix: CharTrie = CharTrie()
-
-    @classmethod
-    def add_prefix(cls: Self, prefix: str, value: TRIE_VALUE) -> None:
-        if prefix in cls.prefix:
-            logger.warning(f'Duplicated prefix rule "{prefix}"')
-            return
-        cls.prefix[prefix] = value
-
-    @classmethod
-    def get_value(cls, bot: "Bot", event: Event, state: StateT) -> CMD_RESULT:
-        prefix = CMD_RESULT(
-            command=None,
-            raw_command=None,
-            command_arg=None,
-            command_start=None,
-            command_whitespace=None,
-        )
-        state[PREFIX_KEY] = prefix
-        if event.type != "message":
-            return prefix
-
-        message = event.get_message()
-        message_seg: MessageSegment = message[0]
-        if message_seg.is_text():
-            segment_text = str(message_seg).lstrip()
-            if pf := cls.prefix.longest_prefix(segment_text):
-                value: TRIE_VALUE = pf.value
-                prefix[RAW_CMD_KEY] = pf.key
-                prefix[CMD_START_KEY] = value.command_start
-                prefix[CMD_KEY] = value.command
-
-                msg = message.copy()
-                msg.pop(0)
-
-                # check whitespace
-                arg_str = segment_text[len(pf.key) :]
-                arg_str_stripped = arg_str.lstrip()
-                # check next segment until arg detected or no text remain
-                while not arg_str_stripped and msg and msg[0].is_text():
-                    arg_str += str(msg.pop(0))
-                    arg_str_stripped = arg_str.lstrip()
-
-                has_arg = arg_str_stripped or msg
-                if (
-                    has_arg
-                    and (stripped_len := len(arg_str) - len(arg_str_stripped)) > 0
-                ):
-                    prefix[CMD_WHITESPACE_KEY] = arg_str[:stripped_len]
-
-                # construct command arg
-                if arg_str_stripped:
-                    new_message = msg.__class__(arg_str_stripped)
-                    for new_segment in reversed(new_message):
-                        msg.insert(0, new_segment)
-                prefix[CMD_ARG_KEY] = msg
-
-        return prefix
 
 
 class StartswithRule:
@@ -172,7 +116,7 @@ class StartswithRule:
     def __hash__(self) -> int:
         return hash((frozenset(self.msgs), self.ignorecase))
 
-    async def __call__(self, event: Event, state: StateT) -> bool:
+    async def __call__(self, event: Event, rule_state: _RuleStateT) -> bool:
         try:
             message = event.get_message()
         except Exception:
@@ -181,7 +125,7 @@ class StartswithRule:
             self.msgs,
             ignorecase=self.ignorecase
         ):
-            state[STARTSWITH_KEY] = match
+            rule_state[STARTSWITH_KEY] = match
             return True
         return False
 
@@ -215,7 +159,7 @@ class EndswithRule:
     def __hash__(self) -> int:
         return hash((frozenset(self.msgs), self.ignorecase))
 
-    async def __call__(self, event: Event, state: StateT) -> bool:
+    async def __call__(self, event: Event, rule_state: _RuleStateT) -> bool:
         try:
             message = event.get_message()
         except Exception:
@@ -224,7 +168,7 @@ class EndswithRule:
             self.msgs, 
             ignorecase=self.ignorecase
         ):
-            state[ENDSWITH_KEY] = match
+            rule_state[ENDSWITH_KEY] = match
             return True
         return False
 
@@ -256,7 +200,7 @@ class FullmatchRule:
     def __hash__(self) -> int:
         return hash((frozenset(self.msgs), self.ignorecase))
 
-    async def __call__(self, event: Event, state: StateT) -> bool:
+    async def __call__(self, event: Event, rule_state: _RuleStateT) -> bool:
         try:
             text = event.get_plain_text()
         except Exception:
@@ -265,7 +209,7 @@ class FullmatchRule:
             return False
         text = text.casefold() if self.ignorecase else text
         if text in self.msgs:
-            state[FULLMATCH_KEY] = text
+            rule_state[FULLMATCH_KEY] = text
             return True
         return False
 
@@ -295,7 +239,7 @@ class KeywordsRule:
     def __hash__(self) -> int:
         return hash(frozenset(self.keywords))
 
-    async def __call__(self, event: Event, state: StateT) -> bool:
+    async def __call__(self, event: Event, rule_state: _RuleStateT) -> bool:
         try:
             text = event.get_plain_text()
         except Exception:
@@ -304,7 +248,7 @@ class KeywordsRule:
             return False
         text = text.casefold() if self.ignorecase else text
         if keys := tuple(k for k in self.keywords if k in text):
-            state[KEYWORD_KEY] = keys
+            rule_state[KEYWORD_KEY] = keys
             return True
         return False
 
@@ -354,16 +298,166 @@ class RegexRule:
     def __hash__(self) -> int:
         return hash((self.regex, self.flags))
 
-    async def __call__(self, event: Event, state: StateT) -> bool:
+    async def __call__(self, event: Event, rule_state: _RuleStateT) -> bool:
         try:
             msg = event.get_message()
         except Exception:
             return False
         if matched := re.search(self.regex, str(msg), self.flags):
-            state[REGEX_MATCHED] = matched
+            rule_state[REGEX_MATCHED] = matched
             return True
         else:
             return False
+
+
+class Counter:
+    """计数器，用于跟踪 True/False 事件的发生时间。"""
+
+    __slots__ = ("values")
+
+    def __init__(self, max_size: int):
+        self.values = deque(maxlen=max_size)
+
+    def append(self, value: bool, time: Optional[Union[int, float]] = None):
+        """记录一个布尔值及其发生时间。"""
+        self.values.append((value, time if time is not None else time_util.time()))
+
+    def count_time(self, time_window: Union[int, float], time: Optional[Union[int, float]] = None) -> int:
+        """返回 `time_window` 秒内 `True` 发生的次数。"""
+        if time is None:
+            time = time_util.time()
+        return sum(1 for v, t in self.values if t >= time - time_window and t < time and v)
+
+    def count_events(self, count_window: int) -> int:
+        """返回最近 `count_window` 条记录中 `True` 发生的次数。"""
+        return sum(1 for v, _ in list(self.values)[-count_window:] if v)
+
+class CounterRule:
+
+    __slots__ = ("session_id", "func", "min_trigger", "time_window", "count_window", "max_size")
+
+    def __init__(
+        self,
+        session_id: str,
+        func: Optional[Dependency[bool]] = None,  
+        min_trigger: int = 10,
+        time_window: int = None,
+        count_window: int = None,
+        max_size: Optional[int] = 100
+    ):
+        self.func = func
+        self.session_id = session_id
+        self.min_trigger = min_trigger
+        self.time_window = time_window
+        self.count_window = count_window
+        self.max_size = max_size
+
+    def __repr__(self) -> str:
+        return f"Counter(session_id={self.session_id}, time_window={self.time_window}, count_window={self.count_window})"
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            isinstance(other, CounterRule)
+            and self.session_id == other.session_id
+            and self.time_window == other.time_window
+            and self.count_window == other.count_window
+        )
+
+    def __hash__(self) -> int:
+        return hash((self.session_id, self.time_window, self.count_window))
+
+    async def __call__(
+        self, 
+        bot: "Bot",
+        event: Event, 
+        rule_state: _RuleStateT,
+        bot_state: _BotStateT
+    ) -> bool:
+
+        counter: Counter = bot_state[COUNTER_STATE].setdefault(self.session_id, Counter(self.max_size))
+        if self.func:
+            counter.append(await solve_dependencies_in_bot(
+                self.func,
+                bot=bot,
+                event=event,
+                rule_state=rule_state,
+                bot_state=bot_state,
+            ))
+        else:
+            counter.append(True)
+
+        trigger_state = {}
+        if self.time_window and (time_trigger := counter.count_time(self.time_window)) >= self.min_trigger:
+            trigger_state[f"time_trigger_{self.time_window}s"] = time_trigger
+        if self.count_window and (count_trigger := counter.count_events(self.count_window)) >= self.min_trigger:
+            trigger_state[f"count_trigger_{self.count_window}"] = count_trigger
+
+        if trigger_state:
+            rule_state[COUNTER_INFO] = trigger_state
+            return True
+
+        return False
+
+
+class TrieRule:
+    prefix: CharTrie = CharTrie()
+
+    @classmethod
+    def add_prefix(cls: Self, prefix: str, value: TRIE_VALUE) -> None:
+        if prefix in cls.prefix:
+            logger.warning(f'Duplicated prefix rule "{prefix}"')
+            return
+        cls.prefix[prefix] = value
+
+    @classmethod
+    def get_value(cls, bot: "Bot", event: Event, rule_state: _RuleStateT) -> CMD_RESULT:
+        prefix = CMD_RESULT(
+            command=None,
+            raw_command=None,
+            command_arg=None,
+            command_start=None,
+            command_whitespace=None,
+        )
+        rule_state[PREFIX_KEY] = prefix
+        if event.type != "message":
+            return prefix
+
+        message = event.get_message()
+        message_seg: MessageSegment = message[0]
+        if message_seg.is_text():
+            segment_text = str(message_seg).lstrip()
+            if pf := cls.prefix.longest_prefix(segment_text):
+                value: TRIE_VALUE = pf.value
+                prefix[RAW_CMD_KEY] = pf.key
+                prefix[CMD_START_KEY] = value.command_start
+                prefix[CMD_KEY] = value.command
+
+                msg = message.copy()
+                msg.pop(0)
+
+                # check whitespace
+                arg_str = segment_text[len(pf.key) :]
+                arg_str_stripped = arg_str.lstrip()
+                # check next segment until arg detected or no text remain
+                while not arg_str_stripped and msg and msg[0].is_text():
+                    arg_str += str(msg.pop(0))
+                    arg_str_stripped = arg_str.lstrip()
+
+                has_arg = arg_str_stripped or msg
+                if (
+                    has_arg
+                    and (stripped_len := len(arg_str) - len(arg_str_stripped)) > 0
+                ):
+                    prefix[CMD_WHITESPACE_KEY] = arg_str[:stripped_len]
+
+                # construct command arg
+                if arg_str_stripped:
+                    new_message = msg.__class__(arg_str_stripped)
+                    for new_segment in reversed(new_message):
+                        msg.insert(0, new_segment)
+                prefix[CMD_ARG_KEY] = msg
+
+        return prefix
 
 
 '''
@@ -570,7 +664,7 @@ class ShellCommandRule:
 
     async def __call__(
         self,
-        state: StateT,
+        rule_state: _RuleStateT,
         cmd: Optional[tuple[str, ...]] = Command(),
         msg: Optional[Message] = CommandArg(),
     ) -> bool:
@@ -578,7 +672,7 @@ class ShellCommandRule:
             return False
 
         try:
-            state[SHELL_ARGV] = list(
+            rule_state[SHELL_ARGV] = list(
                 chain.from_iterable(
                     shlex.split(str(seg))
                     if cast(MessageSegment, seg).is_text()
@@ -588,21 +682,21 @@ class ShellCommandRule:
             )
         except Exception as e:
             # set SHELL_ARGV to none indicating shlex error
-            state[SHELL_ARGV] = None
+            rule_state[SHELL_ARGV] = None
             # ensure SHELL_ARGS is set to ParserExit if parser is provided
             if self.parser:
-                state[SHELL_ARGS] = ParserExit(status=2, message=str(e))
+                rule_state[SHELL_ARGS] = ParserExit(status=2, message=str(e))
             return True
 
         if self.parser:
             t = parser_message.set("")
             try:
-                args = self.parser.parse_args(state[SHELL_ARGV])
-                state[SHELL_ARGS] = args
+                args = self.parser.parse_args(rule_state[SHELL_ARGV])
+                rule_state[SHELL_ARGS] = args
             except ArgumentError as e:
-                state[SHELL_ARGS] = ParserExit(status=2, message=str(e))
+                rule_state[SHELL_ARGS] = ParserExit(status=2, message=str(e))
             except ParserExit as e:
-                state[SHELL_ARGS] = e
+                rule_state[SHELL_ARGS] = e
             finally:
                 parser_message.reset(t)
         return True
@@ -675,6 +769,7 @@ def shell_command(
 
     return Rule(ShellCommandRule(commands, parser))
 '''
+
 
 __autodoc__ = {
     "Rule": True,

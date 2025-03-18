@@ -22,6 +22,21 @@ REJECT_PROMPT_RESULT_KEY: Literal["_reject_{key}_result"] = "_reject_{key}_resul
 """`reject` prompt 发送结果存储 key"""
 
 # used by Rule
+REGEX_MATCHED: Literal["_matched"] = "_matched"
+"""正则匹配结果存储 key"""
+STARTSWITH_KEY: Literal["_startswith"] = "_startswith"
+"""响应触发前缀 key"""
+ENDSWITH_KEY: Literal["_endswith"] = "_endswith"
+"""响应触发后缀 key"""
+FULLMATCH_KEY: Literal["_fullmatch"] = "_fullmatch"
+"""响应触发完整消息 key"""
+KEYWORD_KEY: Literal["_keyword"] = "_keyword"
+"""响应触发关键字 key"""
+COUNTER_INFO: Literal["_counter"] = "_counter"
+"""计数器触发信息 info"""
+COUNTER_STATE: Literal["_counter_state"] = "_counter_state"
+"""用于在bot_state持久化储存计数器状态 state"""
+
 PREFIX_KEY: Literal["_prefix"] = "_prefix"
 """命令前缀存储 key"""
 
@@ -40,16 +55,5 @@ SHELL_ARGS: Literal["_args"] = "_args"
 """shell 命令 parse 后参数字典存储 key"""
 SHELL_ARGV: Literal["_argv"] = "_argv"
 """shell 命令原始参数列表存储 key"""
-
-REGEX_MATCHED: Literal["_matched"] = "_matched"
-"""正则匹配结果存储 key"""
-STARTSWITH_KEY: Literal["_startswith"] = "_startswith"
-"""响应触发前缀 key"""
-ENDSWITH_KEY: Literal["_endswith"] = "_endswith"
-"""响应触发后缀 key"""
-FULLMATCH_KEY: Literal["_fullmatch"] = "_fullmatch"
-"""响应触发完整消息 key"""
-KEYWORD_KEY: Literal["_keyword"] = "_keyword"
-"""响应触发关键字 key"""
 
 WINDOWS = sys.platform.startswith("win") or (sys.platform == "cli" and os.name == "nt")

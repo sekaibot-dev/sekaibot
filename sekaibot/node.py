@@ -32,7 +32,7 @@ from sekaibot.dependencies import Depends, Dependency, solve_dependencies_in_bot
 from sekaibot.internal.event import Event
 from sekaibot.internal.message import BuildMessageType
 from sekaibot.exceptions import SkipException, JumpToException, PruningException, StopException
-from sekaibot.typing import ConfigT, EventT, StateT, _PermStateT, _RuleStateT
+from sekaibot.typing import ConfigT, EventT, StateT, _BotStateT, _RuleStateT
 from sekaibot.utils import is_config_class
 from sekaibot.rule import Rule
 from sekaibot.permission import Permission
@@ -210,7 +210,7 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
         cls,
         bot: Bot,
         event: Event,
-        perm_state: _PermStateT,
+        bot_state: _BotStateT,
         stack: Optional[AsyncExitStack] = None,
         dependency_cache: Optional[Dependency] = None,
     ) -> bool:
@@ -221,7 +221,7 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
             isinstance(cls.EventType, str) and event.type == (cls.EventType or event.type)
             or isinstance(event, cls.EventType)
         ) and await cls.__node_perm__(
-            bot=bot, event=event, perm_state=perm_state,
+            bot=bot, event=event, bot_state=bot_state,
             stack=stack,
             dependency_cache=dependency_cache,
         )
@@ -354,7 +354,7 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
                 state=self.bot.manager.node_state, 
                 global_state=self.bot.manager.global_state,
                 rule_state=self._rule_state, 
-                perm_state=self.bot.manager._perm_state,
+                bot_state=self.bot.manager._bot_state,
                 stack=stack
             )
         return result
