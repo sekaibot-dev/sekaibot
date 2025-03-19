@@ -120,6 +120,7 @@ class NodeManager():
         self,
         node_class: type[Node],
         current_event: Event[Any],
+        rule_state: _RuleStateT,
         max_try_times: int | None = None,
         timeout: int | float = MAX_TIMEOUT,
     ):
@@ -139,9 +140,9 @@ class NodeManager():
                     max_try_times=max_try_times,
                     timeout=timeout,
                 )
-                await self._check_and_run(node_class, event, node_class._rule_state)
+                await self._check_and_run(node_class, event, rule_state)
             except GetEventTimeout:
-                return  # 超时退出
+                return
             except Exception:
                 logger.exception("Exception in node", node=node_class)
 
@@ -261,14 +262,14 @@ class NodeManager():
 
         while index < len(nodes_list):
             node_class, pruning_node = nodes_list[index]
-            _rule_state = defaultdict(lambda: None)
+            rule_state = defaultdict(lambda: None)
 
             logger.debug("Checking for matching nodes", priority=node_class)
 
             next_index = index + 1 
 
             try:
-                await self._check_and_run(node_class, current_event, _rule_state)
+                await self._check_and_run(node_class, current_event, rule_state)
 
             except SkipException:
                 pass
@@ -288,7 +289,7 @@ class NodeManager():
                 else:
                     logger.warning("The node to jump to is before the current node", node=nodes_list[jump_to_index])
             except RejectException as reject:
-                await self._add_temporary_task(node_class, current_event, reject.max_try_times, reject.timeout)
+                await self._add_temporary_task(node_class, current_event, rule_state, reject.max_try_times, reject.timeout)
                 if node_class.block:
                     break
 

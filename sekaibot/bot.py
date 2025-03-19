@@ -29,7 +29,6 @@ from sekaibot.utils import (
     get_classes_from_module_name,
     is_config_class,
     cancel_on_exit,
-    samefile,
 )
 from sekaibot.config import ConfigModel, MainConfig, NodeConfig
 from sekaibot.log import logger, configure_logging

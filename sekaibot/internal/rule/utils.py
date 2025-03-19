@@ -23,7 +23,6 @@ import time as time_util
 import re
 import shlex
 from typing import (
-    IO,
     TYPE_CHECKING,
     NamedTuple,
     Optional,
@@ -60,7 +59,6 @@ from sekaibot.consts import (
     
 )
 
-from . import Rule
 from sekaibot.log import logger
 from sekaibot.typing import NOT_GIVEN, EventT, _RuleStateT, _BotStateT
 from sekaibot.dependencies import Dependency, solve_dependencies_in_bot
