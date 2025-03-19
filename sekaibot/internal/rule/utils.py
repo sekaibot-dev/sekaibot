@@ -73,10 +73,10 @@ T = TypeVar("T")
 
 class CMD_RESULT(TypedDict):
     command: Optional[tuple[str, ...]]
-    raw_command: Optional[str]
+    raw_command: str | None
     command_arg: Optional[Message]
-    command_start: Optional[str]
-    command_whitespace: Optional[str]
+    command_start: str | None
+    command_whitespace: str | None
 
 
 class TRIE_VALUE(NamedTuple):
@@ -321,11 +321,11 @@ class CountTriggerRule:
     def __init__(
         self,
         name: str,
-        func: Optional[Dependency[bool]] = None,  
+        func: Dependency[bool] | None = None,  
         min_trigger: int = 10,
         time_window: int = 60,
         count_window: int = 30,
-        max_size: Optional[int] = 100
+        max_size: int | None = 100
     ):
         self.func = func
         self.name = name
@@ -476,7 +476,7 @@ class CommandRule:
         self,
         cmd: Optional[tuple[str, ...]] = Command(),
         cmd_arg: Optional[Message] = CommandArg(),
-        cmd_whitespace: Optional[str] = CommandWhitespace(),
+        cmd_whitespace: str | None = CommandWhitespace(),
     ) -> bool:
         if cmd not in self.cmds:
             return False
@@ -600,7 +600,7 @@ class ArgumentParser(ArgParser):
 
     def _parse_optional(
         self, arg_string: Union[str, MessageSegment]
-    ) -> Optional[tuple[Optional[Action], str, Optional[str]]]:
+    ) -> Optional[tuple[Optional[Action], str, str | None]]:
         return (
             super()._parse_optional(arg_string) if isinstance(arg_string, str) else None
         )
@@ -611,7 +611,7 @@ class ArgumentParser(ArgParser):
         else:
             super()._print_message(message, file)
 
-    def exit(self, status: int = 0, message: Optional[str] = None):
+    def exit(self, status: int = 0, message: str | None = None):
         if message:
             self._print_message(message)
         raise ParserExit(status=status, message=parser_message.get(None))

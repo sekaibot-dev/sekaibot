@@ -5,6 +5,8 @@ from typing import (
     Literal
 )
 
+MAX_TIMEOUT: Literal[600] = 600
+
 # used by Matcher
 RECEIVE_KEY: Literal["_receive_{id}"] = "_receive_{id}"
 """`receive` 存储 key"""

@@ -179,11 +179,11 @@ class CountTrigger(RuleChecker[tuple[str, Dependency[bool], int, int, int, int],
     def __init__(
         self,
         name: str,
-        func: Optional[Dependency[bool]] = None,  
+        func: Dependency[bool] | None = None,  
         min_trigger: int = 10,
         time_window: int = 60,
         count_window: int = 30,
-        max_size: Optional[int] = 100
+        max_size: int | None = 100
     ) -> Rule:
         super().__init__(CountTriggerRule(name, func, min_trigger, time_window, count_window, max_size))
     
@@ -191,11 +191,11 @@ class CountTrigger(RuleChecker[tuple[str, Dependency[bool], int, int, int, int],
     def Checker(
         cls,
         name: str,
-        func: Optional[Dependency[bool]] = None,  
+        func: Dependency[bool] | None = None,  
         min_trigger: int = 10,
         time_window: int = 60,
         count_window: int = 30,
-        max_size: Optional[int] = 100
+        max_size: int | None = 100
     ):
         return super().Checker(name, name, func, min_trigger, time_window, count_window, max_size) 
 

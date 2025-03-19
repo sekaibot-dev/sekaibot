@@ -4,7 +4,6 @@ from typing import (
     List, 
     Dict, 
     Literal, 
-    Optional, 
     Set, 
     Union, 
     Any,
@@ -115,11 +114,11 @@ class SQLConfig(ConfigModel):
         async_mode: Whether it is an asynchronous connection.
     """
     db_type: Literal["sql"]
-    connection_string: Optional[str] = None,
+    connection_string: str | None = None,
     table_name: str = "message_store",
     session_id_field_name: str = "session_id",
-    engine_args: Optional[Dict[str, Any]] = None,
-    async_mode: Optional[bool] = None, 
+    engine_args: dict[str, Any] | None = None,
+    async_mode: bool | None = None, 
 
 class RedisConfig(ConfigModel):
     """Redis 配置。
@@ -132,7 +131,7 @@ class RedisConfig(ConfigModel):
     db_type: Literal["redis"]
     url: str = "redis://localhost:6379/0"
     key_prefix: str = "message_store:"
-    ttl: Optional[int] = None
+    ttl: int | None = None
 
 class MongoDBConfig(ConfigModel):
     """MongoDB 配置。

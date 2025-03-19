@@ -61,7 +61,7 @@ class Permission:
         bot: "Bot",
         event: Event,
         bot_state: _BotStateT,
-        stack: Optional[AsyncExitStack] = None,
+        stack: AsyncExitStack | None = None,
         dependency_cache: Optional[dict[Dependency[Any], Any]] = None,
     ) -> bool:
         """检查是否满足某个权限。
@@ -167,7 +167,7 @@ class User:
 
     async def __call__(self, bot: Bot, event: Event) -> bool:
         try:
-            session = event.session_id
+            session = event.get_session_id()
         except Exception:
             return False
         return bool(
@@ -192,7 +192,7 @@ class User:
             event: Event 对象
             perm: 需同时满足的权限
         """
-        return cls((event.session_id,), perm=perm and cls._clean_permission(perm))
+        return cls((event.get_session_id(),), perm=perm and cls._clean_permission(perm))
 
     @classmethod
     def from_permission(cls, *users: str, perm: Optional[Permission] = None) -> Self:

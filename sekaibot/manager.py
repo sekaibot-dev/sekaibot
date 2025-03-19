@@ -10,12 +10,8 @@ from typing import (
     Any,
     Awaitable,
     Callable,
-    Dict,
-    List,
+    Union,
     Optional,
-    Set,
-    Tuple,
-    Type,
     overload,
 )
 
@@ -25,7 +21,9 @@ from sekaibot.exceptions import (
     SkipException,
     PruningException,
     JumpToException,
+    RejectException,
 )
+from sekaibot.consts import MAX_TIMEOUT
 from sekaibot.log import logger
 from sekaibot.typing import EventT, StateT, _RuleStateT
 from sekaibot.node import Node
@@ -69,7 +67,6 @@ class NodeManager():
         async with anyio.create_task_group() as tg:
             tg.start_soon(self._handle_event_receive)
             tg.start_soon(cancel_on_exit, self._cancel_event, tg)
-
 
     async def handle_event(
         self,
@@ -121,13 +118,45 @@ class NodeManager():
             current_event = self._current_event
         await self._handle_event(current_event)
 
+    async def _add_temporary_task(
+        self,
+        node_class: type[Node],
+        current_event: Event[Any],
+        max_try_times: int | None = None,
+        timeout: Union[int, float] = MAX_TIMEOUT,
+    ):
+        """添加一个临时节点任务，在调用 reject 时运行。
+
+        Args:
+            node: 要添加的节点，必须是类实例。
+            max_try_times: 最大事件数。
+            timeout: 超时时间。
+        """
+
+        async def temporary_task():
+            try:
+                event = await self.get(
+                    lambda e: e.get_session_id() == current_event.get_session_id(),
+                    event_type=type(current_event),
+                    max_try_times=max_try_times,
+                    timeout=timeout,
+                )
+                await self._check_and_run(node_class, event, node_class._rule_state)
+            except GetEventTimeout:
+                return  # 超时退出
+            except Exception:
+                logger.exception("Exception in node", node=node_class)
+
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(temporary_task)
+
     async def _check_node(
         self,
         node_class: type[Node],
-        event: Event[Any],
+        current_event: Event[Any],
         rule_state: _RuleStateT,
-        stack: Optional[AsyncExitStack] = None,
-        dependency_cache: Optional[Dependency] = None,
+        stack: AsyncExitStack | None = None,
+        dependency_cache: Dependency | None = None,
     ) -> bool:
         """检查事件响应器是否符合运行条件。
 
@@ -144,13 +173,9 @@ class NodeManager():
         返回:
             bool: 是否符合运行条件
         """
-        '''if node.expire_time and datetime.now() > node.expire_time:
-            with contextlib.suppress(Exception):
-                node.destroy()
-            return False'''
 
         try:
-            if not await node_class.check_perm(self.bot, event, self._bot_state, stack, dependency_cache):
+            if not await node_class.check_perm(self.bot, current_event, self._bot_state, stack, dependency_cache):
                 logger.info(f"permission conditions not met", node=node_class.__name__)
                 return False
         except Exception as e:
@@ -160,7 +185,7 @@ class NodeManager():
             return False
 
         try:
-            if not await node_class.check_rule(self.bot, event, rule_state, stack, dependency_cache):
+            if not await node_class.check_rule(self.bot, current_event, rule_state, stack, dependency_cache):
                 logger.info(f"rule conditions not met", node=node_class.__name__)
                 return False
         except Exception as e:
@@ -176,8 +201,8 @@ class NodeManager():
         node_class: type[Node],
         current_event: Event[Any],
         rule_state: _RuleStateT,
-        stack: Optional[AsyncExitStack] = None,
-        dependency_cache: Optional[Dependency] = None,
+        stack: AsyncExitStack | None = None,
+        dependency_cache: Dependency | None = None,
     ):
         _node = await solve_dependencies_in_bot(
             node_class,
@@ -200,10 +225,23 @@ class NodeManager():
             logger.info("Event will be handled by node", node=_node)
             try:
                 await _node.handle()
-            finally:
-                if _node.block:
+            except Exception as e:
+                if not isinstance(e, RejectException) and _node.block:
                     raise StopException
+                raise e
+                
+    async def _check_and_run(
+        self,
+        node_class: type[Node],
+        current_event: Event[Any],
+        rule_state: _RuleStateT,
+    ):
+        async with AsyncExitStack() as stack:
+            if not await self._check_node(node_class, current_event, rule_state, stack=stack):
+                raise PruningException
 
+            await self._run_node(node_class, current_event, rule_state, stack=stack)
+        
     async def _handle_event(self, current_event: Event[Any]) -> None:
         """处理事件并匹配相应的节点（插件）。
 
@@ -232,18 +270,16 @@ class NodeManager():
             next_index = index + 1 
 
             try:
-                async with AsyncExitStack() as stack:
-                    if not await self._check_node(node_class, current_event, _rule_state, stack=stack):
-                        raise PruningException
-
-                    await self._run_node(node_class, current_event, _rule_state, stack=stack)
+                await self._check_and_run(node_class, current_event, _rule_state)
 
             except SkipException:
                 pass
             except StopException:
                 break
             except PruningException:
-                next_index = pruning_node if pruning_node != -1 else None
+                if pruning_node == -1:
+                    break
+                next_index = pruning_node
             except JumpToException as jump_to_node:
                 jump_to_index = jump_to_index_map.get(jump_to_node.node)
 
@@ -253,6 +289,10 @@ class NodeManager():
                     next_index = jump_to_index
                 else:
                     logger.warning("The node to jump to is before the current node", node=nodes_list[jump_to_index])
+            except RejectException as reject:
+                await self._add_temporary_task(node_class, current_event, reject.max_try_times, reject.timeout)
+                if node_class.block:
+                    break
 
             except Exception:
                 logger.exception("Exception in node", node=node_class)
@@ -308,7 +348,7 @@ class NodeManager():
         *,
         event_type: type[Event] | None = None,
         max_try_times: int | None = None,
-        timeout: int | float | None = None,
+        timeout: int | float = MAX_TIMEOUT,
     ) -> EventT:
         """获取满足指定条件的的事件，协程会等待直到适配器接收到满足条件的事件、超过最大事件数或超时。
 

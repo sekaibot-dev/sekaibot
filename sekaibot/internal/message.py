@@ -115,6 +115,30 @@ class Message(ABC, list[MessageSegmentT]):
             消息的文本表示。
         """
         return "".join(map(str, self))
+    
+    def __eq__(self, other: str | BuildMessageType[MessageSegmentT]) -> bool:
+        """判断消息是否等于另一消息。
+
+        Args:
+            other: 其他对象。
+
+        Returns:
+            消息是否等于另一消息。
+        """
+        if isinstance(other, str):
+            return str(self) == other
+        return super().__eq__(self.__class__(other))
+    
+    def __ne__(self, other: str | BuildMessageType[MessageSegmentT]) -> bool:
+        """判断消息是否不等于另一消息。
+
+        Args:
+            other: 其他对象。
+
+        Returns:
+            消息是否不等于另一消息。
+        """
+        return not self.__eq__(other)
 
     def __contains__(self, item: object) -> bool:
         """判断消息中是否包含指定文本或消息字段。
@@ -512,7 +536,7 @@ class MessageSegment(ABC, BaseModel, Mapping[str, Any], Generic[MessageT]):
         return key in self.data
 
     def __eq__(self, other: object) -> bool:
-        """判断是否相等。
+        """判断是否相等。允许在定义自字段时覆写，已适配QQ图片id不相等，而unique相等的情况。
 
         Args:
             other: 其他对象。

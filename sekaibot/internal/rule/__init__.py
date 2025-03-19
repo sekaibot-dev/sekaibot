@@ -69,7 +69,7 @@ class Rule:
         event: Event,
         rule_state: _RuleStateT,
         bot_state: _BotStateT,
-        stack: Optional[AsyncExitStack] = None,
+        stack: AsyncExitStack | None = None,
         dependency_cache: Optional[Dict[Dependency[Any], Any]] = None,
     ) -> bool:
         """检查是否符合所有规则
@@ -186,7 +186,7 @@ class RuleChecker(ABC, Generic[ArgsT, ParamT]):
         event: Event,
         rule_state: _RuleStateT,
         bot_state: _BotStateT,
-        stack: Optional[AsyncExitStack] = None,
+        stack: AsyncExitStack | None = None,
         dependency_cache: Optional[Dict[Dependency[Any], Any]] = None,
     ) -> bool:
         """直接运行检查器并获取结果。"""

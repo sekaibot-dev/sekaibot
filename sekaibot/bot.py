@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 from typing import (
-    Optional,
+    ,
     Dict,
     Tuple,
     List,
@@ -570,7 +570,7 @@ class Bot():
         return func
 
 
-
+'''
     def get_session_id(self, event: dict):
         if is_private_message(event):
             return "user_" + str(event.get("user_id"))
@@ -587,7 +587,7 @@ class Bot():
             group_keywords_hit = check_group_keywords(event.get("plain_text", ""), self.config.keywords)
         return is_at_bot(event) or (is_group and group_keywords_hit)
 
-    async def handle_message(self, event: dict) -> Optional[str]:
+    async def handle_message(self, event: dict) -> str | None:
         """
         核心消息处理入口：
         1. 判断是否需要回复：
@@ -614,7 +614,7 @@ class Bot():
             message_id=str(event.get("message_id")), 
         ))
 
-        return reply
+        return reply'''
 
     
 

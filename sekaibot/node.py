@@ -27,11 +27,12 @@ from typing import (
 from typing_extensions import Annotated, get_args, get_origin
 from contextlib import AsyncExitStack
 
+from sekaibot.consts import MAX_TIMEOUT
 from sekaibot.config import ConfigModel
 from sekaibot.dependencies import Depends, Dependency, solve_dependencies_in_bot, _T
 from sekaibot.internal.event import Event
 from sekaibot.internal.message import BuildMessageType
-from sekaibot.exceptions import SkipException, JumpToException, PruningException, StopException
+from sekaibot.exceptions import SkipException, JumpToException, PruningException, StopException, RejectException
 from sekaibot.typing import ConfigT, EventT, StateT, _BotStateT, _RuleStateT
 from sekaibot.utils import is_config_class
 from sekaibot.rule import Rule
@@ -77,7 +78,7 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
     __node_perm__: ClassVar[Permission] = Permission()
 
     __node_load_type__: ClassVar[NodeLoadType]
-    __node_file_path__: ClassVar[Optional[str]]
+    __node_file_path__: ClassVar[str | None]
 
     if TYPE_CHECKING:
         event: EventT
@@ -211,8 +212,8 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
         bot: Bot,
         event: Event,
         bot_state: _BotStateT,
-        stack: Optional[AsyncExitStack] = None,
-        dependency_cache: Optional[Dependency] = None,
+        stack: AsyncExitStack | None = None,
+        dependency_cache: Dependency | None = None,
     ) -> bool:
         """
         检查节点权限。
@@ -233,8 +234,8 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
         bot: Bot,
         event: Event,
         rule_state: _RuleStateT,
-        stack: Optional[AsyncExitStack] = None,
-        dependency_cache: Optional[Dependency] = None,
+        stack: AsyncExitStack | None = None,
+        dependency_cache: Dependency | None = None,
     ) -> bool:
         """
         检查节点规则。
@@ -265,8 +266,8 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
     async def get(
         self,
         *,
-        max_try_times: Optional[int] = None,
-        timeout: Optional[Union[int, float]] = None,
+        max_try_times: int | None = None,
+        timeout: Union[int, float] = MAX_TIMEOUT,
     ) -> Self:
         """获取用户回复消息。
 
@@ -283,7 +284,7 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
             GetEventTimeout: 超过最大事件数或超时。
         """
         return await self.bot.manager.get(
-            lambda e: e.session_id == self.event.session_id,
+            lambda e: e.get_session_id() == self.event.get_session_id(),
             event_type=type(self.event),
             max_try_times=max_try_times,
             timeout=timeout,
@@ -292,8 +293,8 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
     async def ask(
         self,
         message: str,
-        max_try_times: Optional[int] = None,
-        timeout: Optional[Union[int, float]] = None,
+        max_try_times: int | None = None,
+        timeout: Union[int, float] = MAX_TIMEOUT,
     ) -> Self:
         """询问消息。
 
@@ -332,11 +333,22 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
         raise PruningException
     
     @final
-    def finish(self, message: Optional[BuildMessageType] = None) -> NoReturn:
+    def finish(self, message: BuildMessageType | None = None) -> NoReturn:
         """结束当前节点。"""
         if message:
             self.reply(message)
         raise SkipException
+    
+    @final
+    def reject(
+        self, 
+        message: BuildMessageType | None = None,
+        max_try_times: int | None = None,
+        timeout: Union[int, float] = MAX_TIMEOUT,
+    ) -> NoReturn:
+        if message:
+            self.reply(message)
+        raise RejectException(max_try_times, timeout)
 
     async def run(
         self,

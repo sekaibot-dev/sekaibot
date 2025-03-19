@@ -16,11 +16,9 @@ from typing import (
     ContextManager,
     Dict,
     Generator,
-    Optional,
     Type,
     TypeVar,
     Union,
-    Generic,
     cast,
     get_type_hints
 )
@@ -58,11 +56,11 @@ class InnerDepends:
         use_cache: 是否使用缓存。默认为 `True`。
     """
 
-    dependency: Optional[Dependency]
+    dependency: Dependency | None
     use_cache: bool
 
     def __init__(
-        self, dependency: Optional[Dependency] = None, *, use_cache: bool = True
+        self, dependency: Dependency | None = None, *, use_cache: bool = True
     ) -> None:
         if isinstance(dependency, InnerDepends):
             self.dependency = dependency.dependency
@@ -77,7 +75,7 @@ class InnerDepends:
 
 
 def Depends(  # noqa: N802 # pylint: disable=invalid-name
-    dependency: Optional[Dependency[_T]] = None, *, use_cache: bool = True
+    dependency: Dependency[_T] | None = None, *, use_cache: bool = True
 ) -> _T:
     """子依赖装饰器。
 
@@ -147,8 +145,8 @@ async def solve_dependencies(
     dependent: Dependency[_T],
     *,
     use_cache: bool,
-    stack: Optional[AsyncExitStack] = None,
-    dependency_cache: Dict[Dependency[Any], Any],
+    stack: AsyncExitStack | None = None,
+    dependency_cache: dict[Dependency[Any], Any],
 ) -> _T:
     """解析子依赖，包括 `__call__` 方法的可调用类实例。
 
@@ -251,13 +249,13 @@ async def solve_dependencies_in_bot(
     *,
     bot: "Bot",
     event: Event,
-    state: Optional[StateT] = None,
-    global_state: Optional[GlobalStateT] = None,
-    rule_state: Optional[_RuleStateT] = None,
-    bot_state: Optional[_BotStateT] = None,
+    state: StateT | None = None,
+    global_state: GlobalStateT | None = None,
+    rule_state: _RuleStateT | None = None,
+    bot_state: _BotStateT | None = None,
     use_cache: bool = True,
-    stack: Optional[AsyncExitStack] = None,
-    dependency_cache: Optional[Dict[Dependency[Any], Any]] = None,
+    stack: AsyncExitStack | None = None,
+    dependency_cache: Dict[Dependency[Any], Any] | None = None,
 ) -> _T:
     """解析子依赖。
     
