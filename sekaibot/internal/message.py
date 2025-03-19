@@ -221,8 +221,8 @@ class Message(ABC, list[MessageSegmentT]):
 
     def get_message(
             self, 
-            include: Optional[set] = None, 
-            exclude: Optional[set] = None
+            include: set | None = None, 
+            exclude: set | None = None
         ) -> Self:
         """获取消息中某一类型的部分。
 
@@ -243,8 +243,8 @@ class Message(ABC, list[MessageSegmentT]):
     def startswith(
         self,
         prefix: str | MessageSegmentT | tuple[str, ...] | tuple[MessageSegmentT, ...],
-        start: Optional[SupportsIndex] = None,
-        end: Optional[SupportsIndex] = None,
+        start: SupportsIndex | None = None,
+        end: SupportsIndex | None = None,
         ignorecase: bool = False
     ) -> str | MessageSegmentT | None:
         """实现类似字符串的 `startswith()` 方法。
@@ -290,8 +290,8 @@ class Message(ABC, list[MessageSegmentT]):
     def endswith(
         self,
         suffix: str | MessageSegmentT | tuple[str, ...] | tuple[MessageSegmentT, ...],
-        start: Optional[SupportsIndex] = None,
-        end: Optional[SupportsIndex] = None,
+        start: SupportsIndex | None = None,
+        end: SupportsIndex | None = None,
         ignorecase: bool = False
     ) -> bool:
         """实现类似字符串的 `endswith()` 方法。
@@ -335,17 +335,25 @@ class Message(ABC, list[MessageSegmentT]):
             )
 
     @overload
-    def replace(self, old: str, new: str, count: int = -1) -> Self: ...
+    def replace(
+        self, 
+        old: str, 
+        new: str, 
+        count: int = -1
+    ) -> Self: ...
 
     @overload
     def replace(
-        self, old: MessageSegmentT, new: Optional[MessageSegmentT], count: int = -1
+        self, 
+        old: MessageSegmentT, 
+        new: MessageSegmentT | None, 
+        count: int = -1
     ) -> Self: ...
 
     def replace(
         self,
-        old: Union[str, MessageSegmentT],
-        new: Optional[Union[str, MessageSegmentT]],
+        old: str | MessageSegmentT,
+        new: str | MessageSegmentT | None,
         count: int = -1,
     ) -> Self:
         """实现类似字符串的 `replace()` 方法。

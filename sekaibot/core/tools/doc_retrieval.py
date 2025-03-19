@@ -58,7 +58,7 @@ class DocumentRetrievalTool(BaseTool):
             raise ValueError("不支持的 embedding 模型！")
 
         self.vector_store_type: str = vector_store
-        self.db: Optional[FAISS | Chroma] = None  # 初始时尚未添加文档
+        self.db: FAISS | Chroma | None = None  # 初始时尚未添加文档
 
         # 初始化 LLM（新版 ChatOpenAI）
         self.llm = ChatOpenAI(

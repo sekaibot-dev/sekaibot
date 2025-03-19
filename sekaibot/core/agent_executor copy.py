@@ -76,7 +76,7 @@ class ChatAgentExecutor:
     async def run(
         self, 
         messages: list[BaseMessage], 
-        metadata: Optional[dict[str, Any]] = None
+        metadata: dict[str, Any] | None = None
     ) -> ChatState:
         """
         执行 LangGraph 代理，返回完整对话状态（支持高并发）。

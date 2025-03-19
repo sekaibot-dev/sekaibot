@@ -63,6 +63,7 @@ _T = TypeVar("_T")
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
 _TypeT = TypeVar("_TypeT", bound=Type[Any])
+_BaseModelT = TypeVar("_BaseModelT", bound=BaseModel)
 
 StrOrBytesPath: TypeAlias = Union[str, bytes, "PathLike[str]", "PathLike[bytes]"]
 TreeType = dict[_T, Union[Any, "TreeType"]]
@@ -76,9 +77,9 @@ class ModulePathFinder(MetaPathFinder):
     def find_spec(
         self,
         fullname: str,
-        path: Optional[Sequence[str]] = None,
-        target: Optional[ModuleType] = None,
-    ) -> Union[ModuleSpec, None]:
+        path: Sequence[str] | None = None,
+        target: ModuleType | None = None,
+    ) -> ModuleSpec | None:
         """用于查找指定模块的 `spec`。"""
         if path is None:
             path = []
@@ -102,7 +103,9 @@ def is_config_class(config_class: Any) -> TypeGuard[Type[ConfigModel]]:
         and not inspect.isabstract(config_class)
     )
 
-def remove_none_attributes(model: Type[BaseModel], exclude: Optional[set[str]] = None):
+def remove_none_attributes(
+    model: _BaseModelT, exclude: set[str] | None = None
+) -> _BaseModelT:
     """去除类中值为None的属性
 
     Args:
@@ -196,10 +199,10 @@ def flatten_tree_with_jumps(
         其中剪枝后跳转索引指向下一个可执行的节点，-1 表示无可跳转位置。
     """
     ordered_nodes: list[_T] = []  # 存储深度优先遍历顺序
-    parent_map: dict[_T, Union[_T, None]] = {}  # 记录每个节点的父节点
-    children_map: dict[Union[_T, None], list[_T]] = {}  # 记录每个节点的所有子节点
+    parent_map: dict[_T, _T | None] = {}  # 记录每个节点的父节点
+    children_map: dict[_T | None, list[_T]] = {}  # 记录每个节点的所有子节点
 
-    def dfs(node_dict: TreeType[_T], parent: Union[_T, None] = None) -> None:
+    def dfs(node_dict: TreeType[_T], parent: _T | None = None) -> None:
         """深度优先遍历树，构建 parent_map 和 children_map"""
         for key, value in node_dict.items():
             ordered_nodes.append(key)
@@ -216,7 +219,7 @@ def flatten_tree_with_jumps(
 
         for i in range(len(ordered_nodes) - 1, -1, -1):
             node: _T = ordered_nodes[i]
-            parent: Union[_T, None] = parent_map.get(node)
+            parent: _T | None = parent_map.get(node)
 
             # 获取兄弟节点
             siblings: list[_T] = children_map.get(parent, [])
@@ -227,7 +230,7 @@ def flatten_tree_with_jumps(
                 jump_map[node] = ordered_nodes.index(siblings[node_pos + 1])
             else:
                 # 回溯父节点的兄弟节点
-                temp_parent: Union[_T, None] = parent
+                temp_parent: _T | None = parent
                 while temp_parent is not None:
                     parent_siblings: list[_T] = children_map.get(parent_map.get(temp_parent), [])
                     if temp_parent in parent_siblings:
@@ -322,7 +325,7 @@ async def sync_ctx_manager_wrapper(
         await sync_func_wrapper(cm.__exit__, to_thread=to_thread)(None, None, None)
 
 def wrap_get_func(
-    func: Optional[Callable[[EventT], Union[bool, Awaitable[bool]]]],
+    func: Callable[[EventT], bool | Awaitable[bool]] | None,
 ) -> Callable[[EventT], Awaitable[bool]]:
     """将 `get()` 函数接受的参数包装为一个异步函数。
 
@@ -337,9 +340,6 @@ def wrap_get_func(
     if not asyncio.iscoroutinefunction(func):
         return sync_func_wrapper(func)  # type: ignore
     return func
-
-import anyio
-from typing import Union
 
 async def cancel_on_exit(
     condition: anyio.Event | anyio.Condition,
@@ -365,7 +365,7 @@ if sys.version_info >= (3, 10):  # pragma: no cover
 else:  # pragma: no cover
 
     def get_annotations(
-        obj: Union[Callable[..., object], Type[Any], ModuleType],
+        obj: Callable[..., object] | Type[Any] | ModuleType,
     ) -> dict[str, Any]:
         """计算一个对象的标注字典。
 
@@ -379,7 +379,7 @@ else:  # pragma: no cover
         Returns:
             对象的标注字典。
         """
-        ann: Union[dict[str, Any], None]
+        ann: dict[str, Any] | None
 
         if isinstance(obj, type):
             # class

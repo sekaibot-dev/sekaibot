@@ -4,7 +4,6 @@
 对于适配器开发者，所有适配器抛出的异常都应该继承自 `AdapterException` 。
 """
 
-from typing import Union
 from sekaibot.consts import MAX_TIMEOUT
 
 __all__ = [
@@ -45,11 +44,11 @@ class StopException(EventException):
 class RejectException(EventException):
     """拒绝执行当前节点，并重新获取事件再次进入节点。"""
     max_try_times: int | None = None
-    timeout: Union[int, float] = MAX_TIMEOUT
+    timeout: int | float = MAX_TIMEOUT
     def __init__(
         self, 
         max_try_times: int | None = None, 
-        timeout: Union[int, float] = MAX_TIMEOUT
+        timeout: int | float = MAX_TIMEOUT
     ):
         self.max_try_times = max_try_times
         self.timeout = timeout

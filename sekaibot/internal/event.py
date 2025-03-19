@@ -4,7 +4,7 @@
 """
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Generic, NamedTuple, Optional, Union
+from typing import TYPE_CHECKING, Any, Generic, NamedTuple
 from typing_extensions import Self, override
 
 from pydantic import BaseModel, ConfigDict

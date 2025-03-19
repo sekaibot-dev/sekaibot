@@ -10,8 +10,6 @@ from typing import (
     Any,
     Awaitable,
     Callable,
-    Union,
-    Optional,
     overload,
 )
 
@@ -123,7 +121,7 @@ class NodeManager():
         node_class: type[Node],
         current_event: Event[Any],
         max_try_times: int | None = None,
-        timeout: Union[int, float] = MAX_TIMEOUT,
+        timeout: int | float = MAX_TIMEOUT,
     ):
         """添加一个临时节点任务，在调用 reject 时运行。
 

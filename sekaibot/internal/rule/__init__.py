@@ -5,9 +5,7 @@ from typing import (
     Any, 
     NoReturn, 
     Optional, 
-    Union, 
     Type, 
-    Dict, 
     Self, 
     Callable, 
     Awaitable, 
@@ -53,7 +51,7 @@ class Rule:
 
     __slots__ = ("checkers",)
 
-    def __init__(self, *checkers: Union["Rule", RuleCheckerT, Dependency[bool]]) -> None:
+    def __init__(self, *checkers: "Rule" | RuleCheckerT | Dependency[bool]) -> None:
         self.checkers: set[Dependency[bool]] = set(chain.from_iterable(
             checker.checkers if isinstance(checker, Rule) else {checker}
             for checker in checkers
@@ -70,7 +68,7 @@ class Rule:
         rule_state: _RuleStateT,
         bot_state: _BotStateT,
         stack: AsyncExitStack | None = None,
-        dependency_cache: Optional[dict[Dependency[Any], Any]] = None,
+        dependency_cache: dict[Dependency[Any], Any] | None = None,
     ) -> bool:
         """检查是否符合所有规则
 
@@ -117,7 +115,7 @@ class Rule:
 
         return result
 
-    def __and__(self, other: Optional[Union[Self, RuleCheckerT]]) -> Self:
+    def __and__(self, other: Self | RuleCheckerT | None) -> Self:
         if other is None:
             return self
         elif isinstance(other, Rule):
@@ -125,7 +123,7 @@ class Rule:
         else:
             return Rule(*self.checkers, other)
 
-    def __rand__(self, other: Optional[Union[Self, RuleCheckerT]]) -> Self:
+    def __rand__(self, other: Self | RuleCheckerT | None) -> Self:
         if other is None:
             return self
         elif isinstance(other, Rule):
@@ -136,7 +134,7 @@ class Rule:
     def __or__(self, other: object) -> NoReturn:
         raise RuntimeError("Or operation between rules is not allowed.")
     
-    def __add__(self, other: Union[Self, RuleCheckerT]) -> Self:
+    def __add__(self, other: Self | RuleCheckerT) -> Self:
         if other is None:
             return self
         elif isinstance(other, Rule):
@@ -144,10 +142,10 @@ class Rule:
         else:
             return Rule(*self.checkers, other)
         
-    def __iadd__(self, other: Union[Self, RuleCheckerT]) -> Self:
+    def __iadd__(self, other: Self | RuleCheckerT) -> Self:
         return self.__add__(other)
     
-    def __sub__(self, other: Union[Self, RuleCheckerT]) -> NoReturn:
+    def __sub__(self, other: Self | RuleCheckerT) -> NoReturn:
         raise RuntimeError("Subtraction operation between rules is not allowed.")
     
 ArgsT = TypeVar("T")
@@ -187,7 +185,7 @@ class RuleChecker(ABC, Generic[ArgsT, ParamT]):
         rule_state: _RuleStateT,
         bot_state: _BotStateT,
         stack: AsyncExitStack | None = None,
-        dependency_cache: Optional[dict[Dependency[Any], Any]] = None,
+        dependency_cache: dict[Dependency[Any], Any] | None = None,
     ) -> bool:
         """直接运行检查器并获取结果。"""
         return await self.__rule__(bot, event, rule_state, bot_state, stack, dependency_cache)
@@ -204,14 +202,14 @@ class RuleChecker(ABC, Generic[ArgsT, ParamT]):
         """在依赖注入里获取检查器的数据。"""
         return Depends(cls._param, use_cache=False)
     
-class MatchRule(RuleChecker[Union[str, bool], str]):
+class MatchRule(RuleChecker[str | bool, str]):
     """所有匹配类 Rule 的基类。"""
 
     checker: Type[Callable[[tuple[str, ...], bool], "Rule"]] = None
 
     def __init__(
         self,
-        *msgs: Union[str, tuple[str, ...]], 
+        *msgs: str | tuple[str, ...], 
         ignorecase: bool = False
     ) -> None:
 
@@ -223,7 +221,7 @@ class MatchRule(RuleChecker[Union[str, bool], str]):
     @classmethod
     def Checker(
         cls,
-        *msgs: Union[str, tuple[str, ...]], 
+        *msgs: str | tuple[str, ...], 
         ignorecase: bool = False
     ):
         return super().Checker(*msgs, ignorecase) 

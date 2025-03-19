@@ -10,17 +10,11 @@ from enum import Enum
 from typing import (
     TYPE_CHECKING,
     Any,
-    List,
     ClassVar,
     Self,
     Generic,
     NoReturn,
     Optional,
-    Union,
-    Callable,
-    Awaitable,
-    Tuple,
-    Type,
     cast,
     final,
 ) # type: ignore
@@ -89,14 +83,14 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
         _rule_state = Depends(_RuleStateT)
 
 
-    def __init_state__(self) -> Optional[StateT]:
+    def __init_state__(self) -> StateT | None:
         """初始化节点状态。"""
 
     def __init_subclass__(
         cls,
-        event_type: Optional[type[EventT]] = None,
-        config: Optional[type[ConfigT]] = None,
-        init_state: Optional[StateT] = None,
+        event_type: type[EventT] | None = None,
+        config: type[ConfigT] | None = None,
+        init_state: StateT | None = None,
         **_kwargs: Any,
     ) -> None:
         """初始化子类。
@@ -267,7 +261,7 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
         self,
         *,
         max_try_times: int | None = None,
-        timeout: Union[int, float] = MAX_TIMEOUT,
+        timeout: int | float = MAX_TIMEOUT,
     ) -> Self:
         """获取用户回复消息。
 
@@ -294,7 +288,7 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
         self,
         message: str,
         max_try_times: int | None = None,
-        timeout: Union[int, float] = MAX_TIMEOUT,
+        timeout: int | float = MAX_TIMEOUT,
     ) -> Self:
         """询问消息。
 
@@ -344,7 +338,7 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
         self, 
         message: BuildMessageType | None = None,
         max_try_times: int | None = None,
-        timeout: Union[int, float] = MAX_TIMEOUT,
+        timeout: int | float = MAX_TIMEOUT,
     ) -> NoReturn:
         if message:
             self.reply(message)

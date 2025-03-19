@@ -1,11 +1,6 @@
 import re
 
-from typing import (
-    Union,
-    Any,
-    Optional,
-
-)
+from typing import Any
 
 from sekaibot.internal.event import Event
 from sekaibot.typing import _RuleStateT
@@ -151,14 +146,14 @@ class Regex(RuleChecker[tuple[str, re.RegexFlag], re.Match[str]]):
 
     def __init__(
         self,
-        regex: str, flags: Union[int, re.RegexFlag] = 0
+        regex: str, flags: int | re.RegexFlag = 0
     ) -> Rule:
         super().__init__(RegexRule(regex, flags))
     
     @classmethod
     def Checker(
         cls,
-        regex: str, flags: Union[int, re.RegexFlag] = 0
+        regex: str, flags: int | re.RegexFlag = 0
     ):
         return super().Checker(regex, flags) 
 

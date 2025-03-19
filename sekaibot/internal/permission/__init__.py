@@ -5,7 +5,6 @@ from typing import (
     Any, 
     NoReturn, 
     Optional, 
-    Union, 
     Dict, 
     Self, 
     Callable, 
@@ -46,7 +45,7 @@ class Permission:
 
     __slots__ = ("checkers",)
 
-    def __init__(self, *checkers: Union["Permission", PermissionCheckerT, Dependency[bool]]) -> None:
+    def __init__(self, *checkers: "Permission" | PermissionCheckerT | Dependency[bool]) -> None:
         self.checkers: set[Dependency[bool]] = set(chain.from_iterable(
             checker.checkers if isinstance(checker, Permission) else {checker}
             for checker in checkers
@@ -62,7 +61,7 @@ class Permission:
         event: Event,
         bot_state: _BotStateT,
         stack: AsyncExitStack | None = None,
-        dependency_cache: Optional[dict[Dependency[Any], Any]] = None,
+        dependency_cache: dict[Dependency[Any], Any] | None = None,
     ) -> bool:
         """检查是否满足某个权限。
 
@@ -108,7 +107,7 @@ class Permission:
         raise RuntimeError("And operation between Permissions is not allowed.")
 
     def __or__(
-        self, other: Optional[Union[Self, PermissionCheckerT]]
+        self, other: Self | PermissionCheckerT | None
     ) -> Self:
         if other is None:
             return self
@@ -118,7 +117,7 @@ class Permission:
             return Permission(*self.checkers, other)
 
     def __ror__(
-        self, other: Optional[Union[Self, PermissionCheckerT]]
+        self, other: Self | PermissionCheckerT | None
     ) -> Self:
         if other is None:
             return self
@@ -127,7 +126,7 @@ class Permission:
         else:
             return Permission(other, *self.checkers)
         
-    def __add__(self, other: Union[Self, PermissionCheckerT]) -> Self:
+    def __add__(self, other: Self | PermissionCheckerT) -> Self:
         if other is None:
             return self
         elif isinstance(other, Permission):
@@ -135,10 +134,10 @@ class Permission:
         else:
             return Permission(other, *self.checkers)
         
-    def __iadd__(self, other: Union[Self, PermissionCheckerT]) -> Self:
+    def __iadd__(self, other: Self | PermissionCheckerT) -> Self:
         return self.__add__(other)
     
-    def __sub__(self, other: Union[Self, PermissionCheckerT]) -> NoReturn:
+    def __sub__(self, other: Self | PermissionCheckerT) -> NoReturn:
         raise RuntimeError("Subtraction operation between permissions is not allowed.")
 
 
@@ -153,7 +152,7 @@ class User:
     __slots__ = ("perm", "users")
 
     def __init__(
-        self, users: tuple[str, ...], perm: Optional[Permission] = None
+        self, users: tuple[str, ...], perm: Permission | None = None
     ) -> None:
         self.users = users
         self.perm = perm
@@ -175,7 +174,7 @@ class User:
         )
 
     @classmethod
-    def _clean_permission(cls, perm: Permission) -> Optional[Permission]:
+    def _clean_permission(cls, perm: Permission) -> Permission | None:
         if len(perm.checkers) == 1 and isinstance(
             user_perm := next(iter(perm.checkers)).call, cls
         ):
@@ -183,7 +182,7 @@ class User:
         return perm
 
     @classmethod
-    def from_event(cls, event: Event, perm: Optional[Permission] = None) -> Self:
+    def from_event(cls, event: Event, perm: Permission | None = None) -> Self:
         """从事件中获取会话 ID。
 
         如果 `perm` 中仅有 `User` 类型的权限检查函数，则会去除原有的会话 ID 限制。
@@ -195,7 +194,7 @@ class User:
         return cls((event.get_session_id(),), perm=perm and cls._clean_permission(perm))
 
     @classmethod
-    def from_permission(cls, *users: str, perm: Optional[Permission] = None) -> Self:
+    def from_permission(cls, *users: str, perm: Permission | None = None) -> Self:
         """指定会话与权限。
 
         如果 `perm` 中仅有 `User` 类型的权限检查函数，则会去除原有的会话 ID 限制。
@@ -207,7 +206,7 @@ class User:
         return cls(users, perm=perm and cls._clean_permission(perm))
 
 
-def USER(*users: str, perm: Optional[Permission] = None):
+def USER(*users: str, perm: Permission | None = None):
     """匹配当前事件属于指定会话。
 
     如果 `perm` 中仅有 `User` 类型的权限检查函数，则会去除原有检查函数的会话 ID 限制。

@@ -72,9 +72,9 @@ T = TypeVar("T")
 
 
 class CMD_RESULT(TypedDict):
-    command: Optional[tuple[str, ...]]
+    command: tuple[str, ...] | None
     raw_command: str | None
-    command_arg: Optional[Message]
+    command_arg: Message | None
     command_start: str | None
     command_whitespace: str | None
 
@@ -300,11 +300,11 @@ class Counter:
     def __init__(self, max_size: int):
         self.values = deque(maxlen=max_size)
 
-    def append(self, value: bool, time: Optional[Union[int, float]] = None):
+    def append(self, value: bool, time: int | float | None = None):
         """记录一个布尔值及其发生时间。"""
         self.values.append((value, time if time is not None else time_util.time()))
 
-    def count_time(self, time_window: Union[int, float], time: Optional[Union[int, float]] = None) -> int:
+    def count_time(self, time_window: int | float, time: int | float | None = None) -> int:
         """返回 `time_window` 秒内 `True` 发生的次数。"""
         if time is None:
             time = time_util.time()
@@ -456,7 +456,7 @@ class CommandRule:
     def __init__(
         self,
         cmds: list[tuple[str, ...]],
-        force_whitespace: Optional[Union[str, bool]] = None,
+        force_whitespace: str | bool | None = None,
     ):
         self.cmds = tuple(cmds)
         self.force_whitespace = force_whitespace
@@ -474,8 +474,8 @@ class CommandRule:
 
     async def __call__(
         self,
-        cmd: Optional[tuple[str, ...]] = Command(),
-        cmd_arg: Optional[Message] = CommandArg(),
+        cmd: tuple[str, ...] | None = Command(),
+        cmd_arg: Message | None = CommandArg(),
         cmd_whitespace: str | None = CommandWhitespace(),
     ) -> bool:
         if cmd not in self.cmds:
@@ -488,8 +488,8 @@ class CommandRule:
 
 
 def command(
-    *cmds: Union[str, tuple[str, ...]],
-    force_whitespace: Optional[Union[str, bool]] = None,
+    *cmds: str | tuple[str, ...] | None,
+    force_whitespace: str | bool | None = None,
 ) -> Rule:
     """匹配消息命令。
 
@@ -552,36 +552,36 @@ class ArgumentParser(ArgParser):
         @overload
         def parse_known_args(
             self,
-            args: Optional[Sequence[Union[str, MessageSegment]]] = None,
+            args: Sequence[str | MessageSegment] | None = None,
             namespace: None = None,
-        ) -> tuple[Namespace, list[Union[str, MessageSegment]]]: ...
+        ) -> tuple[Namespace, list[str | MessageSegment]]: ...
 
         @overload
         def parse_known_args(
-            self, args: Optional[Sequence[Union[str, MessageSegment]]], namespace: T
-        ) -> tuple[T, list[Union[str, MessageSegment]]]: ...
+            self, args: Sequence[str | MessageSegment] | None, namespace: T
+        ) -> tuple[T, list[str | MessageSegment]]: ...
 
         @overload
         def parse_known_args(
             self, *, namespace: T
-        ) -> tuple[T, list[Union[str, MessageSegment]]]: ...
+        ) -> tuple[T, list[str | MessageSegment]]: ...
 
         def parse_known_args(  # pyright: ignore[reportIncompatibleMethodOverride]
             self,
-            args: Optional[Sequence[Union[str, MessageSegment]]] = None,
-            namespace: Optional[T] = None,
-        ) -> tuple[Union[Namespace, T], list[Union[str, MessageSegment]]]: ...
+            args: Sequence[str | MessageSegment] | None = None,
+            namespace: T | None = None,
+        ) -> tuple[Namespace | T, list[str | MessageSegment]]: ...
 
     @overload
     def parse_args(
         self,
-        args: Optional[Sequence[Union[str, MessageSegment]]] = None,
+        args: Sequence[str | MessageSegment] | None = None,
         namespace: None = None,
     ) -> Namespace: ...
 
     @overload
     def parse_args(
-        self, args: Optional[Sequence[Union[str, MessageSegment]]], namespace: T
+        self, args: Sequence[str | MessageSegment] | None, namespace: T
     ) -> T: ...
 
     @overload
@@ -589,9 +589,9 @@ class ArgumentParser(ArgParser):
 
     def parse_args(
         self,
-        args: Optional[Sequence[Union[str, MessageSegment]]] = None,
-        namespace: Optional[T] = None,
-    ) -> Union[Namespace, T]:
+        args: Sequence[str | MessageSegment] | None = None,
+        namespace: T | None = None,
+    ) -> Namespace | T:
         result, argv = self.parse_known_args(args, namespace)
         if argv:
             msg = gettext("unrecognized arguments: %s")
@@ -599,13 +599,13 @@ class ArgumentParser(ArgParser):
         return cast(Union[Namespace, T], result)
 
     def _parse_optional(
-        self, arg_string: Union[str, MessageSegment]
-    ) -> Optional[tuple[Optional[Action], str, str | None]]:
+        self, arg_string: str | MessageSegment
+    ) -> tuple[Action | None, str, str | None] | None:
         return (
             super()._parse_optional(arg_string) if isinstance(arg_string, str) else None
         )
 
-    def _print_message(self, message: str, file: Optional[IO[str]] = None):  # type: ignore
+    def _print_message(self, message: str, file: IO[str] | None = None):  # type: ignore
         if (msg := parser_message.get(None)) is not None:
             parser_message.set(msg + message)
         else:
@@ -627,7 +627,7 @@ class ShellCommandRule:
 
     __slots__ = ("cmds", "parser")
 
-    def __init__(self, cmds: list[tuple[str, ...]], parser: Optional[ArgumentParser]):
+    def __init__(self, cmds: list[tuple[str, ...]], parser: ArgumentParser | None):
         self.cmds = tuple(cmds)
         self.parser = parser
 
@@ -647,8 +647,8 @@ class ShellCommandRule:
     async def __call__(
         self,
         rule_state: _RuleStateT,
-        cmd: Optional[tuple[str, ...]] = Command(),
-        msg: Optional[Message] = CommandArg(),
+        cmd: tuple[str, ...] | None = Command(),
+        msg: Message | None = CommandArg(),
     ) -> bool:
         if cmd not in self.cmds or msg is None:
             return False
@@ -685,7 +685,7 @@ class ShellCommandRule:
 
 
 def shell_command(
-    *cmds: Union[str, tuple[str, ...]], parser: Optional[ArgumentParser] = None
+    *cmds: str | tuple[str, ...] | None, parser: ArgumentParser | None = None
 ) -> Rule:
     """匹配 `shell_like` 形式的消息命令。
 

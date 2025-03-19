@@ -44,8 +44,8 @@ GlobalStateT = TypeVar("GlobalStateT", bound="dict")
 _RuleStateT = TypeVar("RuleStateT", bound="dict[str, Any]")
 _BotStateT = TypeVar("BotStateT", bound="dict[str, dict[str, Any]]")
 
-RuleCheckerT = Callable[["Bot", "Event[Any]", _RuleStateT], Union[bool, Awaitable[bool]]]
-PermissionCheckerT = Callable[["Bot", "Event[Any]", _BotStateT], Union[bool, Awaitable[bool]]]
+RuleCheckerT = Callable[["Bot", "Event[Any]", _RuleStateT], bool | Awaitable[bool]]
+PermissionCheckerT = Callable[["Bot", "Event[Any]", _BotStateT], bool | Awaitable[bool]]
 
 BotHook = Callable[["Bot"], Awaitable[None]]
 EventHook = Callable[["Event[Any]"], Awaitable[None]]
@@ -60,7 +60,7 @@ class NotGiven:
     For example:
 
     ```py
-    def get(timeout: Union[int, NotGiven, None] = NotGiven()) -> Response: ...
+    def get(timeout: int | NotGiven | None = NotGiven()) -> Response: ...
 
 
     get(timeout=1)  # 1s timeout
