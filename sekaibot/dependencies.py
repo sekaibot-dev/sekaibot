@@ -105,7 +105,7 @@ def get_dependency_name(dependency: Dependency[Any]) -> str:
 async def _execute_callable(
     dependent: Callable[..., Any], 
     stack: AsyncExitStack, 
-    dependency_cache: Dict[Dependency[Any], Any]
+    dependency_cache: dict[Dependency[Any], Any]
 ) -> Any:
     """执行可调用对象（函数或 __call__ 方法），并注入参数。"""
     func_params = inspect.signature(dependent).parameters
@@ -174,7 +174,7 @@ async def solve_dependencies(
 
     if isinstance(dependent, type):
         # type of dependent is Type[T] (Class, not instance)
-        values: Dict[str, Any] = {}
+        values: dict[str, Any] = {}
         ann = get_annotations(dependent)
         for name, sub_dependent in inspect.getmembers(
             dependent, lambda x: isinstance(x, InnerDepends)
@@ -255,7 +255,7 @@ async def solve_dependencies_in_bot(
     bot_state: _BotStateT | None = None,
     use_cache: bool = True,
     stack: AsyncExitStack | None = None,
-    dependency_cache: Dict[Dependency[Any], Any] | None = None,
+    dependency_cache: dict[Dependency[Any], Any] | None = None,
 ) -> _T:
     """解析子依赖。
     

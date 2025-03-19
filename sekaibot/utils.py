@@ -65,13 +65,13 @@ _R = TypeVar("_R")
 _TypeT = TypeVar("_TypeT", bound=Type[Any])
 
 StrOrBytesPath: TypeAlias = Union[str, bytes, "PathLike[str]", "PathLike[bytes]"]
-TreeType = Dict[_T, Union[Any, "TreeType"]]
+TreeType = dict[_T, Union[Any, "TreeType"]]
 
 
 class ModulePathFinder(MetaPathFinder):
     """用于查找 KafuBot 组件的元路径查找器。"""
 
-    path: ClassVar[List[str]] = []
+    path: ClassVar[list[str]] = []
 
     def find_spec(
         self,
@@ -102,7 +102,7 @@ def is_config_class(config_class: Any) -> TypeGuard[Type[ConfigModel]]:
         and not inspect.isabstract(config_class)
     )
 
-def remove_none_attributes(model: Type[BaseModel], exclude: Optional[Set[str]] = None):
+def remove_none_attributes(model: Type[BaseModel], exclude: Optional[set[str]] = None):
     """去除类中值为None的属性
 
     Args:
@@ -124,7 +124,7 @@ def remove_none_attributes(model: Type[BaseModel], exclude: Optional[Set[str]] =
     model.__dict__.update(cleaned_data)
     return model
 
-def get_classes_from_module(module: ModuleType, super_class: _TypeT) -> List[_TypeT]:
+def get_classes_from_module(module: ModuleType, super_class: _TypeT) -> list[_TypeT]:
     """从模块中查找指定类型的类。
 
     Args:
@@ -134,7 +134,7 @@ def get_classes_from_module(module: ModuleType, super_class: _TypeT) -> List[_Ty
     Returns:
         返回符合条件的类的列表。
     """
-    classes: List[_TypeT] = []
+    classes: list[_TypeT] = []
     for _, module_attr in inspect.getmembers(module, inspect.isclass):
         if (
             (inspect.getmodule(module_attr) or module) is module
@@ -149,7 +149,7 @@ def get_classes_from_module(module: ModuleType, super_class: _TypeT) -> List[_Ty
 
 def get_classes_from_module_name(
     name: str, super_class: _TypeT, *, reload: bool = False
-) -> List[Tuple[_TypeT, ModuleType]]:
+) -> list[tuple[_TypeT, ModuleType]]:
     """从指定名称的模块中查找指定类型的类。
 
     Args:
@@ -179,7 +179,7 @@ def get_classes_from_module_name(
 
 def flatten_tree_with_jumps(
     tree: TreeType[_T]
-) -> List[Tuple[_T, int]]:
+) -> list[tuple[_T, int]]:
     """将树按深度优先遍历展开，并计算剪枝后跳转索引。
 
     该函数遍历给定的树结构，并按深度优先遍历顺序生成节点列表。
@@ -195,9 +195,9 @@ def flatten_tree_with_jumps(
         一个列表，每个元素是一个元组 (节点, 剪枝后跳转索引)
         其中剪枝后跳转索引指向下一个可执行的节点，-1 表示无可跳转位置。
     """
-    ordered_nodes: List[_T] = []  # 存储深度优先遍历顺序
-    parent_map: Dict[_T, Union[_T, None]] = {}  # 记录每个节点的父节点
-    children_map: Dict[Union[_T, None], List[_T]] = {}  # 记录每个节点的所有子节点
+    ordered_nodes: list[_T] = []  # 存储深度优先遍历顺序
+    parent_map: dict[_T, Union[_T, None]] = {}  # 记录每个节点的父节点
+    children_map: dict[Union[_T, None], list[_T]] = {}  # 记录每个节点的所有子节点
 
     def dfs(node_dict: TreeType[_T], parent: Union[_T, None] = None) -> None:
         """深度优先遍历树，构建 parent_map 和 children_map"""
@@ -210,16 +210,16 @@ def flatten_tree_with_jumps(
 
     dfs(tree)
 
-    def build_jump_map() -> Dict[_T, int]:
+    def build_jump_map() -> dict[_T, int]:
         """构建剪枝跳转映射，计算每个节点剪枝后的跳转索引"""
-        jump_map: Dict[_T, int] = {node: -1 for node in ordered_nodes}  # 默认剪枝后都终止
+        jump_map: dict[_T, int] = {node: -1 for node in ordered_nodes}  # 默认剪枝后都终止
 
         for i in range(len(ordered_nodes) - 1, -1, -1):
             node: _T = ordered_nodes[i]
             parent: Union[_T, None] = parent_map.get(node)
 
             # 获取兄弟节点
-            siblings: List[_T] = children_map.get(parent, [])
+            siblings: list[_T] = children_map.get(parent, [])
             node_pos: int = siblings.index(node)
 
             # 如果有兄弟节点，跳到最近的兄弟
@@ -229,7 +229,7 @@ def flatten_tree_with_jumps(
                 # 回溯父节点的兄弟节点
                 temp_parent: Union[_T, None] = parent
                 while temp_parent is not None:
-                    parent_siblings: List[_T] = children_map.get(parent_map.get(temp_parent), [])
+                    parent_siblings: list[_T] = children_map.get(parent_map.get(temp_parent), [])
                     if temp_parent in parent_siblings:
                         temp_pos: int = parent_siblings.index(temp_parent)
                         if temp_pos + 1 < len(parent_siblings):  # 父节点有兄弟
@@ -239,7 +239,7 @@ def flatten_tree_with_jumps(
 
         return jump_map
 
-    jump_map: Dict[_T, int] = build_jump_map()
+    jump_map: dict[_T, int] = build_jump_map()
 
     # 构造最终列表
     return [(node, jump_map[node]) for node in ordered_nodes]
@@ -366,7 +366,7 @@ else:  # pragma: no cover
 
     def get_annotations(
         obj: Union[Callable[..., object], Type[Any], ModuleType],
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """计算一个对象的标注字典。
 
         Args:
@@ -379,7 +379,7 @@ else:  # pragma: no cover
         Returns:
             对象的标注字典。
         """
-        ann: Union[Dict[str, Any], None]
+        ann: Union[dict[str, Any], None]
 
         if isinstance(obj, type):
             # class

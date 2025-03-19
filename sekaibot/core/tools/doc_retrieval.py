@@ -67,14 +67,14 @@ class DocumentRetrievalTool(BaseTool):
             model=model_name,
         )
 
-    def _load_documents(self, file_paths: List[str]) -> List[Document]:
+    def _load_documents(self, file_paths: list[str]) -> list[Document]:
         """
         加载文档，支持文本和图片格式。
 
         :param file_paths: 文件路径列表
         :return: 分块后的 Document 列表
         """
-        documents: List[Document] = []
+        documents: list[Document] = []
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
 
         for file_path in file_paths:
@@ -92,7 +92,7 @@ class DocumentRetrievalTool(BaseTool):
 
         return documents
 
-    def add_documents(self, file_paths: List[str]) -> None:
+    def add_documents(self, file_paths: list[str]) -> None:
         """
         添加文档至向量数据库。
 

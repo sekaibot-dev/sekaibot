@@ -70,7 +70,7 @@ class Rule:
         rule_state: _RuleStateT,
         bot_state: _BotStateT,
         stack: AsyncExitStack | None = None,
-        dependency_cache: Optional[Dict[Dependency[Any], Any]] = None,
+        dependency_cache: Optional[dict[Dependency[Any], Any]] = None,
     ) -> bool:
         """检查是否符合所有规则
 
@@ -187,7 +187,7 @@ class RuleChecker(ABC, Generic[ArgsT, ParamT]):
         rule_state: _RuleStateT,
         bot_state: _BotStateT,
         stack: AsyncExitStack | None = None,
-        dependency_cache: Optional[Dict[Dependency[Any], Any]] = None,
+        dependency_cache: Optional[dict[Dependency[Any], Any]] = None,
     ) -> bool:
         """直接运行检查器并获取结果。"""
         return await self.__rule__(bot, event, rule_state, bot_state, stack, dependency_cache)

@@ -63,8 +63,8 @@ class ChatAgentExecutor:
 
     async def run_chat(
         self,
-        system: List[BaseMessage], 
-        history: List[BaseMessage], 
+        system: list[BaseMessage], 
+        history: list[BaseMessage], 
         input: str
     ) -> str:
         """优化 `AgentExecutor` 变量传递，确保历史记录正确传输"""
@@ -86,7 +86,7 @@ class ChatAgentExecutor:
         session_id: str,
         timestamp: int = None,
         message_id: str = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[dict[str, Any]] = None
     ) -> str:
         """执行完整对话流程"""
         metadata = metadata or {}

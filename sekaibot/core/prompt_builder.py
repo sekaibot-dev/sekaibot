@@ -18,7 +18,7 @@ class PromptBuilder:
     @cached_property
     def basic_settings(
         self,
-    ) -> List[BaseMessage]:
+    ) -> list[BaseMessage]:
         """
         构建系统消息，包含角色设定和用户资料等。
         返回一个包含 SystemMessage 的列表，供每次调用时放在对话最前面。
@@ -40,7 +40,7 @@ class PromptBuilder:
     
     def get_system_message(
         self, user_name: str
-    ) -> List[BaseMessage]:
+    ) -> list[BaseMessage]:
         """
         获取包含系统消息的列表
         """

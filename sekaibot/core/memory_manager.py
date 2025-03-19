@@ -48,7 +48,7 @@ class MemoryManager:
     async def add_messages(
         self,
         session_id: str,
-        messages: List[Dict[str, Any]]
+        messages: list[dict[str, Any]]
     ) -> None:
         history = self.get_history(session_id)
         msg_list = [
@@ -61,7 +61,7 @@ class MemoryManager:
 
     async def load_messages(
         self, session_id: str
-    ) -> List[BaseMessage]:
+    ) -> list[BaseMessage]:
         """
         加载指定 session_id 的完整消息列表。
         返回 langchain.schema.BaseMessage 列表。

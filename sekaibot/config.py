@@ -1,16 +1,13 @@
 # config.py
 import os
 from typing import (
-    List, 
-    Dict, 
     Literal, 
-    Set, 
     Union, 
     Any,
     Annotated
 )
 
-from pydantic import BaseModel, ConfigDict, DirectoryPath, Field, TypeAdapter
+from pydantic import BaseModel, ConfigDict, DirectoryPath, Field
 
 __all__ = [
     "ConfigModel",
@@ -49,8 +46,8 @@ class BotConfig(ConfigModel):
     """Bot 相关设置。"""
 
     event_queue_size: int = Field(default=0, ge=0)
-    nodes: Set[str] = Field(default_factory=set)
-    node_dirs: Set[DirectoryPath] = Field(default_factory=set)
+    nodes: set[str] = Field(default_factory=set)
+    node_dirs: set[DirectoryPath] = Field(default_factory=set)
     log: LogConfig | None = None
 
 
@@ -70,8 +67,8 @@ class ToolConfig(ConfigModel):
 
     Attributes:
     """
-    tools: Set[str] = Field(default_factory=set)
-    tool_dirs: Set[DirectoryPath] = Field(default_factory=set)
+    tools: set[str] = Field(default_factory=set)
+    tool_dirs: set[DirectoryPath] = Field(default_factory=set)
 
 class PromptConfig(ConfigModel):
     """角色信息配置。
@@ -87,7 +84,7 @@ class PromptConfig(ConfigModel):
         "你是一个善解人意、幽默风趣的AI助理，会根据用户的上下文对话内容进行自然回答。"
         "请注意对话场景的合理性，并结合用户和系统信息。"
     )
-    symbol_conversation: List[Dict[str, str | List[str | Dict]]] | None = [
+    symbol_conversation: list[dict[str, str | list[str | dict]]] | None = [
         {"input": "你好", "output": "你好，很高兴能帮助你"}
     ]
 
@@ -126,7 +123,7 @@ class RedisConfig(ConfigModel):
     Attributes:
         url: String parameter configuration for connecting to the redis.
         key_prefix: The prefix of the key, combined with `session id` to form the key.
-        ttl: Set the expiration time of `key`, the unit is seconds.
+        ttl: set the expiration time of `key`, the unit is seconds.
     """
     db_type: Literal["redis"]
     url: str = "redis://localhost:6379/0"
@@ -140,7 +137,7 @@ class MongoDBConfig(ConfigModel):
         connection_string: connection string to connect to MongoDB
         database_name: name of the database to use
         collection_name: name of the collection to use
-        create_index: whether to create an index with name SessionId. Set to False if
+        create_index: whether to create an index with name SessionId. set to False if
             such an index already exists.
     """
     db_type: Literal["mongodb"]

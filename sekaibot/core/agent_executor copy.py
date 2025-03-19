@@ -10,10 +10,10 @@ class ChatState(BaseModel):
     """
     维护对话状态，包括历史记录、当前输入、输出和其他元数据。
     """
-    history: List[BaseMessage] = Field(default_factory=list)
+    history: list[BaseMessage] = Field(default_factory=list)
     input: str = ""
     output: str = ""
-    metadata: Dict[str, Any] = Field(default_factory=dict)  # ✅ 允许存储 `user_id` 等额外信息
+    metadata: dict[str, Any] = Field(default_factory=dict)  # ✅ 允许存储 `user_id` 等额外信息
 
 class ChatAgentExecutor:
     """
@@ -75,8 +75,8 @@ class ChatAgentExecutor:
 
     async def run(
         self, 
-        messages: List[BaseMessage], 
-        metadata: Optional[Dict[str, Any]] = None
+        messages: list[BaseMessage], 
+        metadata: Optional[dict[str, Any]] = None
     ) -> ChatState:
         """
         执行 LangGraph 代理，返回完整对话状态（支持高并发）。
