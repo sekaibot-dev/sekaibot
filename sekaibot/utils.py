@@ -26,7 +26,7 @@ from typing import (
     Coroutine,
     Generator,
     Sequence,
-    Tuple,
+    Literal,
     Type,
     TypeVar,
     Union,
@@ -77,10 +77,17 @@ def flatten_exception_group(
         else:
             yield exc
 
-def handle_exception(msg: str, **kwargs) -> Callable[[BaseExceptionGroup], None]:
+def handle_exception(
+    msg: str, 
+    level: Literal["debug", "info", "warning", "error", "critical"] = "error", 
+    **kwargs
+) -> Callable[[BaseExceptionGroup], None]:
     def _handle(exc_group: BaseExceptionGroup[Exception]) -> None:
         for exc in flatten_exception_group(exc_group):
-            logger.error(msg, exc_info=exc, **kwargs)
+            if level in ("error", "critical"):
+                getattr(logger, level)(msg, exc_info=exc, **kwargs)
+            else:
+                getattr(logger, level)(msg, **kwargs)
 
     return _handle
 

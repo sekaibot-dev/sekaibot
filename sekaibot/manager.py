@@ -255,15 +255,15 @@ class NodeManager():
         node_class: type[Node],
         current_event: Event[Any],
         state: StateT,
-    ) -> PruningException | JumpToException | RejectException | None:
+    ) -> RejectException | PruningException | JumpToException | None:
         """运行节点并处理特殊异常。"""
-        exc: PruningException | JumpToException | RejectException | None = (
+        exc: RejectException | PruningException | JumpToException | None = (
             None
         )
 
         def _handle_special_exception(
             exc_group: BaseExceptionGroup[
-                PruningException | JumpToException | RejectException
+                RejectException | PruningException | JumpToException
             ],
         ):
             nonlocal exc
@@ -271,7 +271,11 @@ class NodeManager():
             if len(excs) > 1:
                 logger.warning(
                     "Multiple session control exceptions occurred. "
-                    "NoneBot will choose the proper one."
+                    "SekaiBot will choose the proper one."
+                )
+                reject = next(
+                    (e for e in excs if isinstance(e, RejectException)),
+                    None,
                 )
                 pruning_exc = next(
                     (e for e in excs if isinstance(e, PruningException)),
@@ -281,11 +285,7 @@ class NodeManager():
                     (e for e in excs if isinstance(e, JumpToException)),
                     None,
                 )
-                reject = next(
-                    (e for e in excs if isinstance(e, RejectException)),
-                    None,
-                )
-                exc = pruning_exc or jumpto_exc or reject
+                exc = reject or pruning_exc or jumpto_exc
             elif isinstance(
                 excs[0], (PruningException, JumpToException, RejectException)
             ):
@@ -334,6 +334,7 @@ class NodeManager():
             exc = await self._simple_run_node(node_class, current_event, state)
 
             if isinstance(exc, PruningException):
+                logger.debug("Pruning exception caught in node", node=node_class)
                 if pruning_node == -1:
                     break
                 next_index = pruning_node
@@ -345,13 +346,14 @@ class NodeManager():
                     logger.warning("The node to jump to does not exist", node_name=exc.node)
                     continue  # 继续下一个节点
                 elif jump_to_index > index:
+                    logger.debug("Jumping exception caught in node", node=nodes_list[jump_to_index])
                     next_index = jump_to_index
                 else:
                     logger.warning("The node to jump to is before the current node", node=nodes_list[jump_to_index])
 
             elif isinstance(exc, RejectException):
+                logger.debug("Rejecting exception caught in node", node=node_class)
                 await self._add_temporary_task(node_class, current_event, state, exc.max_try_times, exc.timeout)
-            #logger.exception("Exception in node", node=node_class, exc_info=exc)
 
             if node_class.block:
                 break
@@ -455,6 +457,7 @@ class NodeManager():
                     and await _func(self._current_event)
                 ):
                     self._current_event.__handled__ = True
+                    logger.debug("Event caught", event=self._current_event)
                     return self._current_event
 
                 try_times += 1

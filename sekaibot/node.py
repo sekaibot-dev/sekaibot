@@ -254,13 +254,13 @@ class Node(ABC, Generic[EventT, NodeStateT, ConfigT]):
 
     async def rule(self) -> bool:
         """匹配事件的方法。事件处理时，会按照节点的优先级依次调用此方法，当此方法返回 `True` 时将事件交由此节点处理。每个节点不一定要实现此方法。
-            注意：不建议直接在此方法内实现对事件的处理，事件的具体处理请交由 `handle()` 方法。
+            注意：不建议直接在此方法内实现对事件的处理，事件的具体处理请交由 node 方法。
         """
         return True
     
     async def fallback(self) -> None:
         """事件不通过时执行的善后方法。当 `rule()` 方法返回 `False` 时 SekaiBot 会调用此方法。每个节点不一定要实现此方法。
-            注意：此方法最好用于执行拒绝（`reject()`）等方法，不建议直接在此方法内实现对事件的处理，事件的具体处理请交由 `handle()` 方法。
+            注意：此方法最好用于执行拒绝（`reject()`）等方法，不建议直接在此方法内实现对事件的处理，事件的具体处理请交由 node 方法。
         """
     
     async def reply(self, message: BuildMessageType) -> NoReturn:
@@ -401,7 +401,7 @@ class Node(ABC, Generic[EventT, NodeStateT, ConfigT]):
         """执行 rule() 方法并返回结果"""
 
         with catch({
-            Exception: handle_exception(f"error occurred in `rule()`", node=self.__class__)
+            Exception: handle_exception(f"Error occurred in `rule()`", node=self.__class__)
         }):
             def _handle_special_exception(
                 exc_group: BaseExceptionGroup[
@@ -414,7 +414,7 @@ class Node(ABC, Generic[EventT, NodeStateT, ConfigT]):
                 }
                 for exc in flatten_exception_group(exc_group):
                     if exc in mapping_dict:
-                        logger.warning(f"you should not use `{mapping_dict[exc]}` in `rule()`, please instead use in `handle()`", node=self.__class__)
+                        logger.warning(f"You should not use `{mapping_dict[exc]}` in `rule()`, please instead use in node", node=self.__class__)
             with catch({
                 (
                     StopException,
@@ -437,19 +437,18 @@ class Node(ABC, Generic[EventT, NodeStateT, ConfigT]):
                 if isinstance(exc, (JumpToException, PruningException, RejectException)):
                     new_exc_group.update(exc)
                 else:
-                    logger.aerror(f"error occurred in `handle()`", node=self.__class__, exc_info=exc)
+                    logger.error(f"Error occurred in node", node=self.__class__, exc_info=exc)
             if new_exc_group:
-                raise ExceptionGroup("errors in `handle()`", list(new_exc_group))
+                raise ExceptionGroup("Errors in node", list(new_exc_group))
         with catch({
             Exception: _handle_handle_exception
         }):
             def _handle_stop_exception(exc_group: BaseExceptionGroup[StopException]):
+                logger.debug("Stopping exception caught in node", node=self.__class__)
                 self.block = True
             with catch({
-                (
-                    SkipException,
-                    FinishException
-                ): lambda exc_group: None,
+                SkipException: handle_exception("Skip exception caught in node", level="debug", node=self.__class__),
+                FinishException: handle_exception("Finish exception caught in node", level="debug", node=self.__class__),
                 StopException: _handle_stop_exception
             }):
                 await self.handle()
@@ -462,20 +461,19 @@ class Node(ABC, Generic[EventT, NodeStateT, ConfigT]):
                 if isinstance(exc, (JumpToException, RejectException)):
                     new_exc_group.update(exc)
                 else:
-                    logger.aerror(f"error occurred in `fallback()`", node=self.__class__, exc_info=exc)
+                    logger.error(f"Error occurred in `fallback()`", node=self.__class__, exc_info=exc)
             if new_exc_group:
-                raise ExceptionGroup("errors in `fallback()`", list(new_exc_group))
+                raise ExceptionGroup("Errors in `fallback()`", list(new_exc_group))
         with catch({
             Exception: _handle_fallback_exception
         }):
             def _handle_stop_exception(exc_group: BaseExceptionGroup[StopException]):
+                logger.debug("Stopping exception caught in node", node=self.__class__)
                 self.block = True
             with catch({
-                (
-                    SkipException,
-                    PruningException,
-                    FinishException
-                ): lambda exc_group: None,
+                SkipException: handle_exception("Skip exception caught in node", level="debug", node=self.__class__),
+                FinishException: handle_exception("Finish exception caught in node", level="debug", node=self.__class__),
+                PruningException: handle_exception("Pruning exception caught in node", level="debug", node=self.__class__),
                 StopException: _handle_stop_exception
             }):
                 await self.fallback()
