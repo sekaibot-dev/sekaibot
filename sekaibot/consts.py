@@ -7,6 +7,11 @@ from typing import (
 
 MAX_TIMEOUT: Literal[600] = 600
 
+NODE_GLOBAL_KEY: Literal["_node_global"] = "_node_global"
+BOT_GLOBAL_KEY: Literal["_bot_global"] = "_bot_global"
+
+RULE_KEY: Literal["_rule_key"] = "rule_key"
+
 # used by Matcher
 RECEIVE_KEY: Literal["_receive_{id}"] = "_receive_{id}"
 """`receive` 存储 key"""
@@ -37,7 +42,7 @@ KEYWORD_KEY: Literal["_keyword"] = "_keyword"
 COUNTER_INFO: Literal["_counter"] = "_counter"
 """计数器触发信息 info"""
 COUNTER_STATE: Literal["_counter_state"] = "_counter_state"
-"""用于在bot_state持久化储存计数器状态 state"""
+"""用于在global_state持久化储存计数器状态 state"""
 
 PREFIX_KEY: Literal["_prefix"] = "_prefix"
 """命令前缀存储 key"""

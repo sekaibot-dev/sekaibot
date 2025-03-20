@@ -23,7 +23,7 @@ from sekaibot.exceptions import (
 )
 from sekaibot.consts import MAX_TIMEOUT
 from sekaibot.log import logger
-from sekaibot.typing import EventT, StateT, _RuleStateT
+from sekaibot.typing import EventT, NodeStateT, StateT
 from sekaibot.node import Node
 from sekaibot.utils import wrap_get_func, cancel_on_exit
 from sekaibot.dependencies import solve_dependencies_in_bot, Dependency
@@ -37,7 +37,6 @@ class NodeManager():
 
     node_state: dict[str, Any]
     global_state: dict[str, Any]
-    _bot_state: dict[str, dict[str, Any]]
 
     _condition: anyio.Condition
     _cancel_event: anyio.Event
@@ -50,7 +49,6 @@ class NodeManager():
         self.bot = bot
         self.node_state = defaultdict(lambda: None)
         self.global_state = defaultdict(lambda: None)
-        self._bot_state = defaultdict(lambda: defaultdict(lambda: None))
 
     async def startup(self) -> None:
         self._condition = anyio.Condition()
@@ -120,7 +118,7 @@ class NodeManager():
         self,
         node_class: type[Node],
         current_event: Event[Any],
-        rule_state: _RuleStateT,
+        state: StateT,
         max_try_times: int | None = None,
         timeout: int | float = MAX_TIMEOUT,
     ):
@@ -132,17 +130,29 @@ class NodeManager():
             timeout: 超时时间。
         """
 
-        async def temporary_task():
+        async def temporary_task(func: Callable[[Event], bool | Awaitable[bool]] | None = None):
+            event_copy: Event[Any] | None = None
+            async def check(event: Event[Any]) -> bool:
+                if event.get_session_id() != current_event.get_session_id(): return False
+                return await wrap_get_func(func)(event)
             try:
                 event = await self.get(
-                    lambda e: e.get_session_id() == current_event.get_session_id(),
+                    check,
                     event_type=type(current_event),
                     max_try_times=max_try_times,
                     timeout=timeout,
                 )
-                await self._check_and_run(node_class, event, rule_state)
+                event_copy = event.model_copy()
+                await self._check_and_run(node_class, event, state)
             except GetEventTimeout:
                 return
+            except RejectException as reject:
+                if event_copy:
+                    # 将事件重新放回时间传播
+                    event_copy.__handled__ = False
+                    await self._add_temporary_task(node_class, current_event, state, reject.max_try_times, reject.timeout)
+                    await self.handle_event(event_copy, show_log=False)
+
             except Exception:
                 logger.exception("Exception in node", node=node_class)
 
@@ -153,7 +163,7 @@ class NodeManager():
         self,
         node_class: type[Node],
         current_event: Event[Any],
-        rule_state: _RuleStateT,
+        node_state: StateT,
         stack: AsyncExitStack | None = None,
         dependency_cache: Dependency | None = None,
     ) -> bool:
@@ -174,7 +184,7 @@ class NodeManager():
         """
 
         try:
-            if not await node_class.check_perm(self.bot, current_event, self._bot_state, stack, dependency_cache):
+            if not await node_class.check_perm(self.bot, current_event, self.global_state, stack, dependency_cache):
                 logger.info(f"permission conditions not met", node=node_class.__name__)
                 return False
         except Exception as e:
@@ -184,7 +194,7 @@ class NodeManager():
             return False
 
         try:
-            if not await node_class.check_rule(self.bot, current_event, rule_state, stack, dependency_cache):
+            if not await node_class.check_rule(self.bot, current_event, node_state, stack, dependency_cache):
                 logger.info(f"rule conditions not met", node=node_class.__name__)
                 return False
         except Exception as e:
@@ -199,7 +209,7 @@ class NodeManager():
         self,
         node_class: type[Node],
         current_event: Event[Any],
-        rule_state: _RuleStateT,
+        state: StateT,
         stack: AsyncExitStack | None = None,
         dependency_cache: Dependency | None = None,
     ):
@@ -207,39 +217,39 @@ class NodeManager():
             node_class,
             bot=self.bot, 
             event=current_event,
-            state=self.node_state[node_class.__name__], 
+            state=state, 
             global_state=self.global_state,
-            rule_state=rule_state, 
-            bot_state=self._bot_state,
+            node_state=self.node_state[node_class.__name__], 
             use_cache=True,
             stack=stack,
             dependency_cache=dependency_cache,
         )
 
         if _node.name not in self.node_state:
-            node_state = _node.__init_state__()
-            if node_state is not None:
-                self.node_state[_node.name] = node_state
-        if await _node.rule():
-            logger.info("Event will be handled by node", node=_node)
-            try:
-                await _node.handle()
-            except Exception as e:
-                if not isinstance(e, RejectException) and _node.block:
-                    raise StopException
-                raise e
+            state = _node.__init_state__()
+            if state is not None:
+                self.node_state[_node.name] = state
+        if not await _node.rule():
+            raise PruningException
+        logger.info("Event will be handled by node", node=_node)
+        try:
+            await _node.handle()
+        except Exception as e:
+            if not isinstance(e, RejectException) and _node.block:
+                raise StopException
+            raise e
                 
     async def _check_and_run(
         self,
         node_class: type[Node],
         current_event: Event[Any],
-        rule_state: _RuleStateT,
+        state: StateT,
     ):
         async with AsyncExitStack() as stack:
-            if not await self._check_node(node_class, current_event, rule_state, stack=stack):
+            if not await self._check_node(node_class, current_event, state, stack=stack):
                 raise PruningException
 
-            await self._run_node(node_class, current_event, rule_state, stack=stack)
+            await self._run_node(node_class, current_event, state, stack=stack)
         
     async def _handle_event(self, current_event: Event[Any]) -> None:
         """处理事件并匹配相应的节点（插件）。
@@ -262,22 +272,21 @@ class NodeManager():
 
         while index < len(nodes_list):
             node_class, pruning_node = nodes_list[index]
-            rule_state = defaultdict(lambda: None)
+            state = defaultdict(lambda: None)
 
             logger.debug("Checking for matching nodes", priority=node_class)
 
             next_index = index + 1 
 
             try:
-                await self._check_and_run(node_class, current_event, rule_state)
+                await self._check_and_run(node_class, current_event, state)
 
             except SkipException:
                 pass
             except StopException:
                 break
             except PruningException:
-                if pruning_node == -1:
-                    break
+                if pruning_node == -1: break
                 next_index = pruning_node
             except JumpToException as jump_to_node:
                 jump_to_index = jump_to_index_map.get(jump_to_node.node)
@@ -289,17 +298,15 @@ class NodeManager():
                 else:
                     logger.warning("The node to jump to is before the current node", node=nodes_list[jump_to_index])
             except RejectException as reject:
-                await self._add_temporary_task(node_class, current_event, rule_state, reject.max_try_times, reject.timeout)
-                if node_class.block:
-                    break
+                await self._add_temporary_task(node_class, current_event, state, reject.max_try_times, reject.timeout)
 
             except Exception:
                 logger.exception("Exception in node", node=node_class)
 
-            if next_index is not None:
-                index = next_index
-            else:
+            if node_class.block:
                 break
+
+            index = next_index
 
         for hook_func in self.bot._event_postprocessor_hooks:
             await hook_func(current_event)

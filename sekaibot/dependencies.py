@@ -24,7 +24,7 @@ from typing import (
 
 from sekaibot.utils import get_annotations, sync_ctx_manager_wrapper
 from sekaibot.internal.event import Event
-from sekaibot.typing import StateT, GlobalStateT, _RuleStateT, _BotStateT
+from sekaibot.typing import NodeStateT, GlobalStateT, StateT
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
 
@@ -248,10 +248,9 @@ async def solve_dependencies_in_bot(
     *,
     bot: "Bot",
     event: Event,
-    state: StateT | None = None,
+    state: NodeStateT | None = None,
     global_state: GlobalStateT | None = None,
-    rule_state: _RuleStateT | None = None,
-    bot_state: _BotStateT | None = None,
+    node_state: StateT | None = None,
     use_cache: bool = True,
     stack: AsyncExitStack | None = None,
     dependency_cache: dict[Dependency[Any], Any] | None = None,
@@ -266,8 +265,7 @@ async def solve_dependencies_in_bot(
         event: 事件对象，必须提供。
         state: 为节点提供的状态信息，默认为 `None`。
         global_state: 为节点提供的全局状态，可选，默认为 `None`。
-        rule_state: 为规则解析器提供状态，可选，默认为 `None`。
-        bot_state: 权限管理器状态，可选，默认为 `None`。
+        node_state: 为规则解析器提供状态，可选，默认为 `None`。
         use_cache: 是否使用缓存，默认为 `True`。
         stack: 异步上下文管理器，可选。
         dependency_cache: 依赖缓存，如果未提供，则自动创建新字典。
@@ -286,18 +284,15 @@ async def solve_dependencies_in_bot(
         "event": event,
     })
     if state is not None: dependency_cache.update({
-        StateT: state,
+        NodeStateT: state,
         "state": state,
     })
     if global_state is not None: dependency_cache.update({
         GlobalStateT: global_state,
         "global_state": global_state,
     })
-    if rule_state is not None: dependency_cache.update({
-        _RuleStateT: rule_state,
-    })
-    if bot_state is not None: dependency_cache.update({
-        _BotStateT: bot_state,
+    if node_state is not None: dependency_cache.update({
+        StateT: node_state,
     })
     return await solve_dependencies(
         dependent, use_cache=use_cache, stack=stack, dependency_cache=dependency_cache

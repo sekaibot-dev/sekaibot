@@ -27,7 +27,7 @@ from sekaibot.dependencies import Depends, Dependency, solve_dependencies_in_bot
 from sekaibot.internal.event import Event
 from sekaibot.internal.message import BuildMessageType
 from sekaibot.exceptions import SkipException, JumpToException, PruningException, StopException, RejectException
-from sekaibot.typing import ConfigT, EventT, StateT, _BotStateT, _RuleStateT
+from sekaibot.typing import ConfigT, EventT, NodeStateT, GlobalStateT , StateT
 from sekaibot.utils import is_config_class
 from sekaibot.rule import Rule
 from sekaibot.permission import Permission
@@ -47,7 +47,7 @@ class NodeLoadType(Enum):
     CLASS = "class"
 
 
-class Node(ABC, Generic[EventT, StateT, ConfigT]):
+class Node(ABC, Generic[EventT, NodeStateT, ConfigT]):
     """所有 SekaiBot 节点的基类。
 
     Attributes:
@@ -76,21 +76,22 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
 
     if TYPE_CHECKING:
         event: EventT
+        state: StateT
         bot: "Bot"
     else:
         event = Depends(Event)
         bot = Depends("Bot")
-        _rule_state = Depends(_RuleStateT)
+        state = Depends(StateT)
 
 
-    def __init_state__(self) -> StateT | None:
+    def __init_state__(self) -> NodeStateT | None:
         """初始化节点状态。"""
 
     def __init_subclass__(
         cls,
         event_type: type[EventT] | None = None,
         config: type[ConfigT] | None = None,
-        init_state: StateT | None = None,
+        init_state: NodeStateT | None = None,
         **_kwargs: Any,
     ) -> None:
         """初始化子类。
@@ -108,7 +109,7 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
             if inspect.isclass(origin_class) and issubclass(origin_class, Node):
                 try:
                     event_t, state_t, config_t = cast(
-                        tuple[EventT, StateT, ConfigT], get_args(orig_base)
+                        tuple[EventT, NodeStateT, ConfigT], get_args(orig_base)
                     )
                 except ValueError:  # pragma: no cover
                     continue
@@ -180,13 +181,13 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
         return default
 
     @property
-    def state(self) -> StateT:
+    def node_state(self) -> NodeStateT:
         """节点状态。"""
         return self.bot.manager.node_state[self.name]
 
-    @state.setter
+    @node_state.setter
     @final
-    def state(self, value: StateT) -> None:
+    def node_state(self, value: NodeStateT) -> None:
         self.bot.manager.node_state[self.name] = value
 
     @property
@@ -205,7 +206,7 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
         cls,
         bot: Bot,
         event: Event,
-        bot_state: _BotStateT,
+        global_state: GlobalStateT,
         stack: AsyncExitStack | None = None,
         dependency_cache: Dependency | None = None,
     ) -> bool:
@@ -216,7 +217,7 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
             isinstance(cls.EventType, str) and event.type == (cls.EventType or event.type)
             or isinstance(event, cls.EventType)
         ) and await cls.__node_perm__(
-            bot=bot, event=event, bot_state=bot_state,
+            bot=bot, event=event, global_state=global_state,
             stack=stack,
             dependency_cache=dependency_cache,
         )
@@ -227,7 +228,7 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
         cls,
         bot: Bot,
         event: Event,
-        rule_state: _RuleStateT,
+        state: StateT,
         stack: AsyncExitStack | None = None,
         dependency_cache: Dependency | None = None,
     ) -> bool:
@@ -238,7 +239,7 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
             isinstance(cls.EventType, str) and event.type == (cls.EventType or event.type)
             or isinstance(event, cls.EventType)
         ) and await cls.__node_rule__(
-            bot=bot, event=event, rule_state=rule_state,
+            bot=bot, event=event, state=state,
             stack=stack,
             dependency_cache=dependency_cache,
         )
@@ -253,6 +254,11 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
             注意：不建议直接在此方法内实现对事件的处理，事件的具体处理请交由 `handle()` 方法。
         """
         return True
+    
+    async def fallback(self) -> None:
+        """事件不通过时执行的善后方法。当 `rule()` 方法返回 `False` 时 SekaiBot 会调用此方法。每个节点不一定要实现此方法。
+            注意：此方法最好用于执行拒绝（`reject()`）等方法，不建议直接在此方法内实现对事件的处理，事件的具体处理请交由 `handle()` 方法。
+        """
     
     async def reply(self, message: BuildMessageType) -> NoReturn:
         """回复消息。"""
@@ -357,10 +363,10 @@ class Node(ABC, Generic[EventT, StateT, ConfigT]):
                 dependent,
                 bot=self.bot, 
                 event=self.event,
-                state=self.bot.manager.node_state, 
+                state=self.state, 
                 global_state=self.bot.manager.global_state,
-                rule_state=self._rule_state, 
-                bot_state=self.bot.manager._bot_state,
+                node_state=self.node_state, 
+                global_state=self.bot.manager.global_state,
                 stack=stack
             )
         return result

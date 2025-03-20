@@ -21,7 +21,7 @@ from sekaibot.dependencies import Dependency, solve_dependencies_in_bot
 from sekaibot.exceptions import SkipException
 from sekaibot.internal.event import Event
 from itertools import chain
-from sekaibot.typing import PermissionCheckerT, _BotStateT
+from sekaibot.typing import PermissionCheckerT, GlobalStateT
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
@@ -59,7 +59,7 @@ class Permission:
         self,
         bot: "Bot",
         event: Event,
-        bot_state: _BotStateT,
+        global_state: GlobalStateT,
         stack: AsyncExitStack | None = None,
         dependency_cache: dict[Dependency[Any], Any] | None = None,
     ) -> bool:
@@ -88,6 +88,7 @@ class Permission:
                 checker,
                 bot=bot,
                 event=event,
+                global_state=global_state,
                 use_cache=False,
                 stack=stack,
                 dependency_cache=dependency_cache,

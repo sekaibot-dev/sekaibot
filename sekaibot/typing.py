@@ -25,10 +25,10 @@ if TYPE_CHECKING:
 __all__ = [
     "TreeType",
     "EventT",
-    "StateT",
+    "NodeStateT",
     "ConfigT",
-    "_RuleStateT",
-    "_BotStateT",
+    "StateT",
+    "",
     "RuleCheckerT",
     "PermissionCheckerT",
     "BotHook",
@@ -39,13 +39,12 @@ EventT = TypeVar("EventT", bound="Event")
 ConfigT = TypeVar("ConfigT", bound="ConfigModel | None")
 AdapterT = TypeVar("AdapterT")
 NodeT = TypeVar("NodeT", bound="Node")
-StateT = TypeVar("StateT")
-GlobalStateT = TypeVar("GlobalStateT", bound="dict")
-_RuleStateT = TypeVar("RuleStateT", bound="dict[str, Any]")
-_BotStateT = TypeVar("BotStateT", bound="dict[str, dict[str, Any]]")
+StateT = TypeVar("NodeStateT", bound="dict[str, dict[str, Any]]")
+NodeStateT = TypeVar("StateT")
+GlobalStateT = TypeVar("GlobalStateT", bound="dict[str, dict[str, Any]]")
 
-RuleCheckerT = Callable[["Bot", "Event[Any]", _RuleStateT], bool | Awaitable[bool]]
-PermissionCheckerT = Callable[["Bot", "Event[Any]", _BotStateT], bool | Awaitable[bool]]
+RuleCheckerT = Callable[..., bool | Awaitable[bool]]
+PermissionCheckerT = Callable[..., bool | Awaitable[bool]]
 
 BotHook = Callable[["Bot"], Awaitable[None]]
 EventHook = Callable[["Event[Any]"], Awaitable[None]]

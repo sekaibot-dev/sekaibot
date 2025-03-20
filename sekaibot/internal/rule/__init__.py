@@ -21,7 +21,7 @@ from sekaibot.dependencies import Dependency, Depends, solve_dependencies_in_bot
 from sekaibot.exceptions import SkipException
 from sekaibot.internal.event import Event
 from itertools import chain
-from sekaibot.typing import RuleCheckerT, _RuleStateT, _BotStateT, NodeT
+from sekaibot.typing import RuleCheckerT, StateT, GlobalStateT, NodeT
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
@@ -65,8 +65,8 @@ class Rule:
         self,
         bot: "Bot",
         event: Event,
-        rule_state: _RuleStateT,
-        bot_state: _BotStateT,
+        node_state: StateT,
+        global_state: GlobalStateT ,
         stack: AsyncExitStack | None = None,
         dependency_cache: dict[Dependency[Any], Any] | None = None,
     ) -> bool:
@@ -75,8 +75,8 @@ class Rule:
         Args:
             bot: Bot 对象
             event: Event 对象
-            rule_state: 当前 State
-            bot_state: 当前机器人公用 State
+            node_state: 当前 State
+            global_state: 当前机器人公用 State
             stack: 异步上下文栈
             dependency_cache: 依赖缓存
         """
@@ -97,9 +97,9 @@ class Rule:
                 checker,
                 bot=bot,
                 event=event,
-                state=rule_state,
-                rule_state=rule_state,
-                bot_state=bot_state,
+                state=node_state,
+                node_state=node_state,
+                global_state=global_state,
                 use_cache=False,
                 stack=stack,
                 dependency_cache=dependency_cache,
@@ -182,13 +182,13 @@ class RuleChecker(ABC, Generic[ArgsT, ParamT]):
         self,
         bot: "Bot",
         event: Event,
-        rule_state: _RuleStateT,
-        bot_state: _BotStateT,
+        node_state: StateT,
+        global_state: GlobalStateT ,
         stack: AsyncExitStack | None = None,
         dependency_cache: dict[Dependency[Any], Any] | None = None,
     ) -> bool:
         """直接运行检查器并获取结果。"""
-        return await self.__rule__(bot, event, rule_state, bot_state, stack, dependency_cache)
+        return await self.__rule__(bot, event, node_state, global_state, stack, dependency_cache)
 
     @classmethod
     @abstractmethod

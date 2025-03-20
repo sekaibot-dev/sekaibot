@@ -41,6 +41,8 @@ from pygtrie import CharTrie
 from sekaibot.internal.event import Event
 from sekaibot.internal.message import Message, MessageSegment, MessageT, MessageSegmentT
 from sekaibot.consts import (
+    RULE_KEY,
+    BOT_GLOBAL_KEY,
     STARTSWITH_KEY,
     ENDSWITH_KEY,
     FULLMATCH_KEY,
@@ -60,7 +62,7 @@ from sekaibot.consts import (
 )
 
 from sekaibot.log import logger
-from sekaibot.typing import NOT_GIVEN, EventT, _RuleStateT, _BotStateT
+from sekaibot.typing import StateT, GlobalStateT 
 from sekaibot.dependencies import Dependency, solve_dependencies_in_bot
 
 if TYPE_CHECKING:
@@ -114,7 +116,7 @@ class StartswithRule:
     def __hash__(self) -> int:
         return hash((frozenset(self.msgs), self.ignorecase))
 
-    async def __call__(self, event: Event, rule_state: _RuleStateT) -> bool:
+    async def __call__(self, event: Event, node_state: StateT) -> bool:
         try:
             message = event.get_message()
         except Exception:
@@ -123,7 +125,7 @@ class StartswithRule:
             self.msgs,
             ignorecase=self.ignorecase
         ):
-            rule_state[STARTSWITH_KEY] = match
+            node_state[RULE_KEY][STARTSWITH_KEY] = match
             return True
         return False
 
@@ -157,7 +159,7 @@ class EndswithRule:
     def __hash__(self) -> int:
         return hash((frozenset(self.msgs), self.ignorecase))
 
-    async def __call__(self, event: Event, rule_state: _RuleStateT) -> bool:
+    async def __call__(self, event: Event, node_state: StateT) -> bool:
         try:
             message = event.get_message()
         except Exception:
@@ -166,7 +168,7 @@ class EndswithRule:
             self.msgs, 
             ignorecase=self.ignorecase
         ):
-            rule_state[ENDSWITH_KEY] = match
+            node_state[RULE_KEY][ENDSWITH_KEY] = match
             return True
         return False
 
@@ -198,7 +200,7 @@ class FullmatchRule:
     def __hash__(self) -> int:
         return hash((frozenset(self.msgs), self.ignorecase))
 
-    async def __call__(self, event: Event, rule_state: _RuleStateT) -> bool:
+    async def __call__(self, event: Event, node_state: StateT) -> bool:
         try:
             text = event.get_plain_text()
         except Exception:
@@ -207,7 +209,7 @@ class FullmatchRule:
             return False
         text = text.casefold() if self.ignorecase else text
         if text in self.msgs:
-            rule_state[FULLMATCH_KEY] = text
+            node_state[RULE_KEY][FULLMATCH_KEY] = text
             return True
         return False
 
@@ -237,7 +239,7 @@ class KeywordsRule:
     def __hash__(self) -> int:
         return hash(frozenset(self.keywords))
 
-    async def __call__(self, event: Event, rule_state: _RuleStateT) -> bool:
+    async def __call__(self, event: Event, node_state: StateT) -> bool:
         try:
             text = event.get_plain_text()
         except Exception:
@@ -246,7 +248,7 @@ class KeywordsRule:
             return False
         text = text.casefold() if self.ignorecase else text
         if keys := tuple(k for k in self.keywords if k in text):
-            rule_state[KEYWORD_KEY] = keys
+            node_state[RULE_KEY][KEYWORD_KEY] = keys
             return True
         return False
 
@@ -278,13 +280,13 @@ class RegexRule:
     def __hash__(self) -> int:
         return hash((self.regex, self.flags))
 
-    async def __call__(self, event: Event, rule_state: _RuleStateT) -> bool:
+    async def __call__(self, event: Event, node_state: StateT) -> bool:
         try:
             msg = event.get_message()
         except Exception:
             return False
         if matched := re.search(self.regex, str(msg), self.flags):
-            rule_state[REGEX_MATCHED] = matched
+            node_state[RULE_KEY][REGEX_MATCHED] = matched
             return True
         else:
             return False
@@ -350,18 +352,23 @@ class CountTriggerRule:
         self, 
         bot: "Bot",
         event: Event, 
-        rule_state: _RuleStateT,
-        bot_state: _BotStateT
+        node_state: StateT,
+        global_state: GlobalStateT 
     ) -> bool:
-
-        counter: Counter = bot_state[COUNTER_STATE].setdefault(self.name, Counter(self.max_size))
+        
+        if isinstance(global_state[BOT_GLOBAL_KEY][COUNTER_STATE], dict):
+            counter: Counter = global_state[BOT_GLOBAL_KEY][COUNTER_STATE].setdefault(self.name, Counter(self.max_size))
+        else:
+            counter = Counter(self.max_size)
+            global_state[BOT_GLOBAL_KEY][COUNTER_STATE] = {self.name: counter}
+            
         if self.func:
             counter.append(await solve_dependencies_in_bot(
                 self.func,
                 bot=bot,
                 event=event,
-                rule_state=rule_state,
-                bot_state=bot_state,
+                node_state=node_state,
+                global_state=global_state,
             ))
         else:
             counter.append(True)
@@ -373,7 +380,7 @@ class CountTriggerRule:
             trigger_state[f"count_trigger_{self.count_window}"] = count_trigger
 
         if trigger_state:
-            rule_state[COUNTER_INFO] = trigger_state
+            node_state[RULE_KEY][COUNTER_INFO] = trigger_state
             return True
 
         return False
@@ -390,7 +397,7 @@ class TrieRule:
         cls.prefix[prefix] = value
 
     @classmethod
-    def get_value(cls, bot: "Bot", event: Event, rule_state: _RuleStateT) -> CMD_RESULT:
+    def get_value(cls, bot: "Bot", event: Event, node_state: StateT) -> CMD_RESULT:
         prefix = CMD_RESULT(
             command=None,
             raw_command=None,
@@ -398,7 +405,7 @@ class TrieRule:
             command_start=None,
             command_whitespace=None,
         )
-        rule_state[PREFIX_KEY] = prefix
+        node_state[RULE_KEY][PREFIX_KEY] = prefix
         if event.type != "message":
             return prefix
 
@@ -644,7 +651,7 @@ class ShellCommandRule:
 
     async def __call__(
         self,
-        rule_state: _RuleStateT,
+        node_state: _NodeStateT,
         cmd: tuple[str, ...] | None = Command(),
         msg: Message | None = CommandArg(),
     ) -> bool:
@@ -652,7 +659,7 @@ class ShellCommandRule:
             return False
 
         try:
-            rule_state[SHELL_ARGV] = list(
+            node_state[RULE_KEY][SHELL_ARGV] = list(
                 chain.from_iterable(
                     shlex.split(str(seg))
                     if cast(MessageSegment, seg).is_text()
@@ -662,21 +669,21 @@ class ShellCommandRule:
             )
         except Exception as e:
             # set SHELL_ARGV to none indicating shlex error
-            rule_state[SHELL_ARGV] = None
+            node_state[RULE_KEY][SHELL_ARGV] = None
             # ensure SHELL_ARGS is set to ParserExit if parser is provided
             if self.parser:
-                rule_state[SHELL_ARGS] = ParserExit(status=2, message=str(e))
+                node_state[RULE_KEY][SHELL_ARGS] = ParserExit(status=2, message=str(e))
             return True
 
         if self.parser:
             t = parser_message.set("")
             try:
-                args = self.parser.parse_args(rule_state[SHELL_ARGV])
-                rule_state[SHELL_ARGS] = args
+                args = self.parser.parse_args(node_state[RULE_KEY][SHELL_ARGV])
+                node_state[RULE_KEY][SHELL_ARGS] = args
             except ArgumentError as e:
-                rule_state[SHELL_ARGS] = ParserExit(status=2, message=str(e))
+                node_state[RULE_KEY][SHELL_ARGS] = ParserExit(status=2, message=str(e))
             except ParserExit as e:
-                rule_state[SHELL_ARGS] = e
+                node_state[RULE_KEY][SHELL_ARGS] = e
             finally:
                 parser_message.reset(t)
         return True
