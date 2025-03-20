@@ -65,7 +65,7 @@ class Rule:
         self,
         bot: "Bot",
         event: Event,
-        node_state: StateT,
+        state: StateT,
         global_state: GlobalStateT ,
         stack: AsyncExitStack | None = None,
         dependency_cache: dict[Dependency[Any], Any] | None = None,
@@ -75,7 +75,7 @@ class Rule:
         Args:
             bot: Bot 对象
             event: Event 对象
-            node_state: 当前 State
+            state: 当前 State
             global_state: 当前机器人公用 State
             stack: 异步上下文栈
             dependency_cache: 依赖缓存
@@ -97,8 +97,7 @@ class Rule:
                 checker,
                 bot=bot,
                 event=event,
-                state=node_state,
-                node_state=node_state,
+                state=state,
                 global_state=global_state,
                 use_cache=False,
                 stack=stack,
@@ -182,13 +181,13 @@ class RuleChecker(ABC, Generic[ArgsT, ParamT]):
         self,
         bot: "Bot",
         event: Event,
-        node_state: StateT,
+        state: StateT,
         global_state: GlobalStateT ,
         stack: AsyncExitStack | None = None,
         dependency_cache: dict[Dependency[Any], Any] | None = None,
     ) -> bool:
         """直接运行检查器并获取结果。"""
-        return await self.__rule__(bot, event, node_state, global_state, stack, dependency_cache)
+        return await self.__rule__(bot, event, state, global_state, stack, dependency_cache)
 
     @classmethod
     @abstractmethod

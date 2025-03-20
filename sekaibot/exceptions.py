@@ -40,6 +40,9 @@ class PruningException(EventException):
 class StopException(EventException):
     """停止当前事件传播。"""
 
+class FinishException(EventException):
+    """结束本节点人物并继续事件传播。"""
+
 
 class RejectException(EventException):
     """拒绝执行当前节点，并重新获取事件再次进入节点。"""

@@ -1,6 +1,7 @@
 import asyncio
 import time
 from contextlib import AsyncExitStack
+from exceptiongroup import BaseExceptionGroup, catch
 from collections import defaultdict
 import anyio
 from anyio.abc import TaskStatus
@@ -25,7 +26,7 @@ from sekaibot.consts import MAX_TIMEOUT
 from sekaibot.log import logger
 from sekaibot.typing import EventT, NodeStateT, StateT
 from sekaibot.node import Node
-from sekaibot.utils import wrap_get_func, cancel_on_exit
+from sekaibot.utils import wrap_get_func, cancel_on_exit, flatten_exception_group, handle_exception
 from sekaibot.dependencies import solve_dependencies_in_bot, Dependency
 from sekaibot.internal.event import Event, EventHandleOption
 
@@ -48,7 +49,7 @@ class NodeManager():
     def __init__(self, bot: "Bot"):
         self.bot = bot
         self.node_state = defaultdict(lambda: None)
-        self.global_state = defaultdict(lambda: None)
+        self.global_state = defaultdict(dict)
 
     async def startup(self) -> None:
         self._condition = anyio.Condition()
@@ -163,7 +164,7 @@ class NodeManager():
         self,
         node_class: type[Node],
         current_event: Event[Any],
-        node_state: StateT,
+        state: StateT,
         stack: AsyncExitStack | None = None,
         dependency_cache: Dependency | None = None,
     ) -> bool:
@@ -187,18 +188,18 @@ class NodeManager():
             if not await node_class.check_perm(self.bot, current_event, self.global_state, stack, dependency_cache):
                 logger.info(f"permission conditions not met", node=node_class.__name__)
                 return False
-        except Exception as e:
-            logger.error(
+        except Exception:
+            logger.exception(
                 f"permission check failed", node=node_class.__name__
             )
             return False
 
         try:
-            if not await node_class.check_rule(self.bot, current_event, node_state, stack, dependency_cache):
+            if not await node_class.check_rule(self.bot, current_event, state, stack, dependency_cache):
                 logger.info(f"rule conditions not met", node=node_class.__name__)
                 return False
-        except Exception as e:
-            logger.error(
+        except Exception:
+            logger.exception(
                 f"rule check failed", node=node_class.__name__
             )
             return False
@@ -218,8 +219,8 @@ class NodeManager():
             bot=self.bot, 
             event=current_event,
             state=state, 
-            global_state=self.global_state,
             node_state=self.node_state[node_class.__name__], 
+            global_state=self.global_state,
             use_cache=True,
             stack=stack,
             dependency_cache=dependency_cache,
@@ -229,17 +230,15 @@ class NodeManager():
             state = _node.__init_state__()
             if state is not None:
                 self.node_state[_node.name] = state
-        if not await _node.rule():
+
+
+        if not await _node._run_rule():
+            await _node._run_fallback()
             raise PruningException
         logger.info("Event will be handled by node", node=_node)
-        try:
-            await _node.handle()
-        except Exception as e:
-            if not isinstance(e, RejectException) and _node.block:
-                raise StopException
-            raise e
+        await _node._run_handle()
                 
-    async def _check_and_run(
+    async def _check_and_run_node(
         self,
         node_class: type[Node],
         current_event: Event[Any],
@@ -250,6 +249,60 @@ class NodeManager():
                 raise PruningException
 
             await self._run_node(node_class, current_event, state, stack=stack)
+
+    async def _simple_run_node(
+        self,
+        node_class: type[Node],
+        current_event: Event[Any],
+        state: StateT,
+    ) -> PruningException | JumpToException | RejectException | None:
+        """运行节点并处理特殊异常。"""
+        exc: PruningException | JumpToException | RejectException | None = (
+            None
+        )
+
+        def _handle_special_exception(
+            exc_group: BaseExceptionGroup[
+                PruningException | JumpToException | RejectException
+            ],
+        ):
+            nonlocal exc
+            excs = list(flatten_exception_group(exc_group))
+            if len(excs) > 1:
+                logger.warning(
+                    "Multiple session control exceptions occurred. "
+                    "NoneBot will choose the proper one."
+                )
+                pruning_exc = next(
+                    (e for e in excs if isinstance(e, PruningException)),
+                    None,
+                )
+                jumpto_exc = next(
+                    (e for e in excs if isinstance(e, JumpToException)),
+                    None,
+                )
+                reject = next(
+                    (e for e in excs if isinstance(e, RejectException)),
+                    None,
+                )
+                exc = pruning_exc or jumpto_exc or reject
+            elif isinstance(
+                excs[0], (PruningException, JumpToException, RejectException)
+            ):
+                exc = excs[0]
+        
+        with catch(
+            {
+                (
+                    PruningException, 
+                    JumpToException, 
+                    RejectException
+                ): _handle_special_exception
+            }
+        ):
+            await self._check_and_run_node(node_class, current_event, state)
+
+        return exc
         
     async def _handle_event(self, current_event: Event[Any]) -> None:
         """处理事件并匹配相应的节点（插件）。
@@ -276,32 +329,29 @@ class NodeManager():
 
             logger.debug("Checking for matching nodes", priority=node_class)
 
-            next_index = index + 1 
+            next_index = index + 1
 
-            try:
-                await self._check_and_run(node_class, current_event, state)
+            exc = await self._simple_run_node(node_class, current_event, state)
 
-            except SkipException:
-                pass
-            except StopException:
-                break
-            except PruningException:
-                if pruning_node == -1: break
+            if isinstance(exc, PruningException):
+                if pruning_node == -1:
+                    break
                 next_index = pruning_node
-            except JumpToException as jump_to_node:
-                jump_to_index = jump_to_index_map.get(jump_to_node.node)
+
+            elif isinstance(exc, JumpToException):
+                jump_to_index = jump_to_index_map.get(exc.node)
 
                 if jump_to_index is None:
-                    logger.warning("The node to jump to does not exist", node_name=jump_to_node.node)
+                    logger.warning("The node to jump to does not exist", node_name=exc.node)
+                    continue  # 继续下一个节点
                 elif jump_to_index > index:
                     next_index = jump_to_index
                 else:
                     logger.warning("The node to jump to is before the current node", node=nodes_list[jump_to_index])
-            except RejectException as reject:
-                await self._add_temporary_task(node_class, current_event, state, reject.max_try_times, reject.timeout)
 
-            except Exception:
-                logger.exception("Exception in node", node=node_class)
+            elif isinstance(exc, RejectException):
+                await self._add_temporary_task(node_class, current_event, state, exc.max_try_times, exc.timeout)
+            #logger.exception("Exception in node", node=node_class, exc_info=exc)
 
             if node_class.block:
                 break

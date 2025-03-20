@@ -10,8 +10,6 @@ MAX_TIMEOUT: Literal[600] = 600
 NODE_GLOBAL_KEY: Literal["_node_global"] = "_node_global"
 BOT_GLOBAL_KEY: Literal["_bot_global"] = "_bot_global"
 
-RULE_KEY: Literal["_rule_key"] = "rule_key"
-
 # used by Matcher
 RECEIVE_KEY: Literal["_receive_{id}"] = "_receive_{id}"
 """`receive` 存储 key"""

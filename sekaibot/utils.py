@@ -24,10 +24,7 @@ from typing import (
     ClassVar,
     ContextManager,
     Coroutine,
-    Dict,
-    List,
-    Set,
-    Optional,
+    Generator,
     Sequence,
     Tuple,
     Type,
@@ -41,6 +38,7 @@ from pydantic import BaseModel
 
 from sekaibot.config import ConfigModel
 from sekaibot.typing import EventT
+from sekaibot.log import logger
 
 if TYPE_CHECKING:
     from os import PathLike
@@ -62,11 +60,29 @@ __all__ = [
 _T = TypeVar("_T")
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
+_E = TypeVar("E", bound=BaseException)
 _TypeT = TypeVar("_TypeT", bound=Type[Any])
 _BaseModelT = TypeVar("_BaseModelT", bound=BaseModel)
 
 StrOrBytesPath: TypeAlias = Union[str, bytes, "PathLike[str]", "PathLike[bytes]"]
 TreeType = dict[_T, Union[Any, "TreeType"]]
+
+
+def flatten_exception_group(
+    exc_group: BaseExceptionGroup[_E],
+) -> Generator[_E, None, None]:
+    for exc in exc_group.exceptions:
+        if isinstance(exc, BaseExceptionGroup):
+            yield from flatten_exception_group(exc)
+        else:
+            yield exc
+
+def handle_exception(msg: str, **kwargs) -> Callable[[BaseExceptionGroup], None]:
+    def _handle(exc_group: BaseExceptionGroup[Exception]) -> None:
+        for exc in flatten_exception_group(exc_group):
+            logger.error(msg, exc_info=exc, **kwargs)
+
+    return _handle
 
 
 class ModulePathFinder(MetaPathFinder):

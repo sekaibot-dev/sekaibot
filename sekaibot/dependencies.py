@@ -248,9 +248,9 @@ async def solve_dependencies_in_bot(
     *,
     bot: "Bot",
     event: Event,
-    state: NodeStateT | None = None,
+    state: StateT | None = None,
+    node_state: NodeStateT | None = None,
     global_state: GlobalStateT | None = None,
-    node_state: StateT | None = None,
     use_cache: bool = True,
     stack: AsyncExitStack | None = None,
     dependency_cache: dict[Dependency[Any], Any] | None = None,
@@ -263,9 +263,9 @@ async def solve_dependencies_in_bot(
         dependent: 需要解析的依赖。
         bot: 机器人实例，必须提供。
         event: 事件对象，必须提供。
-        state: 为节点提供的状态信息，默认为 `None`。
+        state: 节点临时的状态信息，默认为 `None`。
+        node_state: 节点持久化状态信息，可选，默认为 `None`。
         global_state: 为节点提供的全局状态，可选，默认为 `None`。
-        node_state: 为规则解析器提供状态，可选，默认为 `None`。
         use_cache: 是否使用缓存，默认为 `True`。
         stack: 异步上下文管理器，可选。
         dependency_cache: 依赖缓存，如果未提供，则自动创建新字典。
@@ -284,7 +284,7 @@ async def solve_dependencies_in_bot(
         "event": event,
     })
     if state is not None: dependency_cache.update({
-        NodeStateT: state,
+        StateT: state,
         "state": state,
     })
     if global_state is not None: dependency_cache.update({
@@ -292,7 +292,8 @@ async def solve_dependencies_in_bot(
         "global_state": global_state,
     })
     if node_state is not None: dependency_cache.update({
-        StateT: node_state,
+        NodeStateT: node_state,
+        "node_state": node_state,
     })
     return await solve_dependencies(
         dependent, use_cache=use_cache, stack=stack, dependency_cache=dependency_cache

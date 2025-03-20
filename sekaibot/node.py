@@ -7,6 +7,8 @@ import inspect
 import anyio
 from abc import ABC, abstractmethod
 from enum import Enum
+from exceptiongroup import BaseExceptionGroup, catch
+
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -21,14 +23,15 @@ from typing import (
 from typing_extensions import Annotated, get_args, get_origin
 from contextlib import AsyncExitStack
 
+from sekaibot.log import logger
 from sekaibot.consts import MAX_TIMEOUT
 from sekaibot.config import ConfigModel
 from sekaibot.dependencies import Depends, Dependency, solve_dependencies_in_bot, _T
 from sekaibot.internal.event import Event
 from sekaibot.internal.message import BuildMessageType
-from sekaibot.exceptions import SkipException, JumpToException, PruningException, StopException, RejectException
+from sekaibot.exceptions import SkipException, JumpToException, PruningException, StopException, RejectException, FinishException
 from sekaibot.typing import ConfigT, EventT, NodeStateT, GlobalStateT , StateT
-from sekaibot.utils import is_config_class
+from sekaibot.utils import is_config_class, flatten_exception_group, handle_exception
 from sekaibot.rule import Rule
 from sekaibot.permission import Permission
 
@@ -337,7 +340,7 @@ class Node(ABC, Generic[EventT, NodeStateT, ConfigT]):
         """结束当前节点。"""
         if message:
             self.reply(message)
-        raise SkipException
+        raise FinishException
     
     @final
     def reject(
@@ -364,7 +367,6 @@ class Node(ABC, Generic[EventT, NodeStateT, ConfigT]):
                 bot=self.bot, 
                 event=self.event,
                 state=self.state, 
-                global_state=self.bot.manager.global_state,
                 node_state=self.node_state, 
                 global_state=self.bot.manager.global_state,
                 stack=stack
@@ -394,3 +396,86 @@ class Node(ABC, Generic[EventT, NodeStateT, ConfigT]):
                 tg.start_soon(wrapper, dependency)
 
         return tuple(results[dep] for dep in dependencies)
+    
+    async def _run_rule(self):
+        """执行 rule() 方法并返回结果"""
+
+        with catch({
+            Exception: handle_exception(f"error occurred in `rule()`", node=self.__class__)
+        }):
+            def _handle_special_exception(
+                exc_group: BaseExceptionGroup[
+                    StopException | SkipException | JumpToException | PruningException | RejectException | FinishException
+                ]
+            ):
+                mapping_dict = {
+                    StopException: "stop()", SkipException: "skip()", JumpToException: "jump_to()",
+                    PruningException: "prune()", RejectException: "reject()", FinishException: "finish()"
+                }
+                for exc in flatten_exception_group(exc_group):
+                    if exc in mapping_dict:
+                        logger.warning(f"you should not use `{mapping_dict[exc]}` in `rule()`, please instead use in `handle()`", node=self.__class__)
+            with catch({
+                (
+                    StopException,
+                    SkipException,
+                    JumpToException,
+                    PruningException,
+                    RejectException,
+                    FinishException
+                ): _handle_special_exception
+            }):
+                return await self.rule()
+            return False
+        raise PruningException
+    
+    async def _run_handle(self):
+        """执行 handle() 方法并返回结果"""
+        def _handle_handle_exception(exc_group: BaseExceptionGroup[Exception]):
+            new_exc_group = {}
+            for exc in flatten_exception_group(exc_group):
+                if isinstance(exc, (JumpToException, PruningException, RejectException)):
+                    new_exc_group.update(exc)
+                else:
+                    logger.aerror(f"error occurred in `handle()`", node=self.__class__, exc_info=exc)
+            if new_exc_group:
+                raise ExceptionGroup("errors in `handle()`", list(new_exc_group))
+        with catch({
+            Exception: _handle_handle_exception
+        }):
+            def _handle_stop_exception(exc_group: BaseExceptionGroup[StopException]):
+                self.block = True
+            with catch({
+                (
+                    SkipException,
+                    FinishException
+                ): lambda exc_group: None,
+                StopException: _handle_stop_exception
+            }):
+                await self.handle()
+
+    async def _run_fallback(self):
+        """执行 fallback() 方法并返回结果"""
+        def _handle_fallback_exception(exc_group: BaseExceptionGroup[Exception]):
+            new_exc_group = {}
+            for exc in flatten_exception_group(exc_group):
+                if isinstance(exc, (JumpToException, RejectException)):
+                    new_exc_group.update(exc)
+                else:
+                    logger.aerror(f"error occurred in `fallback()`", node=self.__class__, exc_info=exc)
+            if new_exc_group:
+                raise ExceptionGroup("errors in `fallback()`", list(new_exc_group))
+        with catch({
+            Exception: _handle_fallback_exception
+        }):
+            def _handle_stop_exception(exc_group: BaseExceptionGroup[StopException]):
+                self.block = True
+            with catch({
+                (
+                    SkipException,
+                    PruningException,
+                    FinishException
+                ): lambda exc_group: None,
+                StopException: _handle_stop_exception
+            }):
+                await self.fallback()
