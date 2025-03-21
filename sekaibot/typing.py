@@ -22,7 +22,7 @@ __all__ = [
     "NodeStateT",
     "ConfigT",
     "StateT",
-    "",
+    "DependencyCacheT",
     "RuleCheckerT",
     "PermissionCheckerT",
     "BotHook",
@@ -33,9 +33,10 @@ EventT = TypeVar("EventT", bound="Event")
 ConfigT = TypeVar("ConfigT", bound="ConfigModel | None")
 AdapterT = TypeVar("AdapterT")
 NodeT = TypeVar("NodeT", bound="Node")
-StateT = TypeVar("NodeStateT", bound="dict[str, dict[str, Any]]")
-NodeStateT = TypeVar("StateT")
+StateT = TypeVar("StateT", bound="dict[str, dict[str, Any] | Any]")
+NodeStateT = TypeVar("NodeStateT")
 GlobalStateT = TypeVar("GlobalStateT", bound="dict[str, dict[str, Any]]")
+DependencyCacheT = TypeVar("DependencyCacheT", bound="dict")
 
 RuleCheckerT = Callable[..., bool | Awaitable[bool]]
 PermissionCheckerT = Callable[..., bool | Awaitable[bool]]

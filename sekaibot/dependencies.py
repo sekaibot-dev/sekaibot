@@ -24,7 +24,7 @@ from typing import (
 
 from sekaibot.utils import get_annotations, sync_ctx_manager_wrapper
 from sekaibot.internal.event import Event
-from sekaibot.typing import NodeStateT, GlobalStateT, StateT
+from sekaibot.typing import NodeStateT, GlobalStateT, StateT, DependencyCacheT
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
 
@@ -294,6 +294,9 @@ async def solve_dependencies_in_bot(
     if node_state is not None: dependency_cache.update({
         NodeStateT: node_state,
         "node_state": node_state,
+    })
+    if dependency_cache is not None: dependency_cache.update({
+        DependencyCacheT: dependency_cache
     })
     return await solve_dependencies(
         dependent, use_cache=use_cache, stack=stack, dependency_cache=dependency_cache

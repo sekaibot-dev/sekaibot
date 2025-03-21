@@ -22,7 +22,7 @@ from sekaibot.exceptions import (
     JumpToException,
     RejectException,
 )
-from sekaibot.consts import MAX_TIMEOUT
+from sekaibot.consts import MAX_TIMEOUT, JUMO_TO_TARGET
 from sekaibot.log import logger
 from sekaibot.typing import EventT, NodeStateT, StateT
 from sekaibot.node import Node
@@ -131,8 +131,9 @@ class NodeManager():
             timeout: 超时时间。
         """
 
-        async def temporary_task(func: Callable[[Event], bool | Awaitable[bool]] | None = None):
-            event_copy: Event[Any] | None = None
+        async def temporary_task(
+            func: Callable[[Event], bool | Awaitable[bool]] | None = None
+        ):
             async def check(event: Event[Any]) -> bool:
                 if event.get_session_id() != current_event.get_session_id(): return False
                 return await wrap_get_func(func)(event)
@@ -143,19 +144,9 @@ class NodeManager():
                     max_try_times=max_try_times,
                     timeout=timeout,
                 )
-                event_copy = event.model_copy()
-                await self._check_and_run(node_class, event, state)
+                await self._handle_event(event, state, node_class)
             except GetEventTimeout:
                 return
-            except RejectException as reject:
-                if event_copy:
-                    # 将事件重新放回时间传播
-                    event_copy.__handled__ = False
-                    await self._add_temporary_task(node_class, current_event, state, reject.max_try_times, reject.timeout)
-                    await self.handle_event(event_copy, show_log=False)
-
-            except Exception:
-                logger.exception("Exception in node", node=node_class)
 
         async with anyio.create_task_group() as tg:
             tg.start_soon(temporary_task)
@@ -213,7 +204,7 @@ class NodeManager():
         state: StateT,
         stack: AsyncExitStack | None = None,
         dependency_cache: Dependency | None = None,
-    ):
+    ) -> tuple[PruningException | JumpToException | None, StateT]:
         _node = await solve_dependencies_in_bot(
             node_class,
             bot=self.bot, 
@@ -232,79 +223,27 @@ class NodeManager():
                 self.node_state[_node.name] = state
 
 
-        if not await _node._run_rule():
-            await _node._run_fallback()
-            raise PruningException
-        logger.info("Event will be handled by node", node=_node)
-        await _node._run_handle()
+        return (await _node._run_node()), _node.state
                 
     async def _check_and_run_node(
         self,
         node_class: type[Node],
         current_event: Event[Any],
         state: StateT,
-    ):
+        dependency_cache: Dependency | None = None,
+    ) -> tuple[PruningException | JumpToException | None, StateT | None]:
         async with AsyncExitStack() as stack:
-            if not await self._check_node(node_class, current_event, state, stack=stack):
-                raise PruningException
+            if not await self._check_node(node_class, current_event, state, stack, dependency_cache):
+                return PruningException, None
 
-            await self._run_node(node_class, current_event, state, stack=stack)
-
-    async def _simple_run_node(
-        self,
-        node_class: type[Node],
-        current_event: Event[Any],
-        state: StateT,
-    ) -> RejectException | PruningException | JumpToException | None:
-        """运行节点并处理特殊异常。"""
-        exc: RejectException | PruningException | JumpToException | None = (
-            None
-        )
-
-        def _handle_special_exception(
-            exc_group: BaseExceptionGroup[
-                RejectException | PruningException | JumpToException
-            ],
-        ):
-            nonlocal exc
-            excs = list(flatten_exception_group(exc_group))
-            if len(excs) > 1:
-                logger.warning(
-                    "Multiple session control exceptions occurred. "
-                    "SekaiBot will choose the proper one."
-                )
-                reject = next(
-                    (e for e in excs if isinstance(e, RejectException)),
-                    None,
-                )
-                pruning_exc = next(
-                    (e for e in excs if isinstance(e, PruningException)),
-                    None,
-                )
-                jumpto_exc = next(
-                    (e for e in excs if isinstance(e, JumpToException)),
-                    None,
-                )
-                exc = reject or pruning_exc or jumpto_exc
-            elif isinstance(
-                excs[0], (PruningException, JumpToException, RejectException)
-            ):
-                exc = excs[0]
-        
-        with catch(
-            {
-                (
-                    PruningException, 
-                    JumpToException, 
-                    RejectException
-                ): _handle_special_exception
-            }
-        ):
-            await self._check_and_run_node(node_class, current_event, state)
-
-        return exc
-        
-    async def _handle_event(self, current_event: Event[Any]) -> None:
+            return await self._run_node(node_class, current_event, state, stack, dependency_cache)
+  
+    async def _handle_event(
+        self, 
+        current_event: Event[Any], 
+        state: StateT | None = None,
+        start_class: type[Node[Any, Any, Any]] | None = None
+    ) -> None:
         """处理事件并匹配相应的节点（插件）。
 
         此方法在 `current_event` 被处理后不会再次处理，遍历 `nodes_list`
@@ -320,43 +259,52 @@ class NodeManager():
             await hook_func(current_event)
 
         nodes_list = self.bot.nodes_list.copy()
-        index = 0
+        state = state or defaultdict(lambda: None)
         jump_to_index_map = {node.__name__: i for i, (node, _) in enumerate(nodes_list)}
+        index = jump_to_index_map.get(start_class.__name__, 0)
+        interrupted = False
+        dependency_cache = {}
 
-        while index < len(nodes_list):
+        def _handle_stop_propagation(exc_group: BaseExceptionGroup) -> None:
+            nonlocal interrupted
+
+            interrupted = True
+            logger.debug("Stop event propagation")
+
+        while index < len(nodes_list) and not interrupted:
             node_class, pruning_node = nodes_list[index]
-            state = defaultdict(lambda: None)
+            
 
             logger.debug("Checking for matching nodes", priority=node_class)
 
             next_index = index + 1
+            
+            with catch({
+                StopException: _handle_stop_propagation,
+                Exception: handle_exception(
+                    "Error when checking Matcher."
+                ),
+            }):
+                exc, _state = await self._check_and_run_node(node_class, current_event, state.copy(), dependency_cache)
 
-            exc = await self._simple_run_node(node_class, current_event, state)
+                if isinstance(exc, PruningException):
+                    if pruning_node == -1:
+                        break
+                    next_index = pruning_node
 
-            if isinstance(exc, PruningException):
-                logger.debug("Pruning exception caught in node", node=node_class)
-                if pruning_node == -1:
-                    break
-                next_index = pruning_node
+                elif isinstance(exc, JumpToException):
+                    if node_name := _state[JUMO_TO_TARGET]:
+                        jump_to_index = jump_to_index_map.get(node_name)
 
-            elif isinstance(exc, JumpToException):
-                jump_to_index = jump_to_index_map.get(exc.node)
-
-                if jump_to_index is None:
-                    logger.warning("The node to jump to does not exist", node_name=exc.node)
-                    continue  # 继续下一个节点
-                elif jump_to_index > index:
-                    logger.debug("Jumping exception caught in node", node=nodes_list[jump_to_index])
-                    next_index = jump_to_index
-                else:
-                    logger.warning("The node to jump to is before the current node", node=nodes_list[jump_to_index])
-
-            elif isinstance(exc, RejectException):
-                logger.debug("Rejecting exception caught in node", node=node_class)
-                await self._add_temporary_task(node_class, current_event, state, exc.max_try_times, exc.timeout)
-
-            if node_class.block:
-                break
+                        if jump_to_index is None:
+                            logger.warning("The node to jump to does not exist", node_name=node_name)
+                            continue
+                        elif jump_to_index > index:
+                            next_index = jump_to_index
+                        else:
+                            logger.warning("The node to jump to is before the current node", node=nodes_list[jump_to_index])
+                    else:
+                        logger.warning("Rejecting exception caught in node but it does not have the target", node=node_class)
 
             index = next_index
 

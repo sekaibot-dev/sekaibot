@@ -28,9 +28,6 @@ class SkipException(EventException):
 
 class JumpToException(EventException):
     """跳转到特定节点并将事件转发到该节点。"""
-    node: str
-    def __init__(self, node: str):
-        self.node = node
 
 
 class PruningException(EventException):
@@ -40,21 +37,13 @@ class PruningException(EventException):
 class StopException(EventException):
     """停止当前事件传播。"""
 
+
 class FinishException(EventException):
     """结束本节点人物并继续事件传播。"""
 
 
 class RejectException(EventException):
     """拒绝执行当前节点，并重新获取事件再次进入节点。"""
-    max_try_times: int | None = None
-    timeout: int | float = MAX_TIMEOUT
-    def __init__(
-        self, 
-        max_try_times: int | None = None, 
-        timeout: int | float = MAX_TIMEOUT
-    ):
-        self.max_try_times = max_try_times
-        self.timeout = timeout
 
 
 class SekaiBotException(Exception):  # noqa: N818
