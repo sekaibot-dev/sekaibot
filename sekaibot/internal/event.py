@@ -45,12 +45,12 @@ class Event(ABC, BaseModel, Generic[AdapterT]):
     # @abstractmethod
     def get_event_name(self) -> str:
         """获取事件名称的方法。"""
-        raise NotImplementedError
+        return "eventA"#raise NotImplementedError
 
     # @abstractmethod
     def get_event_description(self) -> str:
         """获取事件描述的方法，通常为事件具体内容。"""
-        raise NotImplementedError
+        return "eventA"#raise NotImplementedError
 
     def get_log_string(self) -> str:
         """获取事件日志信息的方法。
@@ -67,19 +67,19 @@ class Event(ABC, BaseModel, Generic[AdapterT]):
     @property
     def user_id(self) -> str:
         """获取事件主体 id 的方法，通常是用户 id 。"""
-        raise NotImplementedError
+        return "eventA"#raise NotImplementedError
 
     # @abstractmethod
     def get_session_id(self) -> str:
         """获取会话 id 的方法，用于判断当前事件属于哪一个会话，
         通常是用户 id、群组 id 组合。
         """
-        raise NotImplementedError
+        return "eventA"#raise NotImplementedError
 
     # @abstractmethod
     def get_message(self) -> "Message":
         """获取事件消息内容的方法。"""
-        raise NotImplementedError
+        return "eventA"#raise NotImplementedError
 
     def get_plain_text(self) -> str:
         """获取消息纯文本的方法。
@@ -91,7 +91,7 @@ class Event(ABC, BaseModel, Generic[AdapterT]):
     # @abstractmethod
     def is_tome(self) -> bool:
         """获取事件是否与机器人有关的方法。"""
-        raise NotImplementedError
+        return "eventA"#raise NotImplementedError
 
 
 class EventHandleOption(NamedTuple):

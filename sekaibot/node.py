@@ -44,7 +44,7 @@ from sekaibot.utils import flatten_exception_group, handle_exception, is_config_
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
 
-__all__ = ["Node", "NodeLoadType"]
+__all__ = ["Node", "SonNode", "NodeLoadType"]
 
 
 class NodeLoadType(Enum):
@@ -56,32 +56,10 @@ class NodeLoadType(Enum):
     CLASS = "class"
 
 
-class Node(ABC, Generic[EventT, NodeStateT, ConfigT]):
-    """所有 SekaiBot 节点的基类。
-
-    Attributes:
-        event: 当前正在被此节点处理的事件。
-        priority: 节点的优先级，数字越小表示优先级越高，默认为 0。
-        block: 节点执行结束后是否阻止事件的传播。`True` 表示阻止。
-        __node_load_type__: 节点加载类型，由 SekaiBot 自动设置，反映了此节点是如何被加载的。
-        __node_file_path__: 当节点加载类型为 `NodeLoadType.CLASS` 时为 `None`，
-            否则为定义节点在的 Python 模块的位置。
-    """
-
-    parent: ClassVar[str] = None
-    priority: ClassVar[int] = 0
-    sand_box: ClassVar[bool] = False
-    block: ClassVar[bool] = False
-
+class SonNode(Generic[EventT, NodeStateT, ConfigT]):
     # 不能使用 ClassVar 因为 PEP 526 不允许这样做
     EventType: str | type[Event] | tuple[type[Event]]
     Config: type[ConfigT]
-
-    __node_rule__: ClassVar[Rule] = Rule()
-    __node_perm__: ClassVar[Permission] = Permission()
-
-    __node_load_type__: ClassVar[NodeLoadType]
-    __node_file_path__: ClassVar[str | None]
 
     if TYPE_CHECKING:
         event: EventT
@@ -114,7 +92,7 @@ class Node(ABC, Generic[EventT, NodeStateT, ConfigT]):
         orig_bases: tuple[type, ...] = getattr(cls, "__orig_bases__", ())
         for orig_base in orig_bases:
             origin_class = get_origin(orig_base)
-            if inspect.isclass(origin_class) and issubclass(origin_class, Node):
+            if inspect.isclass(origin_class) and issubclass(origin_class, SonNode):
                 try:
                     event_t, state_t, config_t = cast(
                         tuple[EventT, NodeStateT, ConfigT], get_args(orig_base)
@@ -124,7 +102,7 @@ class Node(ABC, Generic[EventT, NodeStateT, ConfigT]):
                 if event_type is None:
                     if inspect.isclass(event_t) and issubclass(event_t, Event):
                         event_type = event_t
-                    else:
+                    elif event_t:
                         _event_t = tuple(
                             filter(
                                 lambda e: inspect.isclass(e) and issubclass(e, Event),
@@ -151,11 +129,11 @@ class Node(ABC, Generic[EventT, NodeStateT, ConfigT]):
                 ):
                     init_state = state_t.__metadata__[0]  # pyright: ignore
 
-        if not hasattr(cls, "EventType") and event_type is None:
+        if not hasattr(cls, "EventType") and event_type is not None:
             cls.EventType = event_type
         if not hasattr(cls, "Config") and config is not None:
             cls.Config = config
-        if cls.__init_state__ is Node.__init_state__ and init_state is not None:
+        if cls.__init_state__ is SonNode.__init_state__ and init_state is not None:
             cls.__init_state__ = lambda _: init_state  # type: ignore
 
     @final
@@ -163,24 +141,6 @@ class Node(ABC, Generic[EventT, NodeStateT, ConfigT]):
     def name(self) -> str:
         """节点类名称。"""
         return self.__class__.__name__
-
-    '''async def call_api(self, api: str, **params: Any):
-        """调用 API，协程会等待直到获得 API 响应。
-
-        Args:
-            api: API 名称。
-            **params: API 参数。
-
-        Returns:
-            API 响应中的 data 字段。
-
-        Raises:
-            NetworkError: 网络错误。
-            ApiNotAvailable: API 请求响应 404， API 不可用。
-            ActionFailed: API 请求响应 failed， API 操作失败。
-            ApiTimeout: API 请求响应超时。
-        """
-        return await self.comm.adapter.call_api(api, **params)'''
 
     @final
     @property
@@ -215,72 +175,6 @@ class Node(ABC, Generic[EventT, NodeStateT, ConfigT]):
     @final
     def global_state(self, value: dict) -> None:
         self.bot.manager.global_state = value
-
-    @final
-    @classmethod
-    async def check_perm(
-        cls,
-        bot: Bot,
-        event: Event,
-        global_state: GlobalStateT,
-        stack: AsyncExitStack | None = None,
-        dependency_cache: Dependency | None = None,
-    ) -> bool:
-        """
-        检查节点权限。
-        """
-        return (
-            isinstance(cls.EventType, str)
-            and event.type == (cls.EventType or event.type)
-            or isinstance(event, cls.EventType)
-        ) and await cls.__node_perm__(
-            bot=bot,
-            event=event,
-            global_state=global_state,
-            stack=stack,
-            dependency_cache=dependency_cache,
-        )
-
-    @final
-    @classmethod
-    async def check_rule(
-        cls,
-        bot: Bot,
-        event: Event,
-        state: StateT,
-        stack: AsyncExitStack | None = None,
-        dependency_cache: Dependency | None = None,
-    ) -> bool:
-        """
-        检查节点规则。
-        """
-        return (
-            isinstance(cls.EventType, str)
-            and event.type == (cls.EventType or event.type)
-            or isinstance(event, cls.EventType)
-        ) and await cls.__node_rule__(
-            bot=bot,
-            event=event,
-            state=state,
-            stack=stack,
-            dependency_cache=dependency_cache,
-        )
-
-    @abstractmethod
-    async def handle(self) -> None:
-        """处理事件的方法。当 `rule()` 方法返回 `True` 时 SekaiBot 会调用此方法。每个节点必须实现此方法。"""
-        raise NotImplementedError
-
-    async def rule(self) -> bool:
-        """匹配事件的方法。事件处理时，会按照节点的优先级依次调用此方法，当此方法返回 `True` 时将事件交由此节点处理。每个节点不一定要实现此方法。
-        注意：不建议直接在此方法内实现对事件的处理，事件的具体处理请交由 node 方法。
-        """
-        return True
-
-    async def fallback(self) -> None:
-        """事件不通过时执行的善后方法。当 `rule()` 方法返回 `False` 时 SekaiBot 会调用此方法。每个节点不一定要实现此方法。
-        注意：此方法最好用于执行拒绝（`reject()`）等方法，不建议直接在此方法内实现对事件的处理，事件的具体处理请交由 node 方法。
-        """
 
     async def reply(self, message: BuildMessageType) -> NoReturn:
         """回复消息。"""
@@ -420,6 +314,125 @@ class Node(ABC, Generic[EventT, NodeStateT, ConfigT]):
                 tg.start_soon(wrapper, dependency)
 
         return tuple(results[dep] for dep in dependencies)
+
+
+class Node(SonNode, ABC, Generic[EventT, NodeStateT, ConfigT]):
+    """所有 SekaiBot 节点的基类。
+
+    Attributes:
+        event: 当前正在被此节点处理的事件。
+        priority: 节点的优先级，数字越小表示优先级越高，默认为 0。
+        block: 节点执行结束后是否阻止事件的传播。`True` 表示阻止。
+        __node_load_type__: 节点加载类型，由 SekaiBot 自动设置，反映了此节点是如何被加载的。
+        __node_file_path__: 当节点加载类型为 `NodeLoadType.CLASS` 时为 `None`，
+            否则为定义节点在的 Python 模块的位置。
+    """
+
+    parent: ClassVar[str] = None
+    priority: ClassVar[int] = 0
+    sand_box: ClassVar[bool] = False
+    block: ClassVar[bool] = False
+
+    __node_rule__: ClassVar[Rule] = Rule()
+    __node_perm__: ClassVar[Permission] = Permission()
+
+    __node_load_type__: ClassVar[NodeLoadType]
+    __node_file_path__: ClassVar[str | None]
+
+    '''async def call_api(self, api: str, **params: Any):
+        """调用 API，协程会等待直到获得 API 响应。
+
+        Args:
+            api: API 名称。
+            **params: API 参数。
+
+        Returns:
+            API 响应中的 data 字段。
+
+        Raises:
+            NetworkError: 网络错误。
+            ApiNotAvailable: API 请求响应 404， API 不可用。
+            ActionFailed: API 请求响应 failed， API 操作失败。
+            ApiTimeout: API 请求响应超时。
+        """
+        return await self.comm.adapter.call_api(api, **params)'''
+
+    @final
+    @classmethod
+    async def check_perm(
+        cls,
+        bot: "Bot",
+        event: Event,
+        global_state: GlobalStateT,
+        stack: AsyncExitStack | None = None,
+        dependency_cache: Dependency | None = None,
+    ) -> bool:
+        """
+        检查节点权限。
+        """
+        return (
+            not hasattr(cls, "EventType")
+            or (
+                isinstance(cls.EventType, str)
+                and (
+                    event.type == (cls.EventType or event.type)
+                    or event.get_event_name() == (cls.EventType or event.type)
+                )
+            )
+            or (
+                isinstance(cls.EventType, Event | tuple)
+                and (
+                    isinstance(cls.EventType, Event)
+                    or all(isinstance(i, Event) for i in cls.EventType)
+                )
+                and isinstance(event, cls.EventType)
+            )
+        ) and await cls.__node_perm__(
+            bot=bot,
+            event=event,
+            global_state=global_state,
+            stack=stack,
+            dependency_cache=dependency_cache,
+        )
+
+    @final
+    @classmethod
+    async def check_rule(
+        cls,
+        bot: "Bot",
+        event: Event,
+        state: StateT,
+        global_state: GlobalStateT,
+        stack: AsyncExitStack | None = None,
+        dependency_cache: Dependency | None = None,
+    ) -> bool:
+        """
+        检查节点规则。
+        """
+        return await cls.__node_rule__(
+            bot=bot,
+            event=event,
+            state=state,
+            global_state=global_state,
+            stack=stack,
+            dependency_cache=dependency_cache,
+        )
+
+    @abstractmethod
+    async def handle(self) -> None:
+        """处理事件的方法。当 `rule()` 方法返回 `True` 时 SekaiBot 会调用此方法。每个节点必须实现此方法。"""
+        raise NotImplementedError
+
+    async def rule(self) -> bool:
+        """匹配事件的方法。事件处理时，会按照节点的优先级依次调用此方法，当此方法返回 `True` 时将事件交由此节点处理。每个节点不一定要实现此方法。
+        注意：不建议直接在此方法内实现对事件的处理，事件的具体处理请交由 node 方法。
+        """
+        return True
+
+    async def fallback(self) -> None:
+        """事件不通过时执行的善后方法。当 `rule()` 方法返回 `False` 时 SekaiBot 会调用此方法。每个节点不一定要实现此方法。
+        注意：此方法最好用于执行拒绝（`reject()`）等方法，不建议直接在此方法内实现对事件的处理，事件的具体处理请交由 node 方法。
+        """
 
     @final
     async def _run_rule(self):

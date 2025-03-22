@@ -45,8 +45,6 @@ class StartsWith(MatchRule):
         ignorecase: 是否忽略大小写
     """
 
-    __slots__ = ("__rule__", "checker")
-
     checker = StartswithRule
 
     @classmethod
@@ -62,8 +60,6 @@ class EndsWith(MatchRule):
         ignorecase: 是否忽略大小写
     """
 
-    __slots__ = ("__rule__", "checker")
-
     checker = EndswithRule
 
     @classmethod
@@ -78,8 +74,6 @@ class FullMatch(MatchRule):
         msg: 指定消息全匹配字符串元组
         ignorecase: 是否忽略大小写
     """
-
-    __slots__ = ("__rule__", "checker")
 
     checker = FullmatchRule
 

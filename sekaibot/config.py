@@ -42,6 +42,7 @@ class BotConfig(ConfigModel):
     event_queue_size: int = Field(default=0, ge=0)
     nodes: set[str] = Field(default_factory=set)
     node_dirs: set[DirectoryPath] = Field(default_factory=set)
+    adapters: set[str] = Field(default_factory=set)
     log: LogConfig | None = None
 
 
@@ -166,6 +167,8 @@ class DatabaseConfig(ConfigModel):
 
     config: DatabaseConfigType
 
+class AdapterConfig(ConfigModel):
+    """适配器配置。"""
 
 class NodeConfig(ConfigModel):
     """节点配置。"""
@@ -177,4 +180,5 @@ class MainConfig(ConfigModel):
     bot: BotConfig = BotConfig()
     agent: AgentConfig = AgentConfig()
     node: NodeConfig = NodeConfig()
+    adapter: AdapterConfig = AdapterConfig()
     # database: DatabaseConfig = DatabaseConfig()

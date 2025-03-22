@@ -6,7 +6,6 @@
 import inspect
 from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
 from typing import (
-    TYPE_CHECKING,
     Any,
     AsyncContextManager,
     AsyncGenerator,
@@ -22,9 +21,6 @@ from typing import (
 )
 
 from sekaibot.utils import get_annotations, sync_ctx_manager_wrapper
-
-if TYPE_CHECKING:
-    pass
 
 _T = TypeVar("_T")
 

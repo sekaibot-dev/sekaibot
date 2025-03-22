@@ -1,38 +1,47 @@
-from sekaibot import Node
-from sekaibot.rule import StartsWith, CountTrigger
+from typing import Any
+
+from sekaibot import Depends, Event, Node, SonNode
+
+
 # from sekaibot.rule import rule_at_me
+class BEvent(Event):
+    type: str = "a_event"
+    adapter: str = "test_adapter"
 
 
-@StartsWith("Hello world")
-class HelloWorldNode(Node):
-    if_startswith = StartsWith.Checker("Hello, World", True)
-    param = StartsWith.Param()
+class BNode(SonNode[Event, Any, Any]):
+    def main(self):
+        print(self.event.get_event_name())
+
+
+class HelloWorldNode(Node[Event, Any, Any]):
+    # if_startswith = StartsWith.Checker("Hello, World", True)
+    # param = StartsWith.Param()
 
     """Hello, World! 示例节点。"""
+
+    B: BNode = Depends()
+
     priority = 0
 
     async def handle(self):
-        if key := await self.run(StartsWith._rule_check("Hello, World")):
-            param = await self.run(StartsWith.Param)
-            print(param)
+        print("HelloWorldNode")
+        self.B.main()
         return None
 
 
-@CountTrigger()
 class HelloWorldNode1(Node):
     """Hello, World! 示例节点。"""
 
     parent = "HelloWorldNode"
     priority = 5
-    if_counttrigger = CountTrigger.Checker("")
-    param = CountTrigger.Param()
 
     async def handle(self):
-        print(self.bot.config.model_dump_json(indent=4))
+        # print(self.bot.config.model_dump_json(indent=4))
         return None
 
     async def rule(self):
-        result = await self.run(StartsWith._rule_check("Hello, World"))
+        # result = await self.run(StartsWith._rule_check("Hello, World"))
         return True
 
 

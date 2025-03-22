@@ -151,7 +151,7 @@ class User:
             f"User(users={self.users}" + (f", permission={self.perm})" if self.perm else "") + ")"
         )
 
-    async def __call__(self, bot: Bot, event: Event) -> bool:
+    async def __call__(self, bot: "Bot", event: Event) -> bool:
         try:
             session = event.get_session_id()
         except Exception:

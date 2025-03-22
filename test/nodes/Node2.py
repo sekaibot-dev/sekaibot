@@ -1,4 +1,5 @@
-from sekaibot import Node, Bot, Depends
+from sekaibot import Bot, Depends, Node
+
 # from MainNode import HelloWorldNode1
 # from sekaibot.rule import rule
 

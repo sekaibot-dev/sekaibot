@@ -275,7 +275,7 @@ class NodeManager:
 
         try:
             if not await node_class.check_rule(
-                self.bot, current_event, state, stack, dependency_cache
+                self.bot, current_event, state, self.global_state, stack, dependency_cache
             ):
                 logger.info("rule conditions not met", node=node_class.__name__)
                 return False
@@ -306,7 +306,7 @@ class NodeManager:
         )
 
         if _node.name not in self.node_state:
-            state = _node.__inistateT__()
+            state = _node.__init_state__()
             if state is not None:
                 self.node_state[_node.name] = state
 
