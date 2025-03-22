@@ -1,11 +1,5 @@
 # config.py
-import os
-from typing import (
-    Literal, 
-    Union, 
-    Any,
-    Annotated
-)
+from typing import Annotated, Any, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, DirectoryPath, Field
 
@@ -14,7 +8,6 @@ __all__ = [
     "LogConfig",
     "BotConfig",
     "NodeConfig",
-    "AdapterConfig",
     "MainConfig",
 ]
 
@@ -42,6 +35,7 @@ class LogConfig(ConfigModel):
     level: str | int = "DEBUG"
     verbose_exception: bool = False
 
+
 class BotConfig(ConfigModel):
     """Bot 相关设置。"""
 
@@ -58,21 +52,24 @@ class LLMConfig(ConfigModel):
     """
 
     llm_type: Literal["openai"] = "openai"
-    api_key: str = "sk-dFzsKInVuNhZhAt8KpV4qXhyWeFbME0RYxiGJLXjDHrhirkb"#os.getenv("OPENAI_API_KEY", "your-openai-api-key")
+    api_key: str = "sk-dFzsKInVuNhZhAt8KpV4qXhyWeFbME0RYxiGJLXjDHrhirkb"  # os.getenv("OPENAI_API_KEY", "your-openai-api-key")
     base_url: str = "https://api.chatanywhere.tech/v1"
     model: str = "gpt-4o-mini"
+
 
 class ToolConfig(ConfigModel):
     """Tool 配置。
 
     Attributes:
     """
+
     tools: set[str] = Field(default_factory=set)
     tool_dirs: set[DirectoryPath] = Field(default_factory=set)
 
+
 class PromptConfig(ConfigModel):
     """角色信息配置。
-    
+
     Attributes:
         name: 角色名字
         role_definition: 角色定义
@@ -87,6 +84,7 @@ class PromptConfig(ConfigModel):
     symbol_conversation: list[dict[str, str | list[str | dict]]] | None = [
         {"input": "你好", "output": "你好，很高兴能帮助你"}
     ]
+
 
 class AgentConfig(ConfigModel):
     """Agent 配置。
@@ -110,12 +108,14 @@ class SQLConfig(ConfigModel):
         engine_args: Additional configuration for creating database engines.
         async_mode: Whether it is an asynchronous connection.
     """
+
     db_type: Literal["sql"]
-    connection_string: str | None = None,
-    table_name: str = "message_store",
-    session_id_field_name: str = "session_id",
-    engine_args: dict[str, Any] | None = None,
-    async_mode: bool | None = None, 
+    connection_string: str | None = (None,)
+    table_name: str = ("message_store",)
+    session_id_field_name: str = ("session_id",)
+    engine_args: dict[str, Any] | None = (None,)
+    async_mode: bool | None = (None,)
+
 
 class RedisConfig(ConfigModel):
     """Redis 配置。
@@ -125,10 +125,12 @@ class RedisConfig(ConfigModel):
         key_prefix: The prefix of the key, combined with `session id` to form the key.
         ttl: set the expiration time of `key`, the unit is seconds.
     """
+
     db_type: Literal["redis"]
     url: str = "redis://localhost:6379/0"
     key_prefix: str = "message_store:"
     ttl: int | None = None
+
 
 class MongoDBConfig(ConfigModel):
     """MongoDB 配置。
@@ -140,6 +142,7 @@ class MongoDBConfig(ConfigModel):
         create_index: whether to create an index with name SessionId. set to False if
             such an index already exists.
     """
+
     db_type: Literal["mongodb"]
     connection_string: str
     session_id: str
@@ -147,10 +150,12 @@ class MongoDBConfig(ConfigModel):
     collection_name: str = "message_store"
     create_index: bool = True
 
+
 DatabaseConfigType = Annotated[
     Union[SQLConfig, RedisConfig, MongoDBConfig],
     Field(discriminator="db_type"),
 ]
+
 
 class DatabaseConfig(ConfigModel):
     """Database 配置。
@@ -158,16 +163,18 @@ class DatabaseConfig(ConfigModel):
     Attributes:
         config: SQLConfig | RedisConfig | MongoDBConfig
     """
+
     config: DatabaseConfigType
+
 
 class NodeConfig(ConfigModel):
     """节点配置。"""
 
 
-
 class MainConfig(ConfigModel):
     """SekaiBot 主体配置。"""
+
     bot: BotConfig = BotConfig()
     agent: AgentConfig = AgentConfig()
     node: NodeConfig = NodeConfig()
-    #database: DatabaseConfig = DatabaseConfig()
+    # database: DatabaseConfig = DatabaseConfig()

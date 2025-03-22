@@ -11,58 +11,42 @@ FrontMatter:
     description: nonebot.rule 模块
 """
 
-from argparse import Action, ArgumentError
-from argparse import ArgumentParser as ArgParser
-from argparse import Namespace as Namespace
-from collections.abc import Sequence
-from contextvars import ContextVar
-from gettext import gettext
-from itertools import chain, product
-from collections import deque
-import time as time_util
 import re
-import shlex
+import time as time_util
+from argparse import Namespace as Namespace
+from collections import deque
+from contextvars import ContextVar
 from typing import (
     TYPE_CHECKING,
     NamedTuple,
-    Optional,
+    Self,
     TypedDict,
     TypeVar,
-    Callable,
-    Awaitable,
-    Union,
-    Self,
-    cast,
-    overload,
 )
 
 from pygtrie import CharTrie
 
-from sekaibot.internal.event import Event
-from sekaibot.internal.message import Message, MessageSegment, MessageT, MessageSegmentT
 from sekaibot.consts import (
     BOT_GLOBAL_KEY,
-    STARTSWITH_KEY,
-    ENDSWITH_KEY,
-    FULLMATCH_KEY,
-    KEYWORD_KEY,
-    REGEX_MATCHED,
-    COUNTER_INFO,
-    COUNTER_STATE,
-    PREFIX_KEY,
-    RAW_CMD_KEY,
     CMD_ARG_KEY,
     CMD_KEY,
     CMD_START_KEY,
     CMD_WHITESPACE_KEY,
-    SHELL_ARGS,
-    SHELL_ARGV,
-    
+    COUNTER_INFO,
+    COUNTER_STATE,
+    ENDSWITH_KEY,
+    FULLMATCH_KEY,
+    KEYWORD_KEY,
+    PREFIX_KEY,
+    RAW_CMD_KEY,
+    REGEX_MATCHED,
+    STARTSWITH_KEY,
 )
-
-from sekaibot.log import logger
-from sekaibot.typing import StateT, GlobalStateT 
 from sekaibot.dependencies import Dependency, solve_dependencies_in_bot
+from sekaibot.internal.event import Event
+from sekaibot.internal.message import Message, MessageSegment
+from sekaibot.log import logger
+from sekaibot.typing import GlobalStateT, StateT
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
@@ -120,10 +104,7 @@ class StartswithRule:
             message = event.get_message()
         except Exception:
             return False
-        if match := message.startswith(
-            self.msgs,
-            ignorecase=self.ignorecase
-        ):
+        if match := message.startswith(self.msgs, ignorecase=self.ignorecase):
             state[STARTSWITH_KEY] = match
             return True
         return False
@@ -163,10 +144,7 @@ class EndswithRule:
             message = event.get_message()
         except Exception:
             return False
-        if match := message.endswith(
-            self.msgs, 
-            ignorecase=self.ignorecase
-        ):
+        if match := message.endswith(self.msgs, ignorecase=self.ignorecase):
             state[ENDSWITH_KEY] = match
             return True
         return False
@@ -226,14 +204,13 @@ class KeywordsRule:
         self.keywords = tuple(map(str.casefold, keywords) if ignorecase else keywords)
         self.ignorecase = ignorecase
 
-
     def __repr__(self) -> str:
         return f"Keywords(keywords={self.keywords})"
 
     def __eq__(self, other: object) -> bool:
-        return isinstance(other, KeywordsRule) and frozenset(
-            self.keywords
-        ) == frozenset(other.keywords)
+        return isinstance(other, KeywordsRule) and frozenset(self.keywords) == frozenset(
+            other.keywords
+        )
 
     def __hash__(self) -> int:
         return hash(frozenset(self.keywords))
@@ -271,9 +248,7 @@ class RegexRule:
 
     def __eq__(self, other: object) -> bool:
         return (
-            isinstance(other, RegexRule)
-            and self.regex == other.regex
-            and self.flags == other.flags
+            isinstance(other, RegexRule) and self.regex == other.regex and self.flags == other.flags
         )
 
     def __hash__(self) -> int:
@@ -294,7 +269,7 @@ class RegexRule:
 class Counter:
     """计数器，用于跟踪 True/False 事件的发生时间。"""
 
-    __slots__ = ("values")
+    __slots__ = "values"
 
     def __init__(self, max_size: int):
         self.values = deque(maxlen=max_size)
@@ -313,18 +288,18 @@ class Counter:
         """返回最近 `count_window` 条记录中 `True` 发生的次数。"""
         return sum(1 for v, _ in list(self.values)[-count_window:] if v)
 
-class CountTriggerRule:
 
+class CountTriggerRule:
     __slots__ = ("name", "func", "min_trigger", "time_window", "count_window", "max_size")
 
     def __init__(
         self,
         name: str,
-        func: Dependency[bool] | None = None,  
+        func: Dependency[bool] | None = None,
         min_trigger: int = 10,
         time_window: int = 60,
         count_window: int = 30,
-        max_size: int | None = 100
+        max_size: int | None = 100,
     ):
         self.func = func
         self.name = name
@@ -348,34 +323,39 @@ class CountTriggerRule:
         return hash((self.name, self.time_window, self.count_window))
 
     async def __call__(
-        self, 
-        bot: "Bot",
-        event: Event, 
-        state: StateT,
-        global_state: GlobalStateT 
+        self, bot: "Bot", event: Event, state: StateT, global_state: GlobalStateT
     ) -> bool:
-        
         if isinstance(global_state[BOT_GLOBAL_KEY][COUNTER_STATE], dict):
-            counter: Counter = global_state[BOT_GLOBAL_KEY][COUNTER_STATE].setdefault(self.name, Counter(self.max_size))
+            counter: Counter = global_state[BOT_GLOBAL_KEY][COUNTER_STATE].setdefault(
+                self.name, Counter(self.max_size)
+            )
         else:
             counter = Counter(self.max_size)
             global_state[BOT_GLOBAL_KEY][COUNTER_STATE] = {self.name: counter}
-            
+
         if self.func:
-            counter.append(await solve_dependencies_in_bot(
-                self.func,
-                bot=bot,
-                event=event,
-                state=state,
-                global_state=global_state,
-            ))
+            counter.append(
+                await solve_dependencies_in_bot(
+                    self.func,
+                    bot=bot,
+                    event=event,
+                    state=state,
+                    global_state=global_state,
+                )
+            )
         else:
             counter.append(True)
 
         trigger_state = {}
-        if self.time_window and (time_trigger := counter.count_time(self.time_window)) >= self.min_trigger:
+        if (
+            self.time_window
+            and (time_trigger := counter.count_time(self.time_window)) >= self.min_trigger
+        ):
             trigger_state[f"time_trigger_{self.time_window}s"] = time_trigger
-        if self.count_window and (count_trigger := counter.count_events(self.count_window)) >= self.min_trigger:
+        if (
+            self.count_window
+            and (count_trigger := counter.count_events(self.count_window)) >= self.min_trigger
+        ):
             trigger_state[f"count_trigger_{self.count_window}"] = count_trigger
 
         if trigger_state:
@@ -430,10 +410,7 @@ class TrieRule:
                     arg_str_stripped = arg_str.lstrip()
 
                 has_arg = arg_str_stripped or msg
-                if (
-                    has_arg
-                    and (stripped_len := len(arg_str) - len(arg_str_stripped)) > 0
-                ):
+                if has_arg and (stripped_len := len(arg_str) - len(arg_str_stripped)) > 0:
                     prefix[CMD_WHITESPACE_KEY] = arg_str[:stripped_len]
 
                 # construct command arg
@@ -755,6 +732,8 @@ def shell_command(
 
     return Rule(ShellCommandRule(commands, parser))
 '''
+
+
 class ToMeRule:
     """检查事件是否与机器人有关。"""
 

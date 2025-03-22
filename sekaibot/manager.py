@@ -1,11 +1,7 @@
 import asyncio
 import time
-from contextlib import AsyncExitStack
-from exceptiongroup import BaseExceptionGroup, catch
 from collections import defaultdict
-import anyio
-from anyio.abc import TaskStatus
-from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
+from contextlib import AsyncExitStack
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -14,26 +10,32 @@ from typing import (
     overload,
 )
 
+import anyio
+from anyio.abc import TaskStatus
+from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
+from exceptiongroup import BaseExceptionGroup, catch
+
+from sekaibot.consts import JUMO_TO_TARGET, MAX_TIMEOUT
+from sekaibot.dependencies import Dependency, solve_dependencies_in_bot
 from sekaibot.exceptions import (
     GetEventTimeout,
-    StopException,
-    SkipException,
-    PruningException,
+    IgnoreException,
     JumpToException,
-    RejectException,
+    PruningException,
+    SkipException,
+    StopException,
 )
-from sekaibot.consts import MAX_TIMEOUT, JUMO_TO_TARGET
-from sekaibot.log import logger
-from sekaibot.typing import EventT, NodeStateT, StateT
-from sekaibot.node import Node
-from sekaibot.utils import wrap_get_func, cancel_on_exit, flatten_exception_group, handle_exception
-from sekaibot.dependencies import solve_dependencies_in_bot, Dependency
 from sekaibot.internal.event import Event, EventHandleOption
+from sekaibot.log import logger
+from sekaibot.node import Node
+from sekaibot.typing import EventT, StateT
+from sekaibot.utils import cancel_on_exit, handle_exception, run_coro_with_catch, wrap_get_func
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
 
-class NodeManager():
+
+class NodeManager:
     bot: "Bot"
 
     node_state: dict[str, Any]
@@ -54,16 +56,100 @@ class NodeManager():
     async def startup(self) -> None:
         self._condition = anyio.Condition()
         self._cancel_event = anyio.Event()
-        self._event_send_stream, self._event_receive_stream = (
-            anyio.create_memory_object_stream(
-                max_buffer_size=self.bot.config.bot.event_queue_size
-            )
+        self._event_send_stream, self._event_receive_stream = anyio.create_memory_object_stream(
+            max_buffer_size=self.bot.config.bot.event_queue_size
         )
 
     async def run(self) -> None:
         async with anyio.create_task_group() as tg:
             tg.start_soon(self._handle_event_receive)
             tg.start_soon(cancel_on_exit, self._cancel_event, tg)
+
+    async def _run_event_preprocessors(
+        self,
+        current_event: Event[Any],
+        state: StateT,
+        stack: AsyncExitStack | None = None,
+        dependency_cache: dict | None = None,
+    ) -> bool:
+        """运行事件预处理。
+
+        参数:
+            current_event: Event 对象
+            state: 会话状态
+            stack: 异步上下文栈
+            dependency_cache: 依赖缓存
+
+        返回:
+            是否继续处理事件
+        """
+        if not self.bot._event_preprocessor_hooks:
+            return True
+
+        logger.debug("Running PreProcessors...")
+
+        with catch(
+            {
+                IgnoreException: handle_exception(
+                    "Event is ignored", level="info", name=current_event.get_event_name()
+                ),
+                Exception: handle_exception(
+                    "Error when running EventPreProcessors. Event ignored!"
+                ),
+            }
+        ):
+            async with anyio.create_task_group() as tg:
+                for hook_func in self.bot._event_preprocessor_hooks:
+                    tg.start_soon(
+                        run_coro_with_catch,
+                        hook_func(
+                            bot=self.bot,
+                            event=current_event,
+                            state=state,
+                            stack=stack,
+                            dependency_cache=dependency_cache,
+                        ),
+                        (SkipException,),
+                    )
+
+            return True
+
+        return False
+
+    async def _run_event_postprocessors(
+        self,
+        current_event: Event[Any],
+        state: StateT,
+        stack: AsyncExitStack | None = None,
+        dependency_cache: dict | None = None,
+    ) -> None:
+        """运行事件后处理。
+
+        参数:
+            current_event: Event 对象
+            state: 会话状态
+            stack: 异步上下文栈
+            dependency_cache: 依赖缓存
+        """
+        if not self.bot._event_postprocessor_hooks:
+            return
+
+        logger.debug("Running PostProcessors...")
+
+        with catch({Exception: handle_exception("Error when running EventPostProcessors")}):
+            async with anyio.create_task_group() as tg:
+                for hook_func in self.bot._event_postprocessor_hooks:
+                    tg.start_soon(
+                        run_coro_with_catch,
+                        hook_func(
+                            bot=self.bot,
+                            event=current_event,
+                            state=state,
+                            stack=stack,
+                            dependency_cache=dependency_cache,
+                        ),
+                        (SkipException,),
+                    )
 
     async def handle_event(
         self,
@@ -131,12 +217,12 @@ class NodeManager():
             timeout: 超时时间。
         """
 
-        async def temporary_task(
-            func: Callable[[Event], bool | Awaitable[bool]] | None = None
-        ):
+        async def temporary_task(func: Callable[[Event], bool | Awaitable[bool]] | None = None):
             async def check(event: Event[Any]) -> bool:
-                if event.get_session_id() != current_event.get_session_id(): return False
+                if event.get_session_id() != current_event.get_session_id():
+                    return False
                 return await wrap_get_func(func)(event)
+
             try:
                 event = await self.get(
                     check,
@@ -144,7 +230,9 @@ class NodeManager():
                     max_try_times=max_try_times,
                     timeout=timeout,
                 )
-                await self._handle_event(event, state, node_class)
+                event_copy = event.model_copy()
+                event_copy.__handled__ = False
+                await self._handle_event(event_copy, state, node_class)
             except GetEventTimeout:
                 return
 
@@ -176,23 +264,23 @@ class NodeManager():
         """
 
         try:
-            if not await node_class.check_perm(self.bot, current_event, self.global_state, stack, dependency_cache):
-                logger.info(f"permission conditions not met", node=node_class.__name__)
+            if not await node_class.check_perm(
+                self.bot, current_event, self.global_state, stack, dependency_cache
+            ):
+                logger.info("permission conditions not met", node=node_class.__name__)
                 return False
         except Exception:
-            logger.exception(
-                f"permission check failed", node=node_class.__name__
-            )
+            logger.exception("permission check failed", node=node_class.__name__)
             return False
 
         try:
-            if not await node_class.check_rule(self.bot, current_event, state, stack, dependency_cache):
-                logger.info(f"rule conditions not met", node=node_class.__name__)
+            if not await node_class.check_rule(
+                self.bot, current_event, state, stack, dependency_cache
+            ):
+                logger.info("rule conditions not met", node=node_class.__name__)
                 return False
         except Exception:
-            logger.exception(
-                f"rule check failed", node=node_class.__name__
-            )
+            logger.exception("rule check failed", node=node_class.__name__)
             return False
 
         return True
@@ -207,10 +295,10 @@ class NodeManager():
     ) -> tuple[PruningException | JumpToException | None, StateT]:
         _node = await solve_dependencies_in_bot(
             node_class,
-            bot=self.bot, 
+            bot=self.bot,
             event=current_event,
-            state=state, 
-            node_state=self.node_state[node_class.__name__], 
+            state=state,
+            node_state=self.node_state[node_class.__name__],
             global_state=self.global_state,
             use_cache=True,
             stack=stack,
@@ -218,31 +306,30 @@ class NodeManager():
         )
 
         if _node.name not in self.node_state:
-            state = _node.__init_state__()
+            state = _node.__inistateT__()
             if state is not None:
                 self.node_state[_node.name] = state
 
-
         return (await _node._run_node()), _node.state
-                
+
     async def _check_and_run_node(
         self,
         node_class: type[Node],
         current_event: Event[Any],
         state: StateT,
+        stack: AsyncExitStack | None,
         dependency_cache: Dependency | None = None,
     ) -> tuple[PruningException | JumpToException | None, StateT | None]:
-        async with AsyncExitStack() as stack:
-            if not await self._check_node(node_class, current_event, state, stack, dependency_cache):
-                return PruningException, None
+        if not await self._check_node(node_class, current_event, state, stack, dependency_cache):
+            return PruningException, None
 
-            return await self._run_node(node_class, current_event, state, stack, dependency_cache)
-  
+        return await self._run_node(node_class, current_event, state, stack, dependency_cache)
+
     async def _handle_event(
-        self, 
-        current_event: Event[Any], 
+        self,
+        current_event: Event[Any],
         state: StateT | None = None,
-        start_class: type[Node[Any, Any, Any]] | None = None
+        start_class: type[Node[Any, Any, Any]] | None = None,
     ) -> None:
         """处理事件并匹配相应的节点（插件）。
 
@@ -255,61 +342,86 @@ class NodeManager():
         if current_event.__handled__:
             return
 
-        for hook_func in self.bot._event_preprocessor_hooks:
-            await hook_func(current_event)
+        async with AsyncExitStack() as stack:
+            dependency_cache = {}
 
-        nodes_list = self.bot.nodes_list.copy()
-        state = state or defaultdict(lambda: None)
-        jump_to_index_map = {node.__name__: i for i, (node, _) in enumerate(nodes_list)}
-        index = jump_to_index_map.get(start_class.__name__, 0)
-        interrupted = False
-        dependency_cache = {}
+            if not await self._run_event_preprocessors(
+                current_event=current_event,
+                state=state,
+                stack=stack,
+                dependency_cache=dependency_cache,
+            ):
+                return
 
-        def _handle_stop_propagation(exc_group: BaseExceptionGroup) -> None:
-            nonlocal interrupted
+            nodes_list = self.bot.nodes_list.copy()
+            state = state or defaultdict(lambda: None)
+            jump_to_index_map = {node.__name__: i for i, (node, _) in enumerate(nodes_list)}
+            index = jump_to_index_map.get(start_class.__name__, 0) if start_class else 0
+            interrupted = False
 
-            interrupted = True
-            logger.debug("Stop event propagation")
+            def _handle_stop_propagation(exc_group: BaseExceptionGroup) -> None:
+                nonlocal interrupted
+                interrupted = True
+                logger.debug("Stop event propagation")
 
-        while index < len(nodes_list) and not interrupted:
-            node_class, pruning_node = nodes_list[index]
-            
+            while index < len(nodes_list) and not interrupted:
+                node_class, pruning_node = nodes_list[index]
 
-            logger.debug("Checking for matching nodes", priority=node_class)
+                logger.debug("Checking for matching nodes", priority=node_class)
 
-            next_index = index + 1
-            
-            with catch({
-                StopException: _handle_stop_propagation,
-                Exception: handle_exception(
-                    "Error when checking Matcher."
-                ),
-            }):
-                exc, _state = await self._check_and_run_node(node_class, current_event, state.copy(), dependency_cache)
+                next_index = index + 1
 
-                if isinstance(exc, PruningException):
-                    if pruning_node == -1:
-                        break
-                    next_index = pruning_node
+                with catch(
+                    {
+                        StopException: _handle_stop_propagation,
+                        Exception: handle_exception("Error when checking Node.", node=node_class),
+                    }
+                ):
+                    exc, _state = await self._check_and_run_node(
+                        node_class,
+                        current_event,
+                        state.copy(),
+                        stack,
+                        dependency_cache,
+                    )
 
-                elif isinstance(exc, JumpToException):
-                    if node_name := _state[JUMO_TO_TARGET]:
-                        jump_to_index = jump_to_index_map.get(node_name)
+                    if isinstance(exc, PruningException):
+                        if pruning_node == -1:
+                            break
+                        next_index = pruning_node
 
-                        if jump_to_index is None:
-                            logger.warning("The node to jump to does not exist", node_name=node_name)
-                            continue
-                        elif jump_to_index > index:
-                            next_index = jump_to_index
+                    elif isinstance(exc, JumpToException):
+                        if node_name := _state[JUMO_TO_TARGET]:
+                            jump_to_index = jump_to_index_map.get(node_name)
+                            if jump_to_index is None:
+                                logger.warning(
+                                    "The node to jump to does not exist",
+                                    node_name=node_name,
+                                )
+                                continue
+                            elif jump_to_index > index:
+                                next_index = jump_to_index
+                            else:
+                                logger.warning(
+                                    "The node to jump to is before the current node",
+                                    node=nodes_list[jump_to_index],
+                                )
                         else:
-                            logger.warning("The node to jump to is before the current node", node=nodes_list[jump_to_index])
-                    else:
-                        logger.warning("Rejecting exception caught in node but it does not have the target", node=node_class)
+                            logger.warning(
+                                "Rejecting exception caught in node but it does not have the target",
+                                node=node_class,
+                            )
 
-            index = next_index
+                index = next_index
 
-        for hook_func in self.bot._event_postprocessor_hooks:
-            await hook_func(current_event)
+            logger.debug("Checking for nodes completed")
+
+            await self._run_event_postprocessors(
+                current_event=current_event,
+                state=state,
+                stack=stack,
+                dependency_cache=dependency_cache,
+            )
 
         logger.info("Event Finished")
 
@@ -398,10 +510,7 @@ class NodeManager():
                 if (
                     self._current_event is not None
                     and not self._current_event.__handled__
-                    and (
-                        event_type is None
-                        or isinstance(self._current_event, event_type)
-                    )
+                    and (event_type is None or isinstance(self._current_event, event_type))
                     and await _func(self._current_event)
                 ):
                     self._current_event.__handled__ = True

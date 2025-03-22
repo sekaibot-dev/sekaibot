@@ -1,6 +1,7 @@
 # core/tools/web_search.py
 from langchain.agents import Tool
 
+
 class WebSearchTool:
     """
     示例性的 Web 搜索工具。
@@ -23,5 +24,5 @@ class WebSearchTool:
         return Tool(
             name="web_search",
             func=self.run,
-            description="可以帮助进行网络搜索，输入搜索关键词，返回搜索结果"
+            description="可以帮助进行网络搜索，输入搜索关键词，返回搜索结果",
         )

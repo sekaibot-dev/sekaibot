@@ -4,8 +4,6 @@
 对于适配器开发者，所有适配器抛出的异常都应该继承自 `AdapterException` 。
 """
 
-from sekaibot.consts import MAX_TIMEOUT
-
 __all__ = [
     "EventException",
     "SkipException",
@@ -20,6 +18,10 @@ __all__ = [
 
 class EventException(BaseException):
     """事件处理过程中由节点抛出的异常，用于控制事件的传播，会被 SekaiBot 自动捕获并处理。"""
+
+
+class IgnoreException(EventException):
+    """忽略此事件。"""
 
 
 class SkipException(EventException):

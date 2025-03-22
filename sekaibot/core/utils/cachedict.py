@@ -7,6 +7,7 @@ from typing import TypeVar, Generic, Optional
 K = TypeVar("K")  # 键类型
 V = TypeVar("V")  # 值类型
 
+
 class cacheDict(MutableMapping, Generic[K, V]):
     """支持类型标注的 LRU 缓存"""
 

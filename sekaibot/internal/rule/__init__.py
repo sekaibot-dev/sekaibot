@@ -1,17 +1,17 @@
-from contextlib import AsyncExitStack
 from abc import ABC, abstractmethod
+from contextlib import AsyncExitStack
+from itertools import chain
 from typing import (
-    TYPE_CHECKING, 
-    Any, 
-    NoReturn, 
-    Optional, 
-    Type, 
-    Self, 
-    Callable, 
-    Awaitable, 
-    Generic, 
-    TypeVar, 
-    final
+    TYPE_CHECKING,
+    Any,
+    Awaitable,
+    Callable,
+    Generic,
+    NoReturn,
+    Self,
+    Type,
+    TypeVar,
+    final,
 )
 
 import anyio
@@ -20,17 +20,12 @@ from exceptiongroup import BaseExceptionGroup, catch
 from sekaibot.dependencies import Dependency, Depends, solve_dependencies_in_bot
 from sekaibot.exceptions import SkipException
 from sekaibot.internal.event import Event
-from itertools import chain
-from sekaibot.typing import RuleCheckerT, StateT, GlobalStateT, NodeT
+from sekaibot.typing import GlobalStateT, NodeT, RuleCheckerT, StateT
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
 
-__all__ = [
-    "Rule",
-    "RuleChecker",
-    "MatchRule"
-]
+__all__ = ["Rule", "RuleChecker", "MatchRule"]
 
 
 class Rule:
@@ -52,10 +47,11 @@ class Rule:
     __slots__ = ("checkers",)
 
     def __init__(self, *checkers: "Rule" | RuleCheckerT | Dependency[bool]) -> None:
-        self.checkers: set[Dependency[bool]] = set(chain.from_iterable(
-            checker.checkers if isinstance(checker, Rule) else {checker}
-            for checker in checkers
-        ))
+        self.checkers: set[Dependency[bool]] = set(
+            chain.from_iterable(
+                checker.checkers if isinstance(checker, Rule) else {checker} for checker in checkers
+            )
+        )
         """存储 `RuleChecker`"""
 
     def __repr__(self) -> str:
@@ -66,7 +62,7 @@ class Rule:
         bot: "Bot",
         event: Event,
         state: StateT,
-        global_state: GlobalStateT ,
+        global_state: GlobalStateT,
         stack: AsyncExitStack | None = None,
         dependency_cache: dict[Dependency[Any], Any] | None = None,
     ) -> bool:
@@ -132,7 +128,7 @@ class Rule:
 
     def __or__(self, other: object) -> NoReturn:
         raise RuntimeError("Or operation between rules is not allowed.")
-    
+
     def __add__(self, other: Self | RuleCheckerT) -> Self:
         if other is None:
             return self
@@ -140,15 +136,17 @@ class Rule:
             return Rule(*self.checkers, *other.checkers)
         else:
             return Rule(*self.checkers, other)
-        
+
     def __iadd__(self, other: Self | RuleCheckerT) -> Self:
         return self.__add__(other)
-    
+
     def __sub__(self, other: Self | RuleCheckerT) -> NoReturn:
         raise RuntimeError("Subtraction operation between rules is not allowed.")
-    
+
+
 ArgsT = TypeVar("T")
 ParamT = TypeVar("P")
+
 
 class RuleChecker(ABC, Generic[ArgsT, ParamT]):
     """抽象基类，匹配消息规则。"""
@@ -161,7 +159,7 @@ class RuleChecker(ABC, Generic[ArgsT, ParamT]):
         if not isinstance(cls, type):
             raise TypeError(f"class should be NodeT, not `{type(cls)}`.")
         if not hasattr(cls, "__node_rule__"):
-            setattr(cls, "__node_rule__", Rule())
+            cls.__node_rule__ = Rule()
         cls.__node_rule__ += self.__rule__
         return cls
 
@@ -175,14 +173,13 @@ class RuleChecker(ABC, Generic[ArgsT, ParamT]):
         """默认实现检查方法的依赖注入方法，子类可覆盖。"""
         return Depends(cls._rule_check(*args, **kwargs), use_cache=False)
 
-    
     @final
     async def _check(
         self,
         bot: "Bot",
         event: Event,
         state: StateT,
-        global_state: GlobalStateT ,
+        global_state: GlobalStateT,
         stack: AsyncExitStack | None = None,
         dependency_cache: dict[Dependency[Any], Any] | None = None,
     ) -> bool:
@@ -200,27 +197,19 @@ class RuleChecker(ABC, Generic[ArgsT, ParamT]):
     def Param(cls) -> ParamT:
         """在依赖注入里获取检查器的数据。"""
         return Depends(cls._param, use_cache=False)
-    
+
+
 class MatchRule(RuleChecker[str | bool, str]):
     """所有匹配类 Rule 的基类。"""
 
     checker: Type[Callable[[tuple[str, ...], bool], "Rule"]] = None
 
-    def __init__(
-        self,
-        *msgs: str | tuple[str, ...], 
-        ignorecase: bool = False
-    ) -> None:
-
+    def __init__(self, *msgs: str | tuple[str, ...], ignorecase: bool = False) -> None:
         if self.checker is None:
-            raise NotImplementedError(f"Subclasses of MatchRule must provide a checker.")
+            raise NotImplementedError("Subclasses of MatchRule must provide a checker.")
 
-        super().__init__(Rule(self.checker(*msgs, ignorecase))) 
+        super().__init__(Rule(self.checker(*msgs, ignorecase)))
 
     @classmethod
-    def Checker(
-        cls,
-        *msgs: str | tuple[str, ...], 
-        ignorecase: bool = False
-    ):
-        return super().Checker(*msgs, ignorecase) 
+    def Checker(cls, *msgs: str | tuple[str, ...], ignorecase: bool = False):
+        return super().Checker(*msgs, ignorecase)

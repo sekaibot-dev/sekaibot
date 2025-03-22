@@ -1,3 +1,3 @@
-"""SekaiBot 权限控制
-"""
+"""SekaiBot 权限控制"""
+
 from sekaibot.internal.permission import Permission

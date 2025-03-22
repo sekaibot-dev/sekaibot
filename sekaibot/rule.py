@@ -1,49 +1,41 @@
 import re
-
 from typing import Any
 
-from sekaibot.internal.event import Event
-from sekaibot.typing import StateT
-from sekaibot.internal.rule import Rule, RuleChecker, MatchRule
-from sekaibot.dependencies import Dependency
-from sekaibot.internal.rule.utils import (
-    StartswithRule,
-    EndswithRule,
-    FullmatchRule,
-    KeywordsRule,
-    #CommandRule,
-    #ShellCommandRule,
-    RegexRule,
-    CountTriggerRule,
-    ToMeRule,
-)
 from sekaibot.consts import (
-    CMD_ARG_KEY,
-    CMD_KEY,
-    CMD_START_KEY,
-    CMD_WHITESPACE_KEY,
+    COUNTER_INFO,
     ENDSWITH_KEY,
     FULLMATCH_KEY,
     KEYWORD_KEY,
-    PREFIX_KEY,
-    RAW_CMD_KEY,
     REGEX_MATCHED,
-    COUNTER_INFO,
-    SHELL_ARGS,
-    SHELL_ARGV,
     STARTSWITH_KEY,
 )
+from sekaibot.dependencies import Dependency
+from sekaibot.internal.event import Event
+from sekaibot.internal.rule import MatchRule, Rule, RuleChecker
+from sekaibot.internal.rule.utils import (
+    CountTriggerRule,
+    EndswithRule,
+    FullmatchRule,
+    KeywordsRule,
+    # CommandRule,
+    # ShellCommandRule,
+    RegexRule,
+    StartswithRule,
+    ToMeRule,
+)
+from sekaibot.typing import StateT
 
 __all__ = [
-    "Startswith",
+    "StartsWith",
     "EndsWith",
     "FullMatch",
     "Keywords",
-    #"Command",
-    #"ShellCommand",
+    # "Command",
+    # "ShellCommand",
     "Regex",
     "ToMe",
 ]
+
 
 class StartsWith(MatchRule):
     """匹配消息纯文本开头。
@@ -56,10 +48,11 @@ class StartsWith(MatchRule):
     __slots__ = ("__rule__", "checker")
 
     checker = StartswithRule
-    
+
     @classmethod
     def _param(cls, state: StateT):
         return state[STARTSWITH_KEY]
+
 
 class EndsWith(MatchRule):
     """匹配消息纯文本结尾。
@@ -72,10 +65,11 @@ class EndsWith(MatchRule):
     __slots__ = ("__rule__", "checker")
 
     checker = EndswithRule
-    
+
     @classmethod
     def _param(cls, state: StateT):
         return state[ENDSWITH_KEY]
+
 
 class FullMatch(MatchRule):
     """完全匹配消息。
@@ -93,7 +87,8 @@ class FullMatch(MatchRule):
     def _param(cls, state: StateT):
         return state[FULLMATCH_KEY]
 
-class Keyword(RuleChecker[tuple[list[str], bool], tuple[str,...]]):
+
+class Keywords(RuleChecker[tuple[list[str], bool], tuple[str, ...]]):
     """匹配消息纯文本关键词。
 
     参数:
@@ -102,24 +97,17 @@ class Keyword(RuleChecker[tuple[list[str], bool], tuple[str,...]]):
 
     __slots__ = ("__rule__",)
 
-    def __init__(
-        self,
-        *keywords: str, 
-        ignorecase: bool = False
-    ) -> None:
+    def __init__(self, *keywords: str, ignorecase: bool = False) -> None:
         super().__init__(KeywordsRule(*keywords, ignorecase))
 
     @classmethod
-    def Checker(
-        cls,
-        *keywords: str, 
-        ignorecase: bool = False
-    ):
-        return super().Checker(*keywords, ignorecase) 
+    def Checker(cls, *keywords: str, ignorecase: bool = False):
+        return super().Checker(*keywords, ignorecase)
 
     @classmethod
     def _param(cls, state: StateT):
         return state[KEYWORD_KEY]
+
 
 class Regex(RuleChecker[tuple[str, re.RegexFlag], re.Match[str]]):
     """匹配符合正则表达式的消息字符串。
@@ -144,23 +132,18 @@ class Regex(RuleChecker[tuple[str, re.RegexFlag], re.Match[str]]):
 
     __slots__ = ("__rule__",)
 
-    def __init__(
-        self,
-        regex: str, flags: int | re.RegexFlag = 0
-    ) -> Rule:
+    def __init__(self, regex: str, flags: int | re.RegexFlag = 0) -> Rule:
         super().__init__(RegexRule(regex, flags))
-    
+
     @classmethod
-    def Checker(
-        cls,
-        regex: str, flags: int | re.RegexFlag = 0
-    ):
-        return super().Checker(regex, flags) 
+    def Checker(cls, regex: str, flags: int | re.RegexFlag = 0):
+        return super().Checker(regex, flags)
 
     @classmethod
     def _param(cls, state: StateT):
         return state[REGEX_MATCHED]
-    
+
+
 class CountTrigger(RuleChecker[tuple[str, Dependency[bool], int, int, int, int], dict]):
     """计数器规则。
 
@@ -174,29 +157,32 @@ class CountTrigger(RuleChecker[tuple[str, Dependency[bool], int, int, int, int],
     def __init__(
         self,
         name: str,
-        func: Dependency[bool] | None = None,  
+        func: Dependency[bool] | None = None,
         min_trigger: int = 10,
         time_window: int = 60,
         count_window: int = 30,
-        max_size: int | None = 100
+        max_size: int | None = 100,
     ) -> Rule:
-        super().__init__(CountTriggerRule(name, func, min_trigger, time_window, count_window, max_size))
-    
+        super().__init__(
+            CountTriggerRule(name, func, min_trigger, time_window, count_window, max_size)
+        )
+
     @classmethod
     def Checker(
         cls,
         name: str,
-        func: Dependency[bool] | None = None,  
+        func: Dependency[bool] | None = None,
         min_trigger: int = 10,
         time_window: int = 60,
         count_window: int = 30,
-        max_size: int | None = 100
+        max_size: int | None = 100,
     ):
-        return super().Checker(name, name, func, min_trigger, time_window, count_window, max_size) 
+        return super().Checker(name, name, func, min_trigger, time_window, count_window, max_size)
 
     @classmethod
     def _param(cls, state: StateT):
         return state[COUNTER_INFO]
+
 
 class ToMe(RuleChecker[Any, bool]):
     """匹配与机器人有关的事件。"""
@@ -205,10 +191,10 @@ class ToMe(RuleChecker[Any, bool]):
 
     def __init__(self) -> None:
         super().__init__(ToMeRule())
-    
+
     @classmethod
     def Checker(cls):
-        return super().Checker() 
+        return super().Checker()
 
     @classmethod
     def _param(cls, event: Event) -> bool:

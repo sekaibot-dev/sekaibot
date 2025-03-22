@@ -1,7 +1,6 @@
 """SekaiBot 内部使用的实用工具。"""
 
 import asyncio
-import anyio
 import importlib
 import inspect
 import json
@@ -25,20 +24,23 @@ from typing import (
     ContextManager,
     Coroutine,
     Generator,
-    Sequence,
     Literal,
+    Sequence,
     Type,
     TypeVar,
     Union,
     cast,
+    overload,
 )
+
+import anyio
+from exceptiongroup import BaseExceptionGroup, catch
+from pydantic import BaseModel
 from typing_extensions import ParamSpec, TypeAlias, TypeGuard
 
-from pydantic import BaseModel
-
 from sekaibot.config import ConfigModel
-from sekaibot.typing import EventT
 from sekaibot.log import logger
+from sekaibot.typing import EventT
 
 if TYPE_CHECKING:
     from os import PathLike
@@ -77,10 +79,9 @@ def flatten_exception_group(
         else:
             yield exc
 
+
 def handle_exception(
-    msg: str, 
-    level: Literal["debug", "info", "warning", "error", "critical"] = "error", 
-    **kwargs
+    msg: str, level: Literal["debug", "info", "warning", "error", "critical"] = "error", **kwargs
 ) -> Callable[[BaseExceptionGroup], None]:
     def _handle(exc_group: BaseExceptionGroup[Exception]) -> None:
         for exc in flatten_exception_group(exc_group):
@@ -90,6 +91,44 @@ def handle_exception(
                 getattr(logger, level)(msg, **kwargs)
 
     return _handle
+
+
+@overload
+async def run_coro_with_catch(
+    coro: Coroutine[Any, Any, _T],
+    exc: tuple[type[Exception], ...],
+    return_on_err: None = None,
+) -> _T | None: ...
+
+
+@overload
+async def run_coro_with_catch(
+    coro: Coroutine[Any, Any, _T],
+    exc: tuple[type[Exception], ...],
+    return_on_err: _R,
+) -> _T | _R: ...
+
+
+async def run_coro_with_catch(
+    coro: Coroutine[Any, Any, _T],
+    exc: tuple[type[Exception], ...],
+    return_on_err: _R | None = None,
+) -> _T | _R | None:
+    """运行协程并当遇到指定异常时返回指定值。
+
+    参数:
+        coro: 要运行的协程
+        exc: 要捕获的异常
+        return_on_err: 当发生异常时返回的值
+
+    返回:
+        协程的返回值或发生异常时的指定值
+    """
+
+    with catch({exc: lambda exc_group: None}):
+        return await coro
+
+    return return_on_err
 
 
 class ModulePathFinder(MetaPathFinder):
@@ -126,9 +165,8 @@ def is_config_class(config_class: Any) -> TypeGuard[Type[ConfigModel]]:
         and not inspect.isabstract(config_class)
     )
 
-def remove_none_attributes(
-    model: _BaseModelT, exclude: set[str] | None = None
-) -> _BaseModelT:
+
+def remove_none_attributes(model: _BaseModelT, exclude: set[str] | None = None) -> _BaseModelT:
     """去除类中值为None的属性
 
     Args:
@@ -141,14 +179,13 @@ def remove_none_attributes(
     if exclude is None:
         exclude = set()
     cleaned_data = {
-        key: value
-        for key, value in model.__dict__.items()
-        if key in exclude or value is not None
+        key: value for key, value in model.__dict__.items() if key in exclude or value is not None
     }
     for key in list(model.__dict__.keys()):
         delattr(model, key)
     model.__dict__.update(cleaned_data)
     return model
+
 
 def get_classes_from_module(module: ModuleType, super_class: _TypeT) -> list[_TypeT]:
     """从模块中查找指定类型的类。
@@ -203,9 +240,7 @@ def get_classes_from_module_name(
         raise ImportError(e, traceback.format_exc()) from e
 
 
-def flatten_tree_with_jumps(
-    tree: TreeType[_T]
-) -> list[tuple[_T, int]]:
+def flatten_tree_with_jumps(tree: TreeType[_T]) -> list[tuple[_T, int]]:
     """将树按深度优先遍历展开，并计算剪枝后跳转索引。
 
     该函数遍历给定的树结构，并按深度优先遍历顺序生成节点列表。
@@ -347,6 +382,7 @@ async def sync_ctx_manager_wrapper(
     else:
         await sync_func_wrapper(cm.__exit__, to_thread=to_thread)(None, None, None)
 
+
 def wrap_get_func(
     func: Callable[[EventT], bool | Awaitable[bool]] | None,
 ) -> Callable[[EventT], Awaitable[bool]]:
@@ -364,12 +400,12 @@ def wrap_get_func(
         return sync_func_wrapper(func)  # type: ignore
     return func
 
+
 async def cancel_on_exit(
-    condition: anyio.Event | anyio.Condition,
-    cancel_scope: anyio.CancelScope
+    condition: anyio.Event | anyio.Condition, cancel_scope: anyio.CancelScope
 ) -> None:
     """当 should_exit 被设置时取消当前的 task group。
-    
+
     支持 `anyio.Event` 和 `anyio.Condition`。
     """
     if isinstance(condition, anyio.Event):
@@ -378,7 +414,9 @@ async def cancel_on_exit(
         async with condition:
             await condition.wait()
     else:
-        raise TypeError(f"`condition` must be anyio.Event or anyio.Condition, not {type(condition)}.")
+        raise TypeError(
+            f"`condition` must be anyio.Event or anyio.Condition, not {type(condition)}."
+        )
 
     cancel_scope.cancel()
 
@@ -433,4 +471,3 @@ else:  # pragma: no cover
             return {}
 
         return dict(ann)
-

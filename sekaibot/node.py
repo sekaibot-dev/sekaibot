@@ -4,36 +4,42 @@
 """
 
 import inspect
-import anyio
 from abc import ABC, abstractmethod
+from contextlib import AsyncExitStack
 from enum import Enum
-from exceptiongroup import BaseExceptionGroup, catch
-
 from typing import (
     TYPE_CHECKING,
     Any,
     ClassVar,
-    Self,
     Generic,
     NoReturn,
-    Optional,
+    Self,
     cast,
     final,
-) # type: ignore
-from typing_extensions import Annotated, get_args, get_origin
-from contextlib import AsyncExitStack
+)  # type: ignore
 
-from sekaibot.log import logger
-from sekaibot.consts import MAX_TIMEOUT, REJECT_TARGET, JUMO_TO_TARGET
+import anyio
+from exceptiongroup import BaseExceptionGroup, catch
+from typing_extensions import Annotated, get_args, get_origin
+
 from sekaibot.config import ConfigModel
-from sekaibot.dependencies import Depends, Dependency, solve_dependencies_in_bot, _T
+from sekaibot.consts import JUMO_TO_TARGET, MAX_TIMEOUT, REJECT_TARGET
+from sekaibot.dependencies import _T, Dependency, Depends, solve_dependencies_in_bot
+from sekaibot.exceptions import (
+    FinishException,
+    JumpToException,
+    PruningException,
+    RejectException,
+    SkipException,
+    StopException,
+)
 from sekaibot.internal.event import Event
 from sekaibot.internal.message import BuildMessageType
-from sekaibot.exceptions import SkipException, JumpToException, PruningException, StopException, RejectException, FinishException
-from sekaibot.typing import ConfigT, EventT, NodeStateT, GlobalStateT , StateT
-from sekaibot.utils import is_config_class, flatten_exception_group, handle_exception
-from sekaibot.rule import Rule
+from sekaibot.log import logger
 from sekaibot.permission import Permission
+from sekaibot.rule import Rule
+from sekaibot.typing import ConfigT, EventT, GlobalStateT, NodeStateT, StateT
+from sekaibot.utils import flatten_exception_group, handle_exception, is_config_class
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
@@ -86,7 +92,6 @@ class Node(ABC, Generic[EventT, NodeStateT, ConfigT]):
         bot = Depends("Bot")
         state = Depends(StateT)
 
-
     def __init_state__(self) -> NodeStateT | None:
         """初始化节点状态。"""
 
@@ -117,14 +122,22 @@ class Node(ABC, Generic[EventT, NodeStateT, ConfigT]):
                 except ValueError:  # pragma: no cover
                     continue
                 if event_type is None:
-                    if (
-                        inspect.isclass(event_t)
-                        and issubclass(event_t, Event)
-                    ):
+                    if inspect.isclass(event_t) and issubclass(event_t, Event):
                         event_type = event_t
                     else:
-                        _event_t = tuple(filter(lambda e: inspect.isclass(e) and issubclass(e, Event), get_args(event_t)))
-                        event_type = _event_t[0] if len(_event_t) == 1 else _event_t if len(_event_t) >0 else None
+                        _event_t = tuple(
+                            filter(
+                                lambda e: inspect.isclass(e) and issubclass(e, Event),
+                                get_args(event_t),
+                            )
+                        )
+                        event_type = (
+                            _event_t[0]
+                            if len(_event_t) == 1
+                            else _event_t
+                            if len(_event_t) > 0
+                            else None
+                        )
                 if (
                     config is None
                     and inspect.isclass(config_t)
@@ -150,7 +163,7 @@ class Node(ABC, Generic[EventT, NodeStateT, ConfigT]):
     def name(self) -> str:
         """节点类名称。"""
         return self.__class__.__name__
-    
+
     '''async def call_api(self, api: str, **params: Any):
         """调用 API，协程会等待直到获得 API 响应。
 
@@ -217,10 +230,13 @@ class Node(ABC, Generic[EventT, NodeStateT, ConfigT]):
         检查节点权限。
         """
         return (
-            isinstance(cls.EventType, str) and event.type == (cls.EventType or event.type)
+            isinstance(cls.EventType, str)
+            and event.type == (cls.EventType or event.type)
             or isinstance(event, cls.EventType)
         ) and await cls.__node_perm__(
-            bot=bot, event=event, global_state=global_state,
+            bot=bot,
+            event=event,
+            global_state=global_state,
             stack=stack,
             dependency_cache=dependency_cache,
         )
@@ -239,10 +255,13 @@ class Node(ABC, Generic[EventT, NodeStateT, ConfigT]):
         检查节点规则。
         """
         return (
-            isinstance(cls.EventType, str) and event.type == (cls.EventType or event.type)
+            isinstance(cls.EventType, str)
+            and event.type == (cls.EventType or event.type)
             or isinstance(event, cls.EventType)
         ) and await cls.__node_rule__(
-            bot=bot, event=event, state=state,
+            bot=bot,
+            event=event,
+            state=state,
             stack=stack,
             dependency_cache=dependency_cache,
         )
@@ -254,15 +273,15 @@ class Node(ABC, Generic[EventT, NodeStateT, ConfigT]):
 
     async def rule(self) -> bool:
         """匹配事件的方法。事件处理时，会按照节点的优先级依次调用此方法，当此方法返回 `True` 时将事件交由此节点处理。每个节点不一定要实现此方法。
-            注意：不建议直接在此方法内实现对事件的处理，事件的具体处理请交由 node 方法。
+        注意：不建议直接在此方法内实现对事件的处理，事件的具体处理请交由 node 方法。
         """
         return True
-    
+
     async def fallback(self) -> None:
         """事件不通过时执行的善后方法。当 `rule()` 方法返回 `False` 时 SekaiBot 会调用此方法。每个节点不一定要实现此方法。
-            注意：此方法最好用于执行拒绝（`reject()`）等方法，不建议直接在此方法内实现对事件的处理，事件的具体处理请交由 node 方法。
+        注意：此方法最好用于执行拒绝（`reject()`）等方法，不建议直接在此方法内实现对事件的处理，事件的具体处理请交由 node 方法。
         """
-    
+
     async def reply(self, message: BuildMessageType) -> NoReturn:
         """回复消息。"""
 
@@ -326,28 +345,28 @@ class Node(ABC, Generic[EventT, NodeStateT, ConfigT]):
     def skip(self) -> NoReturn:
         """跳过自身继续当前事件传播。"""
         raise SkipException
-    
+
     @final
     def jump_to(self, node: str) -> NoReturn:
         """跳过自身并将事件转发到下一个节点。"""
         self.state[JUMO_TO_TARGET] = node
         raise JumpToException
-    
+
     @final
     def prune(self) -> NoReturn:
         """中断事件的传播并将事件转发到下一个节点，即剪枝。"""
         raise PruningException
-    
+
     @final
     def finish(self, message: BuildMessageType | None = None) -> NoReturn:
         """结束当前节点。"""
         if message:
             self.reply(message)
         raise FinishException
-    
+
     @final
     def reject(
-        self, 
+        self,
         message: BuildMessageType | None = None,
         max_try_times: int | None = None,
         timeout: int | float = MAX_TIMEOUT,
@@ -363,26 +382,24 @@ class Node(ABC, Generic[EventT, NodeStateT, ConfigT]):
         dependent: Dependency[_T],
     ) -> _T:
         """在节点内运行 SekaiBot 内置的，或自定义的函数，以及具有 `__call__` 的类。
-            这些函数只能含有 Bot, Event, State 三个参数。
+        这些函数只能含有 Bot, Event, State 三个参数。
         """
         result: _T = ...
         async with AsyncExitStack() as stack:
             result = await solve_dependencies_in_bot(
                 dependent,
-                bot=self.bot, 
+                bot=self.bot,
                 event=self.event,
-                state=self.state, 
-                node_state=self.node_state, 
+                state=self.state,
+                node_state=self.node_state,
                 global_state=self.bot.manager.global_state,
-                stack=stack
+                stack=stack,
             )
         return result
-    
+
     @final
     async def gather(
-        self,
-        *dependencies: Dependency[_T],
-        return_exceptions: bool = False
+        self, *dependencies: Dependency[_T], return_exceptions: bool = False
     ) -> tuple[_T, ...]:
         """类似 `asyncio.gather()` 并发执行多个任务，支持 `return_exceptions`"""
 
@@ -394,60 +411,83 @@ class Node(ABC, Generic[EventT, NodeStateT, ConfigT]):
                 results[dep] = await self.run(dep)
             except Exception as e:
                 if return_exceptions:
-                    results[dep] = e 
+                    results[dep] = e
                 else:
-                    raise 
+                    raise
 
         async with anyio.create_task_group() as tg:
             for dependency in dependencies:
                 tg.start_soon(wrapper, dependency)
 
         return tuple(results[dep] for dep in dependencies)
-    
+
     @final
     async def _run_rule(self):
         """执行 rule() 方法并返回结果"""
 
         def _handle_special_exception(
             exc_group: BaseExceptionGroup[
-                StopException | SkipException | JumpToException | PruningException | RejectException | FinishException
-            ]
+                StopException
+                | SkipException
+                | JumpToException
+                | PruningException
+                | RejectException
+                | FinishException
+            ],
         ):
             mapping_dict = {
-                StopException: "stop()", SkipException: "skip()", JumpToException: "jump_to()",
-                PruningException: "prune()", RejectException: "reject()", FinishException: "finish()"
+                StopException: "stop()",
+                SkipException: "skip()",
+                JumpToException: "jump_to()",
+                PruningException: "prune()",
+                RejectException: "reject()",
+                FinishException: "finish()",
             }
             for exc in flatten_exception_group(exc_group):
                 if exc in mapping_dict:
-                    logger.warning(f"You should not use `{mapping_dict[exc]}` in `rule()`, please instead use in node", node=self.__class__)
-        with catch({
-            (
-                StopException,
-                SkipException,
-                JumpToException,
-                PruningException,
-                RejectException,
-                FinishException
-            ): _handle_special_exception
-        }):
+                    logger.warning(
+                        f"You should not use `{mapping_dict[exc]}` in `rule()`, please instead use in node",
+                        node=self.__class__,
+                    )
+
+        with catch(
+            {
+                (
+                    StopException,
+                    SkipException,
+                    JumpToException,
+                    PruningException,
+                    RejectException,
+                    FinishException,
+                ): _handle_special_exception
+            }
+        ):
             return await self.rule()
         return False
-    
+
     @final
     async def _run_handle(self):
         """执行 handle() 方法并返回结果
-        
+
         Raise:
             BaseExceptionGroup[JumpToException | PruningException | RejectException]
         """
+
         def _handle_stop_exception(exc_group: BaseExceptionGroup[StopException]):
             logger.debug("Stopping exception caught in node", node=self.__class__)
             self.block = True
-        with catch({
-            SkipException: handle_exception("Skip exception caught in node", level="debug", node=self.__class__),
-            FinishException: handle_exception("Finish exception caught in node", level="debug", node=self.__class__),
-            StopException: _handle_stop_exception
-        }):
+
+        with catch(
+            {
+                SkipException: handle_exception(
+                    "Skip exception caught in node", level="debug", node=self.__class__
+                ),
+                FinishException: handle_exception(
+                    "Finish exception caught in node", level="debug", node=self.__class__
+                ),
+                StopException: _handle_stop_exception,
+            }
+        ):
             await self.handle()
 
     @final
@@ -457,15 +497,25 @@ class Node(ABC, Generic[EventT, NodeStateT, ConfigT]):
         Raise:
             BaseExceptionGroup[JumpToException | RejectException]
         """
+
         def _handle_stop_exception(exc_group: BaseExceptionGroup[StopException]):
             logger.debug("Stopping exception caught in node", node=self.__class__)
             self.block = True
-        with catch({
-            SkipException: handle_exception("Skip exception caught in node", level="debug", node=self.__class__),
-            FinishException: handle_exception("Finish exception caught in node", level="debug", node=self.__class__),
-            PruningException: handle_exception("Pruning exception caught in node", level="debug", node=self.__class__),
-            StopException: _handle_stop_exception
-        }):
+
+        with catch(
+            {
+                SkipException: handle_exception(
+                    "Skip exception caught in node", level="debug", node=self.__class__
+                ),
+                FinishException: handle_exception(
+                    "Finish exception caught in node", level="debug", node=self.__class__
+                ),
+                PruningException: handle_exception(
+                    "Pruning exception caught in node", level="debug", node=self.__class__
+                ),
+                StopException: _handle_stop_exception,
+            }
+        ):
             await self.fallback()
 
     @final
@@ -477,14 +527,10 @@ class Node(ABC, Generic[EventT, NodeStateT, ConfigT]):
         Raise:
             StopException | Any
         """
-        exc: RejectException | JumpToException | PruningException | None = (
-            None
-        )
+        exc: RejectException | JumpToException | PruningException | None = None
 
         def _handle_special_exception(
-            exc_group: BaseExceptionGroup[
-                RejectException | JumpToException | PruningException
-            ],
+            exc_group: BaseExceptionGroup[RejectException | JumpToException | PruningException],
         ):
             nonlocal exc
             excs = list(flatten_exception_group(exc_group))
@@ -506,51 +552,54 @@ class Node(ABC, Generic[EventT, NodeStateT, ConfigT]):
                     None,
                 )
                 exc = reject or jumpto_exc or pruning_exc
-            elif isinstance(
-                excs[0], (PruningException, JumpToException, RejectException)
-            ):
+            elif isinstance(excs[0], (PruningException, JumpToException, RejectException)):
                 exc = excs[0]
 
         rule_failed = True
-        
+
         with catch(
-            {
-                (
-                    PruningException, 
-                    JumpToException, 
-                    RejectException
-                ): _handle_special_exception
-            }
+            {(PruningException, JumpToException, RejectException): _handle_special_exception}
         ):
             if await self._run_rule():  # 无错误上报
                 logger.info("Event will be handled by node", node=self.__class__)
                 rule_failed = False
-                await self._run_handle()  # 上报 JumpToException | PruningException | RejectException
+                await (
+                    self._run_handle()
+                )  # 上报 JumpToException | PruningException | RejectException
             else:
                 await self._run_fallback()  # 上报 JumpToException | RejectException
-            
+
         if exc:
             if isinstance(exc, RejectException):
                 if self.state[REJECT_TARGET]:
                     max_try_times, timeout = self.state[REJECT_TARGET]
                     logger.debug("Rejecting exception caught in node", node=self.__class__)
-                    await self.bot.manager._add_temporary_task(self.__class__, self.event, self.state, max_try_times, timeout)
+                    await self.bot.manager._add_temporary_task(
+                        self.__class__, self.event, self.state, max_try_times, timeout
+                    )
                 else:
-                    logger.warning("Rejecting exception caught in node but it does not have the target", node=self.__class__)
+                    logger.warning(
+                        "Rejecting exception caught in node but it does not have the target",
+                        node=self.__class__,
+                    )
                 exc = None
             elif isinstance(exc, JumpToException):
                 if self.block:
-                    logger.warning(f"should not use `jump_to()` when block is `true`", node=self.__class__)
+                    logger.warning(
+                        "should not use `jump_to()` when block is `true`", node=self.__class__
+                    )
                     exc = None
                 logger.debug("JumpTo exception caught in node", node=self.__class__)
             elif isinstance(exc, PruningException):
                 if self.block:
-                    logger.warning(f"should not use `prune()` when block is `true`", node=self.__class__)
+                    logger.warning(
+                        "should not use `prune()` when block is `true`", node=self.__class__
+                    )
                     exc = None
-                logger.debug("Pruning exception caught in node", node=self.__class__)        
+                logger.debug("Pruning exception caught in node", node=self.__class__)
         if rule_failed:
             exc = PruningException()
         if self.block:
-            raise StopException    
-        
+            raise StopException
+
         return exc

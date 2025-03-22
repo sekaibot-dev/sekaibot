@@ -1,17 +1,10 @@
 from contextlib import AsyncExitStack
-from abc import ABC, abstractmethod
+from itertools import chain
 from typing import (
-    TYPE_CHECKING, 
-    Any, 
-    NoReturn, 
-    Optional, 
-    Dict, 
-    Self, 
-    Callable, 
-    Awaitable, 
-    Generic, 
-    TypeVar, 
-    final
+    TYPE_CHECKING,
+    Any,
+    NoReturn,
+    Self,
 )
 
 import anyio
@@ -20,8 +13,7 @@ from exceptiongroup import BaseExceptionGroup, catch
 from sekaibot.dependencies import Dependency, solve_dependencies_in_bot
 from sekaibot.exceptions import SkipException
 from sekaibot.internal.event import Event
-from itertools import chain
-from sekaibot.typing import PermissionCheckerT, GlobalStateT
+from sekaibot.typing import GlobalStateT, PermissionCheckerT
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
@@ -46,15 +38,17 @@ class Permission:
     __slots__ = ("checkers",)
 
     def __init__(self, *checkers: "Permission" | PermissionCheckerT | Dependency[bool]) -> None:
-        self.checkers: set[Dependency[bool]] = set(chain.from_iterable(
-            checker.checkers if isinstance(checker, Permission) else {checker}
-            for checker in checkers
-        ))
+        self.checkers: set[Dependency[bool]] = set(
+            chain.from_iterable(
+                checker.checkers if isinstance(checker, Permission) else {checker}
+                for checker in checkers
+            )
+        )
         """存储 `PermissionChecker`"""
 
     def __repr__(self) -> str:
         return f"Permission({', '.join(repr(checker) for checker in self.checkers)})"
-    
+
     async def __call__(
         self,
         bot: "Bot",
@@ -107,9 +101,7 @@ class Permission:
     def __and__(self, other: object) -> NoReturn:
         raise RuntimeError("And operation between Permissions is not allowed.")
 
-    def __or__(
-        self, other: Self | PermissionCheckerT | None
-    ) -> Self:
+    def __or__(self, other: Self | PermissionCheckerT | None) -> Self:
         if other is None:
             return self
         elif isinstance(other, Permission):
@@ -117,16 +109,14 @@ class Permission:
         else:
             return Permission(*self.checkers, other)
 
-    def __ror__(
-        self, other: Self | PermissionCheckerT | None
-    ) -> Self:
+    def __ror__(self, other: Self | PermissionCheckerT | None) -> Self:
         if other is None:
             return self
         elif isinstance(other, Permission):
             return Permission(*other.checkers, *self.checkers)
         else:
             return Permission(other, *self.checkers)
-        
+
     def __add__(self, other: Self | PermissionCheckerT) -> Self:
         if other is None:
             return self
@@ -134,10 +124,10 @@ class Permission:
             return Permission(*self.checkers, *other.checkers)
         else:
             return Permission(other, *self.checkers)
-        
+
     def __iadd__(self, other: Self | PermissionCheckerT) -> Self:
         return self.__add__(other)
-    
+
     def __sub__(self, other: Self | PermissionCheckerT) -> NoReturn:
         raise RuntimeError("Subtraction operation between permissions is not allowed.")
 
@@ -152,17 +142,13 @@ class User:
 
     __slots__ = ("perm", "users")
 
-    def __init__(
-        self, users: tuple[str, ...], perm: Permission | None = None
-    ) -> None:
+    def __init__(self, users: tuple[str, ...], perm: Permission | None = None) -> None:
         self.users = users
         self.perm = perm
 
     def __repr__(self) -> str:
         return (
-            f"User(users={self.users}"
-            + (f", permission={self.perm})" if self.perm else "")
-            + ")"
+            f"User(users={self.users}" + (f", permission={self.perm})" if self.perm else "") + ")"
         )
 
     async def __call__(self, bot: Bot, event: Event) -> bool:
@@ -170,15 +156,11 @@ class User:
             session = event.get_session_id()
         except Exception:
             return False
-        return bool(
-            session in self.users and (self.perm is None or await self.perm(bot, event))
-        )
+        return bool(session in self.users and (self.perm is None or await self.perm(bot, event)))
 
     @classmethod
     def _clean_permission(cls, perm: Permission) -> Permission | None:
-        if len(perm.checkers) == 1 and isinstance(
-            user_perm := next(iter(perm.checkers)).call, cls
-        ):
+        if len(perm.checkers) == 1 and isinstance(user_perm := next(iter(perm.checkers)).call, cls):
             return user_perm.perm
         return perm
 

@@ -3,16 +3,17 @@
 事件类的基类。适配器开发者应实现此事件类基类的子类。
 """
 
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import TYPE_CHECKING, Any, Generic, NamedTuple
-from typing_extensions import Self, override
 
 from pydantic import BaseModel, ConfigDict
+from typing_extensions import override
 
 from sekaibot.typing import AdapterT
+
 from .message import Message
 
-__all__ = ["Event", "EventHandleOption", "MessageEvent"]
+__all__ = ["Event", "EventHandleOption"]
 
 
 class Event(ABC, BaseModel, Generic[AdapterT]):
@@ -41,12 +42,12 @@ class Event(ABC, BaseModel, Generic[AdapterT]):
     def __repr__(self) -> str:
         return self.__str__()
 
-    #@abstractmethod
+    # @abstractmethod
     def get_event_name(self) -> str:
         """获取事件名称的方法。"""
         raise NotImplementedError
 
-    #@abstractmethod
+    # @abstractmethod
     def get_event_description(self) -> str:
         """获取事件描述的方法，通常为事件具体内容。"""
         raise NotImplementedError
@@ -62,20 +63,20 @@ class Event(ABC, BaseModel, Generic[AdapterT]):
         """
         return f"[{self.get_event_name()}]: {self.get_event_description()}"
 
-    #@abstractmethod
+    # @abstractmethod
     @property
     def user_id(self) -> str:
         """获取事件主体 id 的方法，通常是用户 id 。"""
         raise NotImplementedError
 
-    #@abstractmethod
+    # @abstractmethod
     def get_session_id(self) -> str:
         """获取会话 id 的方法，用于判断当前事件属于哪一个会话，
         通常是用户 id、群组 id 组合。
         """
         raise NotImplementedError
 
-    #@abstractmethod
+    # @abstractmethod
     def get_message(self) -> "Message":
         """获取事件消息内容的方法。"""
         raise NotImplementedError
@@ -87,7 +88,7 @@ class Event(ABC, BaseModel, Generic[AdapterT]):
         """
         return self.get_message().get_plain_text()
 
-    #@abstractmethod
+    # @abstractmethod
     def is_tome(self) -> bool:
         """获取事件是否与机器人有关的方法。"""
         raise NotImplementedError

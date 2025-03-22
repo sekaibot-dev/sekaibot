@@ -7,15 +7,11 @@
 from abc import ABC, abstractmethod
 from typing import (
     Any,
-    Dict,
     Generic,
     ItemsView,
     Iterator,
     KeysView,
-    List,
-    Tuple,
     Mapping,
-    Optional,
     SupportsIndex,
     Type,
     TypeVar,
@@ -23,10 +19,10 @@ from typing import (
     ValuesView,
     overload,
 )
-from typing_extensions import Self
 
 from pydantic import BaseModel, Field, GetCoreSchemaHandler
 from pydantic_core import core_schema
+from typing_extensions import Self
 
 __all__ = [
     "MessageT",
@@ -115,7 +111,7 @@ class Message(ABC, list[MessageSegmentT]):
             消息的文本表示。
         """
         return "".join(map(str, self))
-    
+
     def __eq__(self, other: str | BuildMessageType[MessageSegmentT]) -> bool:
         """判断消息是否等于另一消息。
 
@@ -128,7 +124,7 @@ class Message(ABC, list[MessageSegmentT]):
         if isinstance(other, str):
             return str(self) == other
         return super().__eq__(self.__class__(other))
-    
+
     def __ne__(self, other: str | BuildMessageType[MessageSegmentT]) -> bool:
         """判断消息是否不等于另一消息。
 
@@ -195,7 +191,7 @@ class Message(ABC, list[MessageSegmentT]):
     def is_text(self) -> bool:
         """是否是纯文本消息。"""
         return all(x.is_text() for x in self)
-    
+
     def get_message_component(self) -> list:
         """获取消息中的type部分组成的列表。
 
@@ -211,7 +207,7 @@ class Message(ABC, list[MessageSegmentT]):
             消息中的纯文本部分。
         """
         return "".join(map(str, filter(lambda x: x.is_text(), self)))
-    
+
     def get_message_text(self) -> str:
         """获取消息中可解析为文本的部分。可根据需要覆写。
 
@@ -219,18 +215,16 @@ class Message(ABC, list[MessageSegmentT]):
             消息中可解析为文本的部分。
         """
 
-    def get_message(
-            self, 
-            include: set | None = None, 
-            exclude: set | None = None
-        ) -> Self:
+    def get_message(self, include: set | None = None, exclude: set | None = None) -> Self:
         """获取消息中某一类型的部分。
 
         Returns:
             消息中某一类型的部分。
         """
-        return filter(lambda x: (not include or x.type in include) and (not exclude or x.type not in exclude), self)
-
+        return filter(
+            lambda x: (not include or x.type in include) and (not exclude or x.type not in exclude),
+            self,
+        )
 
     def copy(self) -> Self:
         """返回自身的浅复制。
@@ -245,7 +239,7 @@ class Message(ABC, list[MessageSegmentT]):
         prefix: str | MessageSegmentT | tuple[str, ...] | tuple[MessageSegmentT, ...],
         start: SupportsIndex | None = None,
         end: SupportsIndex | None = None,
-        ignorecase: bool = False
+        ignorecase: bool = False,
     ) -> str | MessageSegmentT | None:
         """实现类似字符串的 `startswith()` 方法。
 
@@ -279,9 +273,7 @@ class Message(ABC, list[MessageSegmentT]):
             elif all(isinstance(item, self.get_segment_class()) for item in prefix):
                 return self[0] if self[0] in prefix else None
             else:
-                raise TypeError(
-                    f"prefix arg must be str or {self.get_segment_class()}"
-                )
+                raise TypeError(f"prefix arg must be str or {self.get_segment_class()}")
         else:
             raise TypeError(
                 f"prefix arg must be str or {self.get_segment_class()}, not {type(prefix)}"
@@ -292,7 +284,7 @@ class Message(ABC, list[MessageSegmentT]):
         suffix: str | MessageSegmentT | tuple[str, ...] | tuple[MessageSegmentT, ...],
         start: SupportsIndex | None = None,
         end: SupportsIndex | None = None,
-        ignorecase: bool = False
+        ignorecase: bool = False,
     ) -> bool:
         """实现类似字符串的 `endswith()` 方法。
 
@@ -326,28 +318,18 @@ class Message(ABC, list[MessageSegmentT]):
             elif all(isinstance(item, self.get_segment_class()) for item in suffix):
                 return self[-1] if self[-1] in suffix else None
             else:
-                raise TypeError(
-                    f"prefix arg must be str or {self.get_segment_class()}"
-                )
+                raise TypeError(f"prefix arg must be str or {self.get_segment_class()}")
         else:
             raise TypeError(
                 f"prefix arg must be str or {self.get_segment_class()}, not {type(suffix)}"
             )
 
     @overload
-    def replace(
-        self, 
-        old: str, 
-        new: str, 
-        count: int = -1
-    ) -> Self: ...
+    def replace(self, old: str, new: str, count: int = -1) -> Self: ...
 
     @overload
     def replace(
-        self, 
-        old: MessageSegmentT, 
-        new: MessageSegmentT | None, 
-        count: int = -1
+        self, old: MessageSegmentT, new: MessageSegmentT | None, count: int = -1
     ) -> Self: ...
 
     def replace(
@@ -614,8 +596,8 @@ class MessageSegment(ABC, BaseModel, Mapping[str, Any], Generic[MessageT]):
             是否是纯文本消息字段。
         """
         return self.type == "text"
-    
-    def is_type(self,_type) -> bool:
+
+    def is_type(self, _type) -> bool:
         """是否是某类型消息字段。
 
         Returns:

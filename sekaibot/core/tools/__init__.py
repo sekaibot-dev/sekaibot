@@ -5,6 +5,7 @@ from langchain.agents import Tool
 from .web_search import WebSearchTool
 from .doc_retrieval import DocumentRetrievalTool
 
+
 def get_tools() -> list[Tool]:
     """
     返回可用的 Tool 列表。

@@ -15,6 +15,7 @@ from .utils import BaseTool
 if TYPE_CHECKING:
     from ...bot import Bot
 
+
 class DocumentRetrievalTool(BaseTool):
     """
     文档检索工具，支持 RAG 机制和多模态文件输入（文本、PDF、图片）。
@@ -24,7 +25,7 @@ class DocumentRetrievalTool(BaseTool):
     def __init__(
         self,
         bot: "Bot",
-        name: str, 
+        name: str,
         description: str,
         *,
         vector_store: str = "faiss",
@@ -132,16 +133,16 @@ class DocumentRetrievalTool(BaseTool):
             "Use three sentence maximum and keep the answer concise. "
             "Context: {context}"
         )
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", system_prompt),
-            ("human", "{input}"),
-        ])
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", system_prompt),
+                ("human", "{input}"),
+            ]
+        )
 
         # 创建检索链
         question_answer_chain = create_stuff_documents_chain(self.llm, prompt)
-        qa_chain = create_retrieval_chain(
-            self.db.as_retriever(), question_answer_chain
-        )
+        qa_chain = create_retrieval_chain(self.db.as_retriever(), question_answer_chain)
         return qa_chain.invoke({"input": query})
 
     def run(self, query: str) -> str:

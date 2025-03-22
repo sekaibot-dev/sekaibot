@@ -13,12 +13,11 @@ from .prompt_builder import PromptBuilder
 if TYPE_CHECKING:
     from ..bot import Bot
 
-class Models():
+
+class Models:
     """多种llm模型的整合端口"""
+
     bot: "Bot"
 
-    def __init__(
-        self,
-        bot: "Bot"
-    ):
+    def __init__(self, bot: "Bot"):
         self.bot = bot

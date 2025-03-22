@@ -1,23 +1,22 @@
 from typing import (
-    TYPE_CHECKING, 
-    Awaitable, 
-    Callable, 
-    TypeVar, 
+    TYPE_CHECKING,
+    Awaitable,
+    Callable,
+    Literal,
     TypeVar,
     Union,
-    Literal, 
-    override, 
-) # type: ignore
+    override,
+)  # type: ignore
 
 if TYPE_CHECKING:
-    from typing import Any # type: ignore
+    from typing import Any  # type: ignore
+
     from sekaibot.bot import Bot
     from sekaibot.config import ConfigModel
-    from sekaibot.internal.event import Event, EventHandleOption
+    from sekaibot.internal.event import Event
     from sekaibot.node import Node
 
 __all__ = [
-    "TreeType",
     "EventT",
     "NodeStateT",
     "ConfigT",
@@ -26,7 +25,7 @@ __all__ = [
     "RuleCheckerT",
     "PermissionCheckerT",
     "BotHook",
-    "EventHook"
+    "EventHook",
 ]
 
 EventT = TypeVar("EventT", bound="Event")
@@ -45,6 +44,7 @@ BotHook = Callable[["Bot"], Awaitable[None]]
 EventHook = Callable[["Event[Any]"], Awaitable[None]]
 
 _T = TypeVar("_T")
+
 
 class NotGiven:
     """
@@ -94,4 +94,3 @@ class Omit:
 
     def __bool__(self) -> Literal[False]:
         return False
-

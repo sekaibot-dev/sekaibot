@@ -1,41 +1,37 @@
-import asyncio
-import anyio
-import signal
-import pkgutil
-import threading
 import json
-from collections import defaultdict
-from itertools import chain
+import pkgutil
+import signal
 import sys
+import threading
+from collections import defaultdict
 from pathlib import Path
+from typing import Any, DefaultDict  # type: ignore
 
-from typing import (
-    Any,
-    DefaultDict
-) # type: ignore
+import anyio
 from pydantic import (
     ValidationError,
     create_model,  # pyright: ignore[reportUnknownVariableType]
 )
 
+from sekaibot.config import ConfigModel, MainConfig, NodeConfig
 from sekaibot.exceptions import (
     LoadModuleError,
 )
+from sekaibot.log import configure_logging, logger
+from sekaibot.manager import NodeManager
+
+# from sekaibot.core.agent_executor import ChatAgentExecutor
+from sekaibot.node import Node, NodeLoadType
+from sekaibot.typing import BotHook, EventHook
 from sekaibot.utils import (
     ModulePathFinder,
     ModuleType,
     TreeType,
+    cancel_on_exit,
     flatten_tree_with_jumps,
     get_classes_from_module_name,
     is_config_class,
-    cancel_on_exit,
 )
-from sekaibot.config import ConfigModel, MainConfig, NodeConfig
-from sekaibot.log import logger, configure_logging
-#from sekaibot.core.agent_executor import ChatAgentExecutor
-from sekaibot.node import Node, NodeLoadType
-from sekaibot.manager import NodeManager
-from sekaibot.typing import BotHook, EventHook
 
 HANDLED_SIGNALS = (
     signal.SIGINT,  # Unix signal 2. Sent by Ctrl+C.
@@ -47,6 +43,7 @@ if sys.version_info >= (3, 11):  # pragma: no cover
 else:  # pragma: no cover
     import tomli as tomllib
 
+
 def check_group_keywords(text: str, keywords: list) -> bool:
     """
     检查文本中是否包含任意关键字，返回 True 或 False
@@ -56,6 +53,7 @@ def check_group_keywords(text: str, keywords: list) -> bool:
             return True
     return False
 
+
 def is_at_bot(event: dict) -> bool:
     """
     根据 event 判断是否 at 了 bot。
@@ -63,14 +61,15 @@ def is_at_bot(event: dict) -> bool:
     """
     return event.get("startwith_atbot", False)
 
+
 def is_private_message(event: dict) -> bool:
     """
     判断是否是私聊消息
     """
     return event.get("message_type") == "private"
 
-class Bot():
 
+class Bot:
     config: MainConfig
     manager: NodeManager
 
@@ -78,7 +77,7 @@ class Bot():
     nodes_list: list[tuple[type[Node[Any, Any, Any]], int]]
 
     _should_exit: anyio.Event
-    _restart_flag: bool  # 重启标记    
+    _restart_flag: bool  # 重启标记
     _module_path_finder: ModulePathFinder  # 用于查找 nodes 的模块元路径查找器
     _raw_config_dict: dict[str, Any]  # 原始配置字典
 
@@ -89,11 +88,9 @@ class Bot():
     _extend_nodes: list[
         type[Node[Any, Any, Any]] | str | Path
     ]  # 使用 load_nodes() 方法程序化加载的节点列表
-    _extend_node_dirs: list[
-        Path
-    ]  # 使用 load_nodes_from_dirs() 方法程序化加载的节点路径列表
+    _extend_node_dirs: list[Path]  # 使用 load_nodes_from_dirs() 方法程序化加载的节点路径列表
 
-    #钩子
+    # 钩子
     _bot_run_hooks: list[BotHook]
     _bot_exit_hooks: list[BotHook]
     _event_preprocessor_hooks: list[EventHook]
@@ -133,8 +130,7 @@ class Bot():
 
         sys.meta_path.insert(0, self._module_path_finder)
 
-        #self.chat_agent = ChatAgentExecutor(self)
-
+        # self.chat_agent = ChatAgentExecutor(self)
 
     @property
     def nodes(self) -> list[type[Node[Any, Any, Any]]]:
@@ -143,7 +139,7 @@ class Bot():
             self.nodes_list = flatten_tree_with_jumps(self.nodes_tree)
 
         return [_node for _node, _ in self.nodes_list]
-    
+
     def run(self) -> None:
         """运行 SekaiBot。"""
         anyio.run(self.arun)
@@ -173,7 +169,7 @@ class Bot():
 
     async def startup(self, init: bool = False) -> None:
         """加载或重加载 SekaiBot 的所有加载项"""
-        
+
         self.nodes_tree.clear()
         self.nodes_list.clear()
         # 加载节点
@@ -189,21 +185,22 @@ class Bot():
         # 启动 SekaiBot
         logger.info("Running SekaiBot...")
 
-        #执行启动钩子
+        # 执行启动钩子
         for bot_run_hook_func in self._bot_run_hooks:
             await bot_run_hook_func(self)
 
         try:
             await self.manager.startup()
             from sekaibot.internal.event import Event
+
             class AEvent(Event):
                 """"""
+
             async with anyio.create_task_group() as tg:
                 tg.start_soon(self.manager.run)
-                tg.start_soon(self.manager.handle_event, AEvent(
-                    type = "a_event",
-                    adapter = "test_adapter"
-                ))
+                tg.start_soon(
+                    self.manager.handle_event, AEvent(type="a_event", adapter="test_adapter")
+                )
             """启动各种task
                 _agent_task = asyncio.create_task(_agent.safe_run())
                 self._agent_tasks.add(_agent_task)
@@ -238,7 +235,7 @@ class Bot():
             # add_signal_handler 仅在 Unix 下可用，以下对于 Windows
             for sig in HANDLED_SIGNALS:
                 signal.signal(sig, self.shutdown)
-        
+
     def shutdown(self, *_args: Any):
         """当机器人收到退出信号时，根据情况进行处理。"""
         logger.info("Stopping SekaiBot...")
@@ -247,7 +244,7 @@ class Bot():
             sys.exit()
         else:
             self._should_exit.set()
-    
+
     def _update_config(self) -> None:
         """更新 config，合并入来自 Node 和 Adapter 的 Config。"""
 
@@ -295,8 +292,7 @@ class Bot():
                         self._raw_config_dict = tomllib.load(f)
                     else:
                         logger.error(
-                            "Read config file failed: "
-                            "Unable to determine config file type"
+                            "Read config file failed: Unable to determine config file type"
                         )
             except OSError:
                 logger.exception("Can not open config file:")
@@ -308,7 +304,7 @@ class Bot():
         except ValidationError:
             self.config = MainConfig()
             logger.exception("Config dict parse error")
-        
+
         self._update_config()
 
     def _load_node_classes(
@@ -324,18 +320,15 @@ class Bot():
             node_class.__node_load_type__ = load_type
             node_class.__node_file_path__ = file_path
             if node_class.__name__ in nodes_dict:
-                logger.warning(
-                    "Already have a same name node", 
-                    name=node_class.__name__
-                )
+                logger.warning("Already have a same name node", name=node_class.__name__)
             nodes_dict[node_class.__name__] = node_class
         # 构建节点集合和根节点集合
         all_nodes = set(nodes_dict.values())
-        roots = [
-            _node for _node in all_nodes if not _node.parent
-        ]
-        #构建 节点-子节点 映射表
-        parent_map: DefaultDict[type[Node[Any, Any, Any]], list[type[Node[Any, Any, Any]]]] = defaultdict(list)
+        roots = [_node for _node in all_nodes if not _node.parent]
+        # 构建 节点-子节点 映射表
+        parent_map: DefaultDict[type[Node[Any, Any, Any]], list[type[Node[Any, Any, Any]]]] = (
+            defaultdict(list)
+        )
         for _node in all_nodes - set(roots):
             if _node.parent not in nodes_dict:
                 logger.warning(
@@ -348,13 +341,16 @@ class Bot():
                 continue
             parent_map[nodes_dict[_node.parent]].append(_node)
         roots.sort(key=lambda _node: getattr(_node, "priority", 0))
+
         #  递归建树
-        def build_tree(
-            node_class: type[Node[Any, Any, Any]]
-        ) -> dict[str, Any]:
+        def build_tree(node_class: type[Node[Any, Any, Any]]) -> dict[str, Any]:
             return {
-                child: build_tree(child) for child in sorted(parent_map[node_class], key=lambda _node: getattr(_node, "priority", 0))
+                child: build_tree(child)
+                for child in sorted(
+                    parent_map[node_class], key=lambda _node: getattr(_node, "priority", 0)
+                )
             }
+
         # 加载到类属性
         self.nodes_tree = {root: build_tree(root) for root in roots}
         self.nodes_list = flatten_tree_with_jumps(self.nodes_tree)
@@ -372,16 +368,18 @@ class Bot():
         node_load_type: NodeLoadType,
         reload: bool = False,
     ) -> None:
-        """从模块名称中节点模块。"""       
+        """从模块名称中节点模块。"""
         node_classes: list[tuple[type[Node], ModuleType]] = []
         for name in module_name:
             try:
                 classes = get_classes_from_module_name(name, Node, reload=reload)
                 node_classes.extend(classes)
-            except ImportError as e:
+            except ImportError:
                 logger.exception("Import module failed", module_name=name)
         if node_classes:
-            nodes = [(node_class, node_load_type, module.__file__) for node_class, module in node_classes]
+            nodes = [
+                (node_class, node_load_type, module.__file__) for node_class, module in node_classes
+            ]
             self._load_node_classes(*nodes)
 
     def _load_nodes(
@@ -404,7 +402,7 @@ class Bot():
         """
         node_classes = []
         module_names = []
-        
+
         for node_ in nodes:
             try:
                 if isinstance(node_, type) and issubclass(node_, Node):
@@ -417,14 +415,10 @@ class Bot():
                 elif isinstance(node_, Path):
                     logger.info("Loading nodes from path", path=node_)
                     if not node_.is_file():
-                        raise LoadModuleError(
-                            f'The node path "{node_}" must be a file'
-                        )
+                        raise LoadModuleError(f'The node path "{node_}" must be a file')
                     if node_.suffix != ".py":
-                        raise LoadModuleError(
-                            f'The path "{node_}" must endswith ".py"'
-                        )
-        
+                        raise LoadModuleError(f'The path "{node_}" must endswith ".py"')
+
                     node_module_name = None
                     for path in self._module_path_finder.path:
                         try:
@@ -443,29 +437,28 @@ class Bot():
                             node_module_name = ".".join(rel_path.parts[:-1])
                         else:
                             node_module_name = ".".join(rel_path.parts[:-1] + (rel_path.stem,))
-        
+
                     module_names.append(node_module_name)
                 else:
                     raise TypeError(f"{node_} can not be loaded as node")
             except Exception:
                 logger.exception("Load node failed:", node=node_)
-        
+
         # 如果有节点类，则调用新的 _load_node_class 批量加载
         if node_classes:
-            nodes = [(node_class, node_load_type or NodeLoadType.CLASS, None) for node_class in node_classes]
+            nodes = [
+                (node_class, node_load_type or NodeLoadType.CLASS, None)
+                for node_class in node_classes
+            ]
             self._load_node_classes(*nodes)
-        
+
         # 如果有模块名称，则调用新的 _load_nodes_from_module_name 批量加载
         if module_names:
             self._load_nodes_from_module_name(
-                *module_names,
-                node_load_type=node_load_type or NodeLoadType.NAME,
-                reload=reload
+                *module_names, node_load_type=node_load_type or NodeLoadType.NAME, reload=reload
             )
 
-    def load_nodes(
-        self, *nodes: type[Node[Any, Any, Any]] | str | Path
-    ) -> None:
+    def load_nodes(self, *nodes: type[Node[Any, Any, Any]] | str | Path) -> None:
         """加载节点。
 
         Args:
@@ -491,12 +484,12 @@ class Bot():
         logger.info("Loading nodes from dirs", dirs=", ".join(map(str, dir_list)))
         self._module_path_finder.path.extend(dir_list)
         module_name = list(
-            filter(lambda name: not name.startswith("_"), 
-                (module_info.name for module_info in pkgutil.iter_modules(dir_list)))
+            filter(
+                lambda name: not name.startswith("_"),
+                (module_info.name for module_info in pkgutil.iter_modules(dir_list)),
+            )
         )
-        self._load_nodes_from_module_name(
-            *module_name, node_load_type=NodeLoadType.DIR
-        )
+        self._load_nodes_from_module_name(*module_name, node_load_type=NodeLoadType.DIR)
 
     def load_nodes_from_dirs(self, *dirs: Path) -> None:
         """从目录中加载节点，以 `_` 开头的模块中的节点不会被导入。路径可以是相对路径或绝对路径。
@@ -507,7 +500,6 @@ class Bot():
         """
         self._extend_node_dirs.extend(dirs)
         self._load_nodes_from_dirs(*dirs)
-
 
     def bot_run_hook(self, func: BotHook) -> BotHook:
         """注册一个 Bot 启动时的函数。
@@ -604,9 +596,8 @@ class Bot():
 
         return reply'''
 
-    
 
-'''if __name__ == "__main__":
+"""if __name__ == "__main__":
     # 示例：模拟私聊测试
     sample_event_private = {
         "type": "message",
@@ -647,4 +638,4 @@ class Bot():
         resp2 = await bot.handle_message(sample_event_group)
         print("群聊回复:", resp2)
 
-    asyncio.run(run_test())'''
+    asyncio.run(run_test())"""

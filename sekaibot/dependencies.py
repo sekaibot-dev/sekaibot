@@ -4,27 +4,27 @@
 """
 
 import inspect
-import sys
 from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
 from typing import (
     TYPE_CHECKING,
     Any,
     AsyncContextManager,
     AsyncGenerator,
-    Callable,
     Awaitable,
+    Callable,
     ContextManager,
     Generator,
     Type,
     TypeVar,
     Union,
     cast,
-    get_type_hints
+    get_type_hints,
 )
 
-from sekaibot.utils import get_annotations, sync_ctx_manager_wrapper
 from sekaibot.internal.event import Event
-from sekaibot.typing import NodeStateT, GlobalStateT, StateT, DependencyCacheT
+from sekaibot.typing import DependencyCacheT, GlobalStateT, NodeStateT, StateT
+from sekaibot.utils import get_annotations, sync_ctx_manager_wrapper
+
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
 
@@ -58,9 +58,7 @@ class InnerDepends:
     dependency: Dependency | None
     use_cache: bool
 
-    def __init__(
-        self, dependency: Dependency | None = None, *, use_cache: bool = True
-    ) -> None:
+    def __init__(self, dependency: Dependency | None = None, *, use_cache: bool = True) -> None:
         if isinstance(dependency, InnerDepends):
             self.dependency = dependency.dependency
             self.use_cache = dependency.use_cache
@@ -87,6 +85,7 @@ def Depends(  # noqa: N802 # pylint: disable=invalid-name
     """
     return InnerDepends(dependency=dependency, use_cache=use_cache)  # type: ignore
 
+
 def get_dependency_name(dependency: Dependency[Any]) -> str:
     """获取 Dependency[Any] 的名称，正确区分类、函数、实例等"""
 
@@ -102,9 +101,9 @@ def get_dependency_name(dependency: Dependency[Any]) -> str:
 
 
 async def _execute_callable(
-    dependent: Callable[..., Any], 
-    stack: AsyncExitStack, 
-    dependency_cache: dict[Dependency[Any], Any]
+    dependent: Callable[..., Any],
+    stack: AsyncExitStack,
+    dependency_cache: dict[Dependency[Any], Any],
 ) -> Any:
     """执行可调用对象（函数或 __call__ 方法），并注入参数。"""
     func_params = inspect.signature(dependent).parameters
@@ -114,10 +113,10 @@ async def _execute_callable(
         param_type = get_type_hints(dependent).get(param_name)
         if isinstance(param.default, InnerDepends):
             func_args[param_name] = await solve_dependencies(
-                param.default.dependency, 
+                param.default.dependency,
                 use_cache=param.default.use_cache,
-                stack=stack, 
-                dependency_cache=dependency_cache
+                stack=stack,
+                dependency_cache=dependency_cache,
             )
         elif param.default is not inspect.Parameter.empty:
             func_args[param_name] = param.default
@@ -139,6 +138,7 @@ async def _execute_callable(
     if inspect.iscoroutinefunction(dependent):
         return await dependent(**func_args)
     return dependent(**func_args)
+
 
 async def solve_dependencies(
     dependent: Dependency[_T],
@@ -164,7 +164,7 @@ async def solve_dependencies(
     if isinstance(dependent, InnerDepends):
         use_cache = dependent.use_cache
         dependent = dependent.dependency
-        
+
     if dependent is None:
         raise TypeError("dependent cannot be None")
 
@@ -182,7 +182,9 @@ async def solve_dependencies(
             if sub_dependent.dependency is None:
                 dependent_ann = ann.get(name)
                 if dependent_ann is None:
-                    raise TypeError(f"can not resolve dependency for attribute '{name}' in {dependent}")
+                    raise TypeError(
+                        f"can not resolve dependency for attribute '{name}' in {dependent}"
+                    )
                 sub_dependent.dependency = dependent_ann
             values[name] = await solve_dependencies(
                 sub_dependent.dependency,
@@ -210,13 +212,15 @@ async def solve_dependencies(
             )
         else:
             depend = depend_obj
-    elif isinstance(dependent, object) and hasattr(dependent, "__call__") and callable(dependent):
+    elif isinstance(dependent, object) and callable(dependent) and callable(dependent):
         # type of dependent is an instance with __call__ method (Callable class instance)
         call_method = dependent.__call__
         if inspect.iscoroutinefunction(call_method) or inspect.isfunction(call_method):
             depend = await _execute_callable(call_method, stack, dependency_cache)
         else:
-            raise TypeError(f"__call__ method in {dependent.__class__.__name__} is not a valid function")
+            raise TypeError(
+                f"__call__ method in {dependent.__class__.__name__} is not a valid function"
+            )
     elif inspect.iscoroutinefunction(dependent) or inspect.isfunction(dependent):
         # type of dependent is Callable[..., T] | Callable[..., Awaitable[T]]
         depend = await _execute_callable(dependent, stack, dependency_cache)
@@ -256,7 +260,7 @@ async def solve_dependencies_in_bot(
     dependency_cache: dict[Dependency[Any], Any] | None = None,
 ) -> _T:
     """解析子依赖。
-    
+
     此方法强制要求 `bot`、`event`、`state`、`global_state` 作为参数，以确保依赖解析的严谨性。
 
     Args:
@@ -277,27 +281,37 @@ async def solve_dependencies_in_bot(
 
     if dependency_cache is None:
         dependency_cache = {}
-    dependency_cache.update({
-        Bot: bot,
-        Event: event,
-        "bot": bot,
-        "event": event,
-    })
-    if state is not None: dependency_cache.update({
-        StateT: state,
-        "state": state,
-    })
-    if global_state is not None: dependency_cache.update({
-        GlobalStateT: global_state,
-        "global_state": global_state,
-    })
-    if node_state is not None: dependency_cache.update({
-        NodeStateT: node_state,
-        "node_state": node_state,
-    })
-    if dependency_cache is not None: dependency_cache.update({
-        DependencyCacheT: dependency_cache
-    })
+    dependency_cache.update(
+        {
+            Bot: bot,
+            Event: event,
+            "bot": bot,
+            "event": event,
+        }
+    )
+    if state is not None:
+        dependency_cache.update(
+            {
+                StateT: state,
+                "state": state,
+            }
+        )
+    if global_state is not None:
+        dependency_cache.update(
+            {
+                GlobalStateT: global_state,
+                "global_state": global_state,
+            }
+        )
+    if node_state is not None:
+        dependency_cache.update(
+            {
+                NodeStateT: node_state,
+                "node_state": node_state,
+            }
+        )
+    if dependency_cache is not None:
+        dependency_cache.update({DependencyCacheT: dependency_cache})
     return await solve_dependencies(
         dependent, use_cache=use_cache, stack=stack, dependency_cache=dependency_cache
     )

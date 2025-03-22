@@ -1,9 +1,6 @@
-import sys
 import os
-
-from typing import (
-    Literal
-)
+import sys
+from typing import Literal
 
 MAX_TIMEOUT: Literal[600] = 600
 
