@@ -398,7 +398,6 @@ class NodeManager:
                                     "The node to jump to does not exist",
                                     node_name=node_name,
                                 )
-                                continue
                             elif jump_to_index > index:
                                 next_index = jump_to_index
                             else:

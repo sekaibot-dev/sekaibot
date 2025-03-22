@@ -21,12 +21,10 @@ from typing import (
     get_type_hints,
 )
 
-from sekaibot.internal.event import Event
-from sekaibot.typing import DependencyCacheT, GlobalStateT, NodeStateT, StateT
 from sekaibot.utils import get_annotations, sync_ctx_manager_wrapper
 
 if TYPE_CHECKING:
-    from sekaibot.bot import Bot
+    pass
 
 _T = TypeVar("_T")
 
@@ -40,9 +38,6 @@ Dependency = Union[
     Callable[..., _T],
     Callable[..., Awaitable[_T]],
 ]
-
-
-__all__ = ["Depends"]
 
 
 class InnerDepends:
@@ -69,21 +64,6 @@ class InnerDepends:
         attr = getattr(self.dependency, "__name__", type(self.dependency).__name__)
         cache = "" if self.use_cache else ", use_cache=False"
         return f"InnerDepends({attr}{cache})"
-
-
-def Depends(  # noqa: N802 # pylint: disable=invalid-name
-    dependency: Dependency[_T] | None = None, *, use_cache: bool = True
-) -> _T:
-    """子依赖装饰器。
-
-    Args:
-        dependency: 依赖类。如果不指定则根据字段的类型注释自动判断。
-        use_cache: 是否使用缓存。默认为 `True`。
-
-    Returns:
-        返回内部子依赖对象。
-    """
-    return InnerDepends(dependency=dependency, use_cache=use_cache)  # type: ignore
 
 
 def get_dependency_name(dependency: Dependency[Any]) -> str:
@@ -140,6 +120,50 @@ async def _execute_callable(
     return dependent(**func_args)
 
 
+async def _execute_class(
+    dependent: Callable[..., Any],
+    stack: AsyncExitStack,
+    dependency_cache: dict[Dependency[Any], Any],
+) -> Any:
+    values: dict[str, Any] = {}
+    ann = get_annotations(dependent)
+    for name, sub_dependent in inspect.getmembers(dependent, lambda x: isinstance(x, InnerDepends)):
+        assert isinstance(sub_dependent, InnerDepends)
+        if sub_dependent.dependency is None:
+            dependent_ann = ann.get(name)
+            if dependent_ann is None:
+                raise TypeError(f"can not resolve dependency for attribute '{name}' in {dependent}")
+            sub_dependent.dependency = dependent_ann
+        values[name] = await solve_dependencies(
+            sub_dependent.dependency,
+            use_cache=sub_dependent.use_cache,
+            stack=stack,
+            dependency_cache=dependency_cache,
+        )
+    depend_obj = cast(
+        Union[_T, AsyncContextManager[_T], ContextManager[_T]],
+        dependent.__new__(dependent),  # pyright: ignore
+    )
+    for key, value in values.items():
+        setattr(depend_obj, key, value)
+    depend_obj.__init__()
+
+    if isinstance(depend_obj, AsyncContextManager):
+        if stack is None:
+            raise TypeError("stack cannot be None when entering an async context")
+        depend = await stack.enter_async_context(depend_obj)  # pyright: ignore
+    elif isinstance(depend_obj, ContextManager):
+        if stack is None:
+            raise TypeError("stack cannot be None when entering a sync context")
+        depend = await stack.enter_async_context(  # pyright: ignore
+            sync_ctx_manager_wrapper(depend_obj)
+        )
+    else:
+        depend = depend_obj
+
+    return depend
+
+
 async def solve_dependencies(
     dependent: Dependency[_T],
     *,
@@ -173,45 +197,7 @@ async def solve_dependencies(
 
     if isinstance(dependent, type):
         # type of dependent is Type[T] (Class, not instance)
-        values: dict[str, Any] = {}
-        ann = get_annotations(dependent)
-        for name, sub_dependent in inspect.getmembers(
-            dependent, lambda x: isinstance(x, InnerDepends)
-        ):
-            assert isinstance(sub_dependent, InnerDepends)
-            if sub_dependent.dependency is None:
-                dependent_ann = ann.get(name)
-                if dependent_ann is None:
-                    raise TypeError(
-                        f"can not resolve dependency for attribute '{name}' in {dependent}"
-                    )
-                sub_dependent.dependency = dependent_ann
-            values[name] = await solve_dependencies(
-                sub_dependent.dependency,
-                use_cache=sub_dependent.use_cache,
-                stack=stack,
-                dependency_cache=dependency_cache,
-            )
-        depend_obj = cast(
-            Union[_T, AsyncContextManager[_T], ContextManager[_T]],
-            dependent.__new__(dependent),  # pyright: ignore
-        )
-        for key, value in values.items():
-            setattr(depend_obj, key, value)
-        depend_obj.__init__()
-
-        if isinstance(depend_obj, AsyncContextManager):
-            if stack is None:
-                raise TypeError("stack cannot be None when entering an async context")
-            depend = await stack.enter_async_context(depend_obj)  # pyright: ignore
-        elif isinstance(depend_obj, ContextManager):
-            if stack is None:
-                raise TypeError("stack cannot be None when entering a sync context")
-            depend = await stack.enter_async_context(  # pyright: ignore
-                sync_ctx_manager_wrapper(depend_obj)
-            )
-        else:
-            depend = depend_obj
+        depend = await _execute_class(dependent, stack, dependency_cache)
     elif isinstance(dependent, object) and callable(dependent) and callable(dependent):
         # type of dependent is an instance with __call__ method (Callable class instance)
         call_method = dependent.__call__
@@ -245,73 +231,3 @@ async def solve_dependencies(
 
     dependency_cache[dependent] = depend
     return depend  # pyright: ignore
-
-
-async def solve_dependencies_in_bot(
-    dependent: Dependency[_T],
-    *,
-    bot: "Bot",
-    event: Event,
-    state: StateT | None = None,
-    node_state: NodeStateT | None = None,
-    global_state: GlobalStateT | None = None,
-    use_cache: bool = True,
-    stack: AsyncExitStack | None = None,
-    dependency_cache: dict[Dependency[Any], Any] | None = None,
-) -> _T:
-    """解析子依赖。
-
-    此方法强制要求 `bot`、`event`、`state`、`global_state` 作为参数，以确保依赖解析的严谨性。
-
-    Args:
-        dependent: 需要解析的依赖。
-        bot: 机器人实例，必须提供。
-        event: 事件对象，必须提供。
-        state: 节点临时的状态信息，默认为 `None`。
-        node_state: 节点持久化状态信息，可选，默认为 `None`。
-        global_state: 为节点提供的全局状态，可选，默认为 `None`。
-        use_cache: 是否使用缓存，默认为 `True`。
-        stack: 异步上下文管理器，可选。
-        dependency_cache: 依赖缓存，如果未提供，则自动创建新字典。
-
-    Returns:
-        解析后的依赖对象。
-    """
-    from sekaibot.bot import Bot
-
-    if dependency_cache is None:
-        dependency_cache = {}
-    dependency_cache.update(
-        {
-            Bot: bot,
-            Event: event,
-            "bot": bot,
-            "event": event,
-        }
-    )
-    if state is not None:
-        dependency_cache.update(
-            {
-                StateT: state,
-                "state": state,
-            }
-        )
-    if global_state is not None:
-        dependency_cache.update(
-            {
-                GlobalStateT: global_state,
-                "global_state": global_state,
-            }
-        )
-    if node_state is not None:
-        dependency_cache.update(
-            {
-                NodeStateT: node_state,
-                "node_state": node_state,
-            }
-        )
-    if dependency_cache is not None:
-        dependency_cache.update({DependencyCacheT: dependency_cache})
-    return await solve_dependencies(
-        dependent, use_cache=use_cache, stack=stack, dependency_cache=dependency_cache
-    )
