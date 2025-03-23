@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
 from contextlib import AsyncExitStack
 from itertools import chain
-from typing import (
+from typing import (  # noqa: UP035
     TYPE_CHECKING,
     Any,
     Generic,
@@ -201,7 +201,7 @@ class RuleChecker(ABC, Generic[ArgsT, ParamT]):
 class MatchRule(RuleChecker[str | bool, str]):
     """所有匹配类 Rule 的基类。"""
 
-    checker: Type[Callable[[tuple[str, ...], bool], "Rule"]] = None
+    checker: Type[Callable[[tuple[str, ...], bool], "Rule"]] = None  # noqa: UP006
 
     def __init__(self, *msgs: str | tuple[str, ...], ignorecase: bool = False) -> None:
         if self.checker is None:

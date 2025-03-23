@@ -5,20 +5,11 @@
 """
 
 from abc import ABC, abstractmethod
-from typing import (
-    Any,
-    Generic,
-    SupportsIndex,
-    Type,
-    TypeVar,
-    Union,
-    overload,
-)
 from collections.abc import ItemsView, Iterator, KeysView, Mapping, ValuesView
+from typing import Any, Generic, Self, SupportsIndex, Type, TypeVar, overload  # noqa: UP035
 
 from pydantic import BaseModel, Field, GetCoreSchemaHandler
 from pydantic_core import core_schema
-from typing import Self
 
 __all__ = [
     "MessageT",
@@ -32,7 +23,7 @@ MessageT = TypeVar("MessageT", bound="Message[Any]")
 MessageSegmentT = TypeVar("MessageSegmentT", bound="MessageSegment[Any]")
 
 # 可以转化为 Message 的类型
-BuildMessageType = Union[list[MessageSegmentT], MessageSegmentT, str, Mapping[str, Any]]
+BuildMessageType = list[MessageSegmentT] | MessageSegmentT | str | Mapping[str, Any]
 
 
 class Message(ABC, list[MessageSegmentT]):
@@ -417,7 +408,7 @@ class MessageSegment(ABC, BaseModel, Mapping[str, Any], Generic[MessageT]):
 
     @classmethod
     @abstractmethod
-    def get_message_class(cls) -> Type[MessageT]: # type ignored
+    def get_message_class(cls) -> Type[MessageT]:  # noqa: UP006
         """获取消息类。
 
         Returns:

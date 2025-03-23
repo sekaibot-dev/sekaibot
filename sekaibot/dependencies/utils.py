@@ -4,24 +4,23 @@
 """
 
 import inspect
+from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
-from typing import (
+from typing import (  # noqa: UP035
     Any,
     AsyncContextManager,
     ContextManager,
-    Type,
     TypeVar,
     Union,
     cast,
     get_type_hints,
 )
-from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 
 from sekaibot.utils import get_annotations, sync_ctx_manager_wrapper
 
 _T = TypeVar("_T")
 
-Dependency = Union[
+Dependency = Union[  # noqa: UP007
     # Class-based dependencies
     type[_T | AsyncContextManager[_T] | ContextManager[_T]],
     # Generator-based dependencies
