@@ -1,11 +1,10 @@
 from abc import ABC, abstractmethod
+from collections.abc import Awaitable, Callable
 from contextlib import AsyncExitStack
 from itertools import chain
 from typing import (
     TYPE_CHECKING,
     Any,
-    Awaitable,
-    Callable,
     Generic,
     NoReturn,
     Self,

@@ -9,18 +9,20 @@ from contextlib import AsyncExitStack
 from enum import Enum
 from typing import (
     TYPE_CHECKING,
+    Annotated,
     Any,
-    ClassVar,
+    ClassVar,  # type: ignore
     Generic,
     NoReturn,
     Self,
     cast,
     final,
-)  # type: ignore
+    get_args,
+    get_origin,
+)
 
 import anyio
 from exceptiongroup import BaseExceptionGroup, catch
-from typing_extensions import Annotated, get_args, get_origin
 
 from sekaibot.config import ConfigModel
 from sekaibot.consts import JUMO_TO_TARGET, MAX_TIMEOUT, REJECT_TARGET
@@ -565,7 +567,7 @@ class Node(SonNode, ABC, Generic[EventT, NodeStateT, ConfigT]):
                     None,
                 )
                 exc = reject or jumpto_exc or pruning_exc
-            elif isinstance(excs[0], (PruningException, JumpToException, RejectException)):
+            elif isinstance(excs[0], PruningException | JumpToException | RejectException):
                 exc = excs[0]
 
         rule_failed = True

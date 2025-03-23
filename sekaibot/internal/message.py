@@ -8,21 +8,17 @@ from abc import ABC, abstractmethod
 from typing import (
     Any,
     Generic,
-    ItemsView,
-    Iterator,
-    KeysView,
-    Mapping,
     SupportsIndex,
     Type,
     TypeVar,
     Union,
-    ValuesView,
     overload,
 )
+from collections.abc import ItemsView, Iterator, KeysView, Mapping, ValuesView
 
 from pydantic import BaseModel, Field, GetCoreSchemaHandler
 from pydantic_core import core_schema
-from typing_extensions import Self
+from typing import Self
 
 __all__ = [
     "MessageT",
@@ -421,7 +417,7 @@ class MessageSegment(ABC, BaseModel, Mapping[str, Any], Generic[MessageT]):
 
     @classmethod
     @abstractmethod
-    def get_message_class(cls) -> Type[MessageT]:
+    def get_message_class(cls) -> Type[MessageT]: # type ignored
         """获取消息类。
 
         Returns:

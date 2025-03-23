@@ -42,7 +42,7 @@ def convert_directory(directory: str):
                 print(f"Processing: {file_path}")
 
                 # 读取原文件
-                with open(file_path, "r", encoding="utf-8") as f:
+                with open(file_path, encoding="utf-8") as f:
                     old_code = f.read()
 
                 # 转换代码

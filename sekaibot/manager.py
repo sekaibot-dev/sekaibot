@@ -1,14 +1,9 @@
 import asyncio
 import time
 from collections import defaultdict
+from collections.abc import Awaitable, Callable
 from contextlib import AsyncExitStack
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Awaitable,
-    Callable,
-    overload,
-)
+from typing import TYPE_CHECKING, Any, overload
 
 import anyio
 from anyio.abc import TaskStatus
@@ -503,7 +498,7 @@ class NodeManager:
                             self._condition.wait(),
                             timeout=start_time + timeout - time.time(),
                         )
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         break
 
                 if (

@@ -4,14 +4,13 @@
 """
 
 from abc import ABCMeta, abstractmethod
-from typing import Literal, Optional, Union
+from typing import Literal, override
 
 import aiohttp
 import anyio
 import structlog
 from aiohttp import web
 from anyio.lowlevel import checkpoint
-from typing_extensions import override
 
 from sekaibot.internal.adapter import Adapter
 from sekaibot.typing import ConfigT, EventT
@@ -171,15 +170,15 @@ class WebSocketAdapter(Adapter[EventT, ConfigT], metaclass=ABCMeta):
     同时支持 WebSocket 客户端和服务端。
     """
 
-    websocket: Union[web.WebSocketResponse, aiohttp.ClientWebSocketResponse, None] = None
+    websocket: web.WebSocketResponse | aiohttp.ClientWebSocketResponse | None = None
 
     # ws
-    session: Optional[aiohttp.ClientSession]
+    session: aiohttp.ClientSession | None
 
     # reverse-ws
-    app: Optional[web.Application]
-    runner: Optional[web.AppRunner]
-    site: Optional[web.TCPSite]
+    app: web.Application | None
+    runner: web.AppRunner | None
+    site: web.TCPSite | None
 
     # config
     adapter_type: Literal["ws", "reverse-ws"]

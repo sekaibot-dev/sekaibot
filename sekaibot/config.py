@@ -1,5 +1,5 @@
 # config.py
-from typing import Annotated, Any, Literal, Union
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, DirectoryPath, Field
 
@@ -153,7 +153,7 @@ class MongoDBConfig(ConfigModel):
 
 
 DatabaseConfigType = Annotated[
-    Union[SQLConfig, RedisConfig, MongoDBConfig],
+    SQLConfig | RedisConfig | MongoDBConfig,
     Field(discriminator="db_type"),
 ]
 
@@ -167,8 +167,10 @@ class DatabaseConfig(ConfigModel):
 
     config: DatabaseConfigType
 
+
 class AdapterConfig(ConfigModel):
     """适配器配置。"""
+
 
 class NodeConfig(ConfigModel):
     """节点配置。"""

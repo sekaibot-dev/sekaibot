@@ -5,18 +5,8 @@
 
 import os
 from abc import ABC, abstractmethod
-from collections.abc import Awaitable
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Generic,
-    Optional,
-    TypeVar,
-    Union,
-    final,
-    overload,
-)
+from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING, Any, Generic, TypeVar, final, overload
 
 import structlog
 
@@ -108,31 +98,31 @@ class Adapter(Generic[EventT, ConfigT], ABC):
     @overload
     async def get(
         self,
-        func: Optional[Callable[[EventT], Union[bool, Awaitable[bool]]]] = None,
+        func: Callable[[EventT], bool | Awaitable[bool]] | None = None,
         *,
         event_type: None = None,
-        max_try_times: Optional[int] = None,
-        timeout: Optional[Union[int, float]] = None,
+        max_try_times: int | None = None,
+        timeout: int | float | None = None,
     ) -> EventT: ...
 
     @overload
     async def get(
         self,
-        func: Optional[Callable[[_EventT], Union[bool, Awaitable[bool]]]] = None,
+        func: Callable[[_EventT], bool | Awaitable[bool]] | None = None,
         *,
         event_type: type[_EventT],
-        max_try_times: Optional[int] = None,
-        timeout: Optional[Union[int, float]] = None,
+        max_try_times: int | None = None,
+        timeout: int | float | None = None,
     ) -> _EventT: ...
 
     @final
     async def get(
         self,
-        func: Optional[Callable[[Any], Union[bool, Awaitable[bool]]]] = None,
+        func: Callable[[Any], bool | Awaitable[bool]] | None = None,
         *,
         event_type: Any = None,
-        max_try_times: Optional[int] = None,
-        timeout: Optional[Union[int, float]] = None,
+        max_try_times: int | None = None,
+        timeout: int | float | None = None,
     ) -> Event[Any]:
         """获取满足指定条件的的事件，协程会等待直到适配器接收到满足条件的事件、超过最大事件数或超时。
 

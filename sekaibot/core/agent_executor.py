@@ -84,7 +84,7 @@ class ChatAgentExecutor:
         session_id: str,
         timestamp: int = None,
         message_id: str = None,
-        metadata: Optional[dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> str:
         """执行完整对话流程"""
         metadata = metadata or {}

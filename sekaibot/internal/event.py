@@ -7,7 +7,7 @@ from abc import ABC
 from typing import TYPE_CHECKING, Any, Generic, NamedTuple
 
 from pydantic import BaseModel, ConfigDict
-from typing_extensions import override
+from typing import override
 
 from sekaibot.typing import AdapterT
 

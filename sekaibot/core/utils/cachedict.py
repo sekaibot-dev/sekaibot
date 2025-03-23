@@ -31,7 +31,7 @@ class cacheDict(MutableMapping, Generic[K, V]):
             return value
         raise KeyError(f"{key} 不存在")
 
-    def get(self, key: K, default: Optional[V] = None) -> Optional[V]:
+    def get(self, key: K, default: V | None = None) -> V | None:
         """获取键值，若不存在返回 default"""
         try:
             return self[key]

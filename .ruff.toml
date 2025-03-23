@@ -2,8 +2,12 @@ line-length = 100
 target-version = "py312"
 
 [lint]
-select = ["E", "F", "I", "B", "C90"]
+select = ["E", "F", "I", "B", "C90", "UP"]
 ignore = ["E501", "C901"]
+fixable = ["UP"] # 允许自动修复 pyupgrade 相关内容
+
+[lint.pyupgrade]
+keep-runtime-typing = false  
 
 [format]
 quote-style = "double"

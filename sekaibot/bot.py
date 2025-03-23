@@ -3,9 +3,10 @@ import pkgutil
 import signal
 import sys
 import threading
+import tomllib
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, DefaultDict  # type: ignore
+from typing import Any  # type: ignore
 
 import anyio
 from pydantic import (
@@ -14,13 +15,9 @@ from pydantic import (
 )
 
 from sekaibot.config import ConfigModel, MainConfig, NodeConfig
-from sekaibot.exceptions import (
-    LoadModuleError,
-)
+from sekaibot.exceptions import LoadModuleError
 from sekaibot.log import configure_logging, logger
 from sekaibot.manager import NodeManager
-
-# from sekaibot.core.agent_executor import ChatAgentExecutor
 from sekaibot.node import Node, NodeLoadType
 from sekaibot.typing import BotHook, EventHook
 from sekaibot.utils import (
@@ -37,11 +34,6 @@ HANDLED_SIGNALS = (
     signal.SIGINT,  # Unix signal 2. Sent by Ctrl+C.
     signal.SIGTERM,  # Unix signal 15. Sent by `kill <pid>`.
 )
-
-if sys.version_info >= (3, 11):  # pragma: no cover
-    import tomllib
-else:  # pragma: no cover
-    import tomli as tomllib
 
 
 def check_group_keywords(text: str, keywords: list) -> bool:
@@ -326,7 +318,7 @@ class Bot:
         all_nodes = set(nodes_dict.values())
         roots = [_node for _node in all_nodes if not _node.parent]
         # 构建 节点-子节点 映射表
-        parent_map: DefaultDict[type[Node[Any, Any, Any]], list[type[Node[Any, Any, Any]]]] = (
+        parent_map: defaultdict[type[Node[Any, Any, Any]], list[type[Node[Any, Any, Any]]]] = (
             defaultdict(list)
         )
         for _node in all_nodes - set(roots):

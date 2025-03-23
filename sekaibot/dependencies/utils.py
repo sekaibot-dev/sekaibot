@@ -8,17 +8,14 @@ from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
 from typing import (
     Any,
     AsyncContextManager,
-    AsyncGenerator,
-    Awaitable,
-    Callable,
     ContextManager,
-    Generator,
     Type,
     TypeVar,
     Union,
     cast,
     get_type_hints,
 )
+from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 
 from sekaibot.utils import get_annotations, sync_ctx_manager_wrapper
 
@@ -26,7 +23,7 @@ _T = TypeVar("_T")
 
 Dependency = Union[
     # Class-based dependencies
-    Type[Union[_T, AsyncContextManager[_T], ContextManager[_T]]],
+    type[_T | AsyncContextManager[_T] | ContextManager[_T]],
     # Generator-based dependencies
     Callable[[], AsyncGenerator[_T, None]],
     Callable[[], Generator[_T, None, None]],
@@ -137,7 +134,7 @@ async def _execute_class(
             dependency_cache=dependency_cache,
         )
     depend_obj = cast(
-        Union[_T, AsyncContextManager[_T], ContextManager[_T]],
+        _T | AsyncContextManager[_T] | ContextManager[_T],
         dependent.__new__(dependent),  # pyright: ignore
     )
     for key, value in values.items():

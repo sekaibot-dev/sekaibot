@@ -6,44 +6,26 @@ import inspect
 import json
 import os
 import os.path
-import sys
 import traceback
 from abc import ABC
+from collections.abc import AsyncGenerator, Awaitable, Callable, Coroutine, Generator, Sequence
+from contextlib import AbstractContextManager as ContextManager
 from contextlib import asynccontextmanager
 from functools import partial
 from importlib.abc import MetaPathFinder
 from importlib.machinery import ModuleSpec, PathFinder
-from types import GetSetDescriptorType, ModuleType
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    AsyncGenerator,
-    Awaitable,
-    Callable,
-    ClassVar,
-    ContextManager,
-    Coroutine,
-    Generator,
-    Literal,
-    Sequence,
-    Type,
-    TypeVar,
-    Union,
-    cast,
-    overload,
-)
+from inspect import get_annotations
+from types import ModuleType
+from typing import Any, ClassVar, Literal, TypeGuard, TypeVar, Union, cast, overload
 
 import anyio
 from exceptiongroup import BaseExceptionGroup, catch
 from pydantic import BaseModel
-from typing_extensions import ParamSpec, TypeAlias, TypeGuard
+from typing_extensions import ParamSpec
 
 from sekaibot.config import ConfigModel
 from sekaibot.log import logger
 from sekaibot.typing import EventT
-
-if TYPE_CHECKING:
-    from os import PathLike
 
 __all__ = [
     "ModulePathFinder",
@@ -63,10 +45,10 @@ _T = TypeVar("_T")
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
 _E = TypeVar("E", bound=BaseException)
-_TypeT = TypeVar("_TypeT", bound=Type[Any])
+_TypeT = TypeVar("_TypeT", bound=type[Any])
 _BaseModelT = TypeVar("_BaseModelT", bound=BaseModel)
 
-StrOrBytesPath: TypeAlias = Union[str, bytes, "PathLike[str]", "PathLike[bytes]"]
+StrOrBytesPath = str | bytes | os.PathLike  # type alias
 TreeType = dict[_T, Union[Any, "TreeType"]]
 
 
@@ -148,7 +130,7 @@ class ModulePathFinder(MetaPathFinder):
         return PathFinder.find_spec(fullname, self.path + list(path), target)
 
 
-def is_config_class(config_class: Any) -> TypeGuard[Type[ConfigModel]]:
+def is_config_class(config_class: Any) -> TypeGuard[type[ConfigModel]]:
     """判断一个对象是否是配置类。
 
     Args:
@@ -419,55 +401,3 @@ async def cancel_on_exit(
         )
 
     cancel_scope.cancel()
-
-
-if sys.version_info >= (3, 10):  # pragma: no cover
-    from inspect import get_annotations
-else:  # pragma: no cover
-
-    def get_annotations(
-        obj: Callable[..., object] | Type[Any] | ModuleType,
-    ) -> dict[str, Any]:
-        """计算一个对象的标注字典。
-
-        Args:
-            obj: 一个可调用对象、类或模块。
-
-        Raises:
-            TypeError: `obj` 不是一个可调用对象、类或模块。
-            ValueError: 对象的 `__annotations__` 不是一个字典或 `None`。
-
-        Returns:
-            对象的标注字典。
-        """
-        ann: dict[str, Any] | None
-
-        if isinstance(obj, type):
-            # class
-            obj_dict = getattr(obj, "__dict__", None)
-            if obj_dict and hasattr(obj_dict, "get"):
-                ann = obj_dict.get("__annotations__")
-                if isinstance(ann, GetSetDescriptorType):
-                    ann = None
-            else:
-                ann = None
-        elif isinstance(obj, ModuleType) or callable(obj):
-            # this includes types.ModuleType, types.Function, types.BuiltinFunctionType,
-            # types.BuiltinMethodType, functools.partial, functools.singledispatch,
-            # "class funclike" from Lib/test/test_inspect... on and on it goes.
-            ann = getattr(obj, "__annotations__", None)
-        else:
-            raise TypeError(f"{obj!r} is not a module, class, or callable.")
-
-        if ann is None:
-            return {}
-
-        if not isinstance(ann, dict):
-            raise ValueError(  # noqa: TRY004
-                f"{obj!r}.__annotations__ is neither a dict nor None"
-            )
-
-        if not ann:
-            return {}
-
-        return dict(ann)

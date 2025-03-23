@@ -1,12 +1,5 @@
-from typing import (
-    TYPE_CHECKING,
-    Awaitable,
-    Callable,
-    Literal,
-    TypeVar,
-    Union,
-    override,
-)  # type: ignore
+from collections.abc import Awaitable, Callable  # type: ignore
+from typing import TYPE_CHECKING, Literal, TypeVar, override
 
 if TYPE_CHECKING:
     from typing import Any  # type: ignore
@@ -71,7 +64,7 @@ class NotGiven:
         return "NOT_GIVEN"
 
 
-NotGivenOr = Union[_T, NotGiven]
+NotGivenOr = _T | NotGiven
 NOT_GIVEN = NotGiven()
 
 
