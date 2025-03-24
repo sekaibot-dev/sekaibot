@@ -5,6 +5,7 @@ from typing import (
     Any,
     NoReturn,
     Self,
+    Union,
 )
 
 import anyio
@@ -37,7 +38,9 @@ class Permission:
 
     __slots__ = ("checkers",)
 
-    def __init__(self, *checkers: "Permission" | PermissionCheckerT | Dependency[bool]) -> None:
+    def __init__(
+        self, *checkers: Union["Permission", PermissionCheckerT, Dependency[bool]]
+    ) -> None:
         self.checkers: set[Dependency[bool]] = set(
             chain.from_iterable(
                 checker.checkers if isinstance(checker, Permission) else {checker}

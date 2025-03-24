@@ -1,6 +1,14 @@
-from typing import Any
+#from typing import Any
 
-from sekaibot import Depends, Event, Node, SonNode
+from sekaibot import ConfigModel, Depends, Event, Node, SonNode
+
+
+class ConfigA(ConfigModel):
+    __config_name__ = "a"
+    a: str = None
+class ConfigB(ConfigModel):
+    __config_name__ = "b"
+    a: str = None
 
 
 # from sekaibot.rule import rule_at_me
@@ -9,12 +17,12 @@ class BEvent(Event):
     adapter: str = "test_adapter"
 
 
-class BNode(SonNode[Event, Any, Any]):
+class BNode(SonNode[Event, str, ConfigB]):
     def main(self):
-        print(self.event.get_event_name())
+        print(self.node_state, self.event.get_event_name(), self.config.a)
 
 
-class HelloWorldNode(Node[Event, Any, Any]):
+class HelloWorldNode(Node[Event | BEvent, dict, ConfigA]):
     # if_startswith = StartsWith.Checker("Hello, World", True)
     # param = StartsWith.Param()
 
@@ -25,7 +33,8 @@ class HelloWorldNode(Node[Event, Any, Any]):
     priority = 0
 
     async def handle(self):
-        print("HelloWorldNode")
+        print("HelloWorldNode", self.name, self.config.a)
+        self.node_state["async"] = True
         self.B.main()
         return None
 

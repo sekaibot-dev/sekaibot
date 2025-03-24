@@ -22,9 +22,14 @@ from sekaibot.exceptions import (
 )
 from sekaibot.internal.event import Event, EventHandleOption
 from sekaibot.log import logger
-from sekaibot.node import Node
+from sekaibot.node import NameT, Node
 from sekaibot.typing import EventT, StateT
-from sekaibot.utils import cancel_on_exit, handle_exception, run_coro_with_catch, wrap_get_func
+from sekaibot.utils import (
+    cancel_on_exit,
+    handle_exception,
+    run_coro_with_catch,
+    wrap_get_func,
+)
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
@@ -293,7 +298,7 @@ class NodeManager:
             bot=self.bot,
             event=current_event,
             state=state,
-            node_state=self.node_state[node_class.__name__],
+            node_state=self.node_state.get(node_class.__name__),
             global_state=self.global_state,
             use_cache=True,
             stack=stack,
@@ -316,7 +321,7 @@ class NodeManager:
         dependency_cache: Dependency | None = None,
     ) -> tuple[PruningException | JumpToException | None, StateT | None]:
         if not await self._check_node(node_class, current_event, state, stack, dependency_cache):
-            return PruningException, None
+            return PruningException(), None
 
         return await self._run_node(node_class, current_event, state, stack, dependency_cache)
 
@@ -377,7 +382,10 @@ class NodeManager:
                         current_event,
                         state.copy(),
                         stack,
-                        dependency_cache,
+                        dependency_cache
+                        | {
+                            NameT: node_class.__name__,
+                        },
                     )
 
                     if isinstance(exc, PruningException):

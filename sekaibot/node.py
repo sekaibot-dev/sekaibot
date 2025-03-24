@@ -15,6 +15,7 @@ from typing import (
     Generic,
     NoReturn,
     Self,
+    TypeVar,
     cast,
     final,
     get_args,
@@ -40,7 +41,13 @@ from sekaibot.internal.message import BuildMessageType
 from sekaibot.log import logger
 from sekaibot.permission import Permission
 from sekaibot.rule import Rule
-from sekaibot.typing import ConfigT, EventT, GlobalStateT, NodeStateT, StateT
+from sekaibot.typing import (
+    ConfigT,
+    EventT,
+    GlobalStateT,
+    NodeStateT,
+    StateT,
+)
 from sekaibot.utils import flatten_exception_group, handle_exception, is_config_class
 
 if TYPE_CHECKING:
@@ -48,6 +55,7 @@ if TYPE_CHECKING:
 
 __all__ = ["Node", "SonNode", "NodeLoadType"]
 
+NameT = TypeVar("NameT", bound="str")
 
 class NodeLoadType(Enum):
     """节点加载类型。"""
@@ -67,10 +75,12 @@ class SonNode(Generic[EventT, NodeStateT, ConfigT]):
         event: EventT
         state: StateT
         bot: "Bot"
+        name: NameT
     else:
         event = Depends(Event)
         bot = Depends("Bot")
         state = Depends(StateT)
+        name = Depends(NameT)
 
     def __init_state__(self) -> NodeStateT | None:
         """初始化节点状态。"""
@@ -94,43 +104,42 @@ class SonNode(Generic[EventT, NodeStateT, ConfigT]):
         orig_bases: tuple[type, ...] = getattr(cls, "__orig_bases__", ())
         for orig_base in orig_bases:
             origin_class = get_origin(orig_base)
-            if inspect.isclass(origin_class) and issubclass(origin_class, SonNode):
-                try:
-                    event_t, state_t, config_t = cast(
-                        tuple[EventT, NodeStateT, ConfigT], get_args(orig_base)
+            if not (inspect.isclass(origin_class) and issubclass(origin_class, SonNode)):
+                continue
+            try:
+                event_t, state_t, config_t = cast(
+                    tuple[EventT, NodeStateT, ConfigT], get_args(orig_base)
+                )
+            except ValueError:  # pragma: no cover
+                continue
+            if event_type is None:
+                if inspect.isclass(event_t) and issubclass(event_t, Event):
+                    event_type = event_t
+                elif event_t:
+                    _event_t = tuple(
+                        filter(
+                            lambda e: inspect.isclass(e) and issubclass(e, Event),
+                            get_args(event_t),
+                        )
                     )
-                except ValueError:  # pragma: no cover
-                    continue
-                if event_type is None:
-                    if inspect.isclass(event_t) and issubclass(event_t, Event):
-                        event_type = event_t
-                    elif event_t:
-                        _event_t = tuple(
-                            filter(
-                                lambda e: inspect.isclass(e) and issubclass(e, Event),
-                                get_args(event_t),
-                            )
-                        )
-                        event_type = (
-                            _event_t[0]
-                            if len(_event_t) == 1
-                            else _event_t
-                            if len(_event_t) > 0
-                            else None
-                        )
-                if (
-                    config is None
-                    and inspect.isclass(config_t)
-                    and issubclass(config_t, ConfigModel)
-                ):
-                    config = config_t  # pyright: ignore
-                if (
-                    init_state is None
-                    and get_origin(state_t) is Annotated
-                    and hasattr(state_t, "__metadata__")
-                ):
+                    event_type = (
+                        _event_t[0]
+                        if len(_event_t) == 1
+                        else _event_t
+                        if len(_event_t) > 0
+                        else None
+                    )
+            if (
+                config is None
+                and inspect.isclass(config_t)
+                and issubclass(config_t, ConfigModel)
+            ):
+                config = config_t  # pyright: ignore
+            if init_state is None:
+                if get_origin(state_t) is Annotated and hasattr(state_t, "__metadata__"):
                     init_state = state_t.__metadata__[0]  # pyright: ignore
-
+                elif inspect.isclass(state_t):
+                    init_state = state_t()  # pyright: ignore
         if not hasattr(cls, "EventType") and event_type is not None:
             cls.EventType = event_type
         if not hasattr(cls, "Config") and config is not None:
@@ -140,22 +149,19 @@ class SonNode(Generic[EventT, NodeStateT, ConfigT]):
 
     @final
     @property
-    def name(self) -> str:
-        """节点类名称。"""
-        return self.__class__.__name__
-
-    @final
-    @property
     def config(self) -> ConfigT:
         """节点配置。"""
         default: Any = None
         config_class = getattr(self, "Config", None)
         if is_config_class(config_class):
-            return getattr(
+            _config = getattr(
                 self.bot.config.node,
                 config_class.__config_name__,
                 default,
             )
+            if isinstance(_config, dict):
+                return config_class(**_config)
+            return _config
         return default
 
     @property
@@ -318,7 +324,7 @@ class SonNode(Generic[EventT, NodeStateT, ConfigT]):
         return tuple(results[dep] for dep in dependencies)
 
 
-class Node(SonNode, ABC, Generic[EventT, NodeStateT, ConfigT]):
+class Node(SonNode[EventT, NodeStateT, ConfigT], ABC):
     """所有 SekaiBot 节点的基类。
 
     Attributes:
@@ -340,6 +346,15 @@ class Node(SonNode, ABC, Generic[EventT, NodeStateT, ConfigT]):
 
     __node_load_type__: ClassVar[NodeLoadType]
     __node_file_path__: ClassVar[str | None]
+
+    def __init_subclass__(cls, *args, **kwargs):
+        super().__init_subclass__(*args, **kwargs) 
+
+    @final
+    @property
+    def name(self) -> str:
+        """节点类名称。"""
+        return self.__class__.__name__
 
     '''async def call_api(self, api: str, **params: Any):
         """调用 API，协程会等待直到获得 API 响应。
@@ -382,10 +397,9 @@ class Node(SonNode, ABC, Generic[EventT, NodeStateT, ConfigT]):
                 )
             )
             or (
-                isinstance(cls.EventType, Event | tuple)
-                and (
-                    isinstance(cls.EventType, Event)
-                    or all(isinstance(i, Event) for i in cls.EventType)
+                (
+                    isinstance(cls.EventType, type) and issubclass(cls.EventType, Event)
+                    or isinstance(cls.EventType, tuple) and all(issubclass(i, Event) for i in cls.EventType)
                 )
                 and isinstance(event, cls.EventType)
             )
@@ -575,15 +589,12 @@ class Node(SonNode, ABC, Generic[EventT, NodeStateT, ConfigT]):
         with catch(
             {(PruningException, JumpToException, RejectException): _handle_special_exception}
         ):
-            if await self._run_rule():  # 无错误上报
+            if await self._run_rule():
                 logger.info("Event will be handled by node", node=self.__class__)
                 rule_failed = False
-                await (
-                    self._run_handle()
-                )  # 上报 JumpToException | PruningException | RejectException
+                await self._run_handle()
             else:
-                await self._run_fallback()  # 上报 JumpToException | RejectException
-
+                await self._run_fallback()
         if exc:
             if isinstance(exc, RejectException):
                 if self.state[REJECT_TARGET]:

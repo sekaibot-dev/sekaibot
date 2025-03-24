@@ -4,7 +4,13 @@
 """
 
 from abc import ABC
-from typing import TYPE_CHECKING, Any, Generic, NamedTuple, override
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Generic,
+    NamedTuple,
+    override,
+)
 
 from pydantic import BaseModel, ConfigDict
 

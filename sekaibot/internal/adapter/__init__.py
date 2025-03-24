@@ -6,7 +6,14 @@
 import os
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING, Any, Generic, TypeVar, final, overload
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Generic,
+    TypeVar,
+    final,
+    overload,
+)
 
 import structlog
 

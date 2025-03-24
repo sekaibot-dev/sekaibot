@@ -9,10 +9,7 @@ from pathlib import Path
 from typing import Any  # type: ignore
 
 import anyio
-from pydantic import (
-    ValidationError,
-    create_model,  # pyright: ignore[reportUnknownVariableType]
-)
+from pydantic import ValidationError, create_model  # pyright: ignore[reportUnknownVariableType]
 
 from sekaibot.config import ConfigModel, MainConfig, NodeConfig
 from sekaibot.exceptions import LoadModuleError

@@ -5,8 +5,22 @@
 """
 
 from abc import ABC, abstractmethod
-from collections.abc import ItemsView, Iterator, KeysView, Mapping, ValuesView
-from typing import Any, Generic, Self, SupportsIndex, Type, TypeVar, overload  # noqa: UP035
+from collections.abc import (
+    ItemsView,
+    Iterator,
+    KeysView,
+    Mapping,
+    ValuesView,
+)
+from typing import (  # noqa: UP035
+    Any,
+    Generic,
+    Self,
+    SupportsIndex,
+    Type,
+    TypeVar,
+    overload,
+)
 
 from pydantic import BaseModel, Field, GetCoreSchemaHandler
 from pydantic_core import core_schema

@@ -14,3 +14,9 @@ adapter_type = "reverse-ws"
 host = "127.0.0.1"
 port = 8080
 url = "/cqhttp/ws"
+
+[node.a]
+a = "http"
+
+[node.b]
+a = "http"

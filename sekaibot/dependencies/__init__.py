@@ -4,14 +4,15 @@
 """
 
 from contextlib import AsyncExitStack
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    TypeVar,
-)
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from sekaibot.internal.event import Event
-from sekaibot.typing import DependencyCacheT, GlobalStateT, NodeStateT, StateT
+from sekaibot.typing import (
+    DependencyCacheT,
+    GlobalStateT,
+    NodeStateT,
+    StateT,
+)
 
 from .utils import Dependency, InnerDepends, solve_dependencies
 

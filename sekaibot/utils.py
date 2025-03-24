@@ -8,7 +8,14 @@ import os
 import os.path
 import traceback
 from abc import ABC
-from collections.abc import AsyncGenerator, Awaitable, Callable, Coroutine, Generator, Sequence
+from collections.abc import (
+    AsyncGenerator,
+    Awaitable,
+    Callable,
+    Coroutine,
+    Generator,
+    Sequence,
+)
 from contextlib import AbstractContextManager as ContextManager
 from contextlib import asynccontextmanager
 from functools import partial
@@ -16,7 +23,16 @@ from importlib.abc import MetaPathFinder
 from importlib.machinery import ModuleSpec, PathFinder
 from inspect import get_annotations
 from types import ModuleType
-from typing import Any, ClassVar, Literal, TypeGuard, TypeVar, Union, cast, overload
+from typing import (
+    Any,
+    ClassVar,
+    Literal,
+    TypeGuard,
+    TypeVar,
+    Union,
+    cast,
+    overload,
+)
 
 import anyio
 from exceptiongroup import BaseExceptionGroup, catch
@@ -48,7 +64,7 @@ _E = TypeVar("E", bound=BaseException)
 _TypeT = TypeVar("_TypeT", bound=type[Any])
 _BaseModelT = TypeVar("_BaseModelT", bound=BaseModel)
 
-StrOrBytesPath = str | bytes | os.PathLike  # type alias
+StrOrBytesPath = Union[str, bytes, os.PathLike]  # type alias  # noqa: UP007
 TreeType = dict[_T, Union[Any, "TreeType"]]
 
 

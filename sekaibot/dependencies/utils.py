@@ -4,8 +4,17 @@
 """
 
 import inspect
-from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
-from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
+from collections.abc import (
+    AsyncGenerator,
+    Awaitable,
+    Callable,
+    Generator,
+)
+from contextlib import (
+    AsyncExitStack,
+    asynccontextmanager,
+    contextmanager,
+)
 from typing import (  # noqa: UP035
     Any,
     AsyncContextManager,

@@ -10,6 +10,7 @@ from typing import (  # noqa: UP035
     Self,
     Type,
     TypeVar,
+    Union,
     final,
 )
 
@@ -19,7 +20,12 @@ from exceptiongroup import BaseExceptionGroup, catch
 from sekaibot.dependencies import Dependency, Depends, solve_dependencies_in_bot
 from sekaibot.exceptions import SkipException
 from sekaibot.internal.event import Event
-from sekaibot.typing import GlobalStateT, NodeT, RuleCheckerT, StateT
+from sekaibot.typing import (
+    GlobalStateT,
+    NodeT,
+    RuleCheckerT,
+    StateT,
+)
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
@@ -45,7 +51,7 @@ class Rule:
 
     __slots__ = ("checkers",)
 
-    def __init__(self, *checkers: "Rule" | RuleCheckerT | Dependency[bool]) -> None:
+    def __init__(self, *checkers: Union["Rule", RuleCheckerT, Dependency[bool]]) -> None:
         self.checkers: set[Dependency[bool]] = set(
             chain.from_iterable(
                 checker.checkers if isinstance(checker, Rule) else {checker} for checker in checkers
