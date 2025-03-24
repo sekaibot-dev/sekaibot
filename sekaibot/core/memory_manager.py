@@ -1,10 +1,12 @@
 # core/memory_manager.py
 
 import asyncio
+from typing import Any, Dict, List, Literal
+
+from langchain.schema import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_community.chat_message_histories import RedisChatMessageHistory
-from langchain.schema import HumanMessage, AIMessage, SystemMessage, BaseMessage
-from typing import Literal, Dict, Any, List
-from .utils import cacheDict
+
+from .utils import LRUCache
 
 
 class MemoryManager:
@@ -20,7 +22,7 @@ class MemoryManager:
         self.redis_url = redis_url
         self.key_prefix = key_prefix
         # 用于缓存 session_id -> RedisChatMessageHistory 实例
-        self._history_cache: cacheDict[str, RedisChatMessageHistory] = cacheDict(max_size=50)
+        self._history_cache: LRUCache[str, RedisChatMessageHistory] = LRUCache(max_size=50)
 
     def get_history(self, session_id: str) -> RedisChatMessageHistory:
         """

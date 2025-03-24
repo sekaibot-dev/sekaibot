@@ -45,9 +45,16 @@ from sekaibot.typing import EventT
 
 __all__ = [
     "ModulePathFinder",
+    "ModuleType",
+    "TreeType",
     "is_config_class",
+    "remove_none_attributes",
     "get_classes_from_module",
     "get_classes_from_module_name",
+    "flatten_tree_with_jumps",
+    "flatten_exception_group",
+    "handle_exception",
+    "run_coro_with_catch",
     "PydanticEncoder",
     "samefile",
     "sync_func_wrapper",
@@ -66,67 +73,6 @@ _BaseModelT = TypeVar("_BaseModelT", bound=BaseModel)
 
 StrOrBytesPath = Union[str, bytes, os.PathLike]  # type alias  # noqa: UP007
 TreeType = dict[_T, Union[Any, "TreeType"]]
-
-
-def flatten_exception_group(
-    exc_group: BaseExceptionGroup[_E],
-) -> Generator[_E, None, None]:
-    for exc in exc_group.exceptions:
-        if isinstance(exc, BaseExceptionGroup):
-            yield from flatten_exception_group(exc)
-        else:
-            yield exc
-
-
-def handle_exception(
-    msg: str, level: Literal["debug", "info", "warning", "error", "critical"] = "error", **kwargs
-) -> Callable[[BaseExceptionGroup], None]:
-    def _handle(exc_group: BaseExceptionGroup[Exception]) -> None:
-        for exc in flatten_exception_group(exc_group):
-            if level in ("error", "critical"):
-                getattr(logger, level)(msg, exc_info=exc, **kwargs)
-            else:
-                getattr(logger, level)(msg, **kwargs)
-
-    return _handle
-
-
-@overload
-async def run_coro_with_catch(
-    coro: Coroutine[Any, Any, _T],
-    exc: tuple[type[Exception], ...],
-    return_on_err: None = None,
-) -> _T | None: ...
-
-
-@overload
-async def run_coro_with_catch(
-    coro: Coroutine[Any, Any, _T],
-    exc: tuple[type[Exception], ...],
-    return_on_err: _R,
-) -> _T | _R: ...
-
-
-async def run_coro_with_catch(
-    coro: Coroutine[Any, Any, _T],
-    exc: tuple[type[Exception], ...],
-    return_on_err: _R | None = None,
-) -> _T | _R | None:
-    """运行协程并当遇到指定异常时返回指定值。
-
-    参数:
-        coro: 要运行的协程
-        exc: 要捕获的异常
-        return_on_err: 当发生异常时返回的值
-
-    返回:
-        协程的返回值或发生异常时的指定值
-    """
-
-    with catch({exc: lambda exc_group: None}):
-        return await coro
-
-    return return_on_err
 
 
 class ModulePathFinder(MetaPathFinder):
@@ -277,31 +223,88 @@ def flatten_tree_with_jumps(tree: TreeType[_T]) -> list[tuple[_T, int]]:
             node: _T = ordered_nodes[i]
             parent: _T | None = parent_map.get(node)
 
-            # 获取兄弟节点
             siblings: list[_T] = children_map.get(parent, [])
             node_pos: int = siblings.index(node)
 
-            # 如果有兄弟节点，跳到最近的兄弟
             if node_pos + 1 < len(siblings):
                 jump_map[node] = ordered_nodes.index(siblings[node_pos + 1])
             else:
-                # 回溯父节点的兄弟节点
                 temp_parent: _T | None = parent
                 while temp_parent is not None:
                     parent_siblings: list[_T] = children_map.get(parent_map.get(temp_parent), [])
                     if temp_parent in parent_siblings:
                         temp_pos: int = parent_siblings.index(temp_parent)
-                        if temp_pos + 1 < len(parent_siblings):  # 父节点有兄弟
+                        if temp_pos + 1 < len(parent_siblings):
                             jump_map[node] = ordered_nodes.index(parent_siblings[temp_pos + 1])
                             break
-                    temp_parent = parent_map.get(temp_parent)  # 继续向上回溯
+                    temp_parent = parent_map.get(temp_parent)
 
         return jump_map
 
     jump_map: dict[_T, int] = build_jump_map()
 
-    # 构造最终列表
     return [(node, jump_map[node]) for node in ordered_nodes]
+
+
+def flatten_exception_group(
+    exc_group: BaseExceptionGroup[_E],
+) -> Generator[_E, None, None]:
+    for exc in exc_group.exceptions:
+        if isinstance(exc, BaseExceptionGroup):
+            yield from flatten_exception_group(exc)
+        else:
+            yield exc
+
+
+def handle_exception(
+    msg: str, level: Literal["debug", "info", "warning", "error", "critical"] = "error", **kwargs
+) -> Callable[[BaseExceptionGroup], None]:
+    def _handle(exc_group: BaseExceptionGroup[Exception]) -> None:
+        for exc in flatten_exception_group(exc_group):
+            if level in ("error", "critical"):
+                getattr(logger, level)(msg, exc_info=exc, **kwargs)
+            else:
+                getattr(logger, level)(msg, **kwargs)
+
+    return _handle
+
+
+@overload
+async def run_coro_with_catch(
+    coro: Coroutine[Any, Any, _T],
+    exc: tuple[type[Exception], ...],
+    return_on_err: None = None,
+) -> _T | None: ...
+
+
+@overload
+async def run_coro_with_catch(
+    coro: Coroutine[Any, Any, _T],
+    exc: tuple[type[Exception], ...],
+    return_on_err: _R,
+) -> _T | _R: ...
+
+
+async def run_coro_with_catch(
+    coro: Coroutine[Any, Any, _T],
+    exc: tuple[type[Exception], ...],
+    return_on_err: _R | None = None,
+) -> _T | _R | None:
+    """运行协程并当遇到指定异常时返回指定值。
+
+    参数:
+        coro: 要运行的协程
+        exc: 要捕获的异常
+        return_on_err: 当发生异常时返回的值
+
+    返回:
+        协程的返回值或发生异常时的指定值
+    """
+
+    with catch({exc: lambda exc_group: None}):
+        return await coro
+
+    return return_on_err
 
 
 class PydanticEncoder(json.JSONEncoder):

@@ -4,17 +4,8 @@
 """
 
 import inspect
-from collections.abc import (
-    AsyncGenerator,
-    Awaitable,
-    Callable,
-    Generator,
-)
-from contextlib import (
-    AsyncExitStack,
-    asynccontextmanager,
-    contextmanager,
-)
+from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
+from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
 from typing import (  # noqa: UP035
     Any,
     AsyncContextManager,
@@ -35,7 +26,7 @@ Dependency = Union[  # noqa: UP007
     # Generator-based dependencies
     Callable[[], AsyncGenerator[_T, None]],
     Callable[[], Generator[_T, None, None]],
-    # Function-based dependencies (带参数)
+    # Function-based dependencies
     Callable[..., _T],
     Callable[..., Awaitable[_T]],
 ]

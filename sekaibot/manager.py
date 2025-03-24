@@ -24,12 +24,7 @@ from sekaibot.internal.event import Event, EventHandleOption
 from sekaibot.log import logger
 from sekaibot.node import NameT, Node
 from sekaibot.typing import EventT, StateT
-from sekaibot.utils import (
-    cancel_on_exit,
-    handle_exception,
-    run_coro_with_catch,
-    wrap_get_func,
-)
+from sekaibot.utils import cancel_on_exit, handle_exception, run_coro_with_catch, wrap_get_func
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot

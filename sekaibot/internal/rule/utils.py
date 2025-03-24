@@ -12,17 +12,9 @@ FrontMatter:
 """
 
 import re
-import time as time_util
 from argparse import Namespace as Namespace
-from collections import deque
 from contextvars import ContextVar
-from typing import (
-    TYPE_CHECKING,
-    NamedTuple,
-    Self,
-    TypedDict,
-    TypeVar,
-)
+from typing import TYPE_CHECKING, Any, NamedTuple, Self, TypedDict, TypeVar
 
 from pygtrie import CharTrie
 
@@ -33,7 +25,9 @@ from sekaibot.consts import (
     CMD_START_KEY,
     CMD_WHITESPACE_KEY,
     COUNTER_INFO,
+    COUNTER_LATEST_TIGGERS,
     COUNTER_STATE,
+    COUNTER_TIME_TIGGERS,
     ENDSWITH_KEY,
     FULLMATCH_KEY,
     KEYWORD_KEY,
@@ -47,6 +41,7 @@ from sekaibot.internal.event import Event
 from sekaibot.internal.message import Message, MessageSegment
 from sekaibot.log import logger
 from sekaibot.typing import GlobalStateT, StateT
+from sekaibot.utils import Counter
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
@@ -266,29 +261,6 @@ class RegexRule:
             return False
 
 
-class Counter:
-    """计数器，用于跟踪 True/False 事件的发生时间。"""
-
-    __slots__ = "values"
-
-    def __init__(self, max_size: int):
-        self.values = deque(maxlen=max_size)
-
-    def append(self, value: bool, time: int | float | None = None):
-        """记录一个布尔值及其发生时间。"""
-        self.values.append((value, time if time is not None else time_util.time()))
-
-    def count_time(self, time_window: int | float, time: int | float | None = None) -> int:
-        """返回 `time_window` 秒内 `True` 发生的次数。"""
-        if time is None:
-            time = time_util.time()
-        return sum(1 for v, t in self.values if t >= time - time_window and t < time and v)
-
-    def count_events(self, count_window: int) -> int:
-        """返回最近 `count_window` 条记录中 `True` 发生的次数。"""
-        return sum(1 for v, _ in list(self.values)[-count_window:] if v)
-
-
 class CountTriggerRule:
     __slots__ = ("name", "func", "min_trigger", "time_window", "count_window", "max_size")
 
@@ -326,37 +298,45 @@ class CountTriggerRule:
         self, bot: "Bot", event: Event, state: StateT, global_state: GlobalStateT
     ) -> bool:
         if isinstance(global_state[BOT_GLOBAL_KEY][COUNTER_STATE], dict):
-            counter: Counter = global_state[BOT_GLOBAL_KEY][COUNTER_STATE].setdefault(
-                self.name, Counter(self.max_size)
+            counter: Counter[Event[Any]] = global_state[BOT_GLOBAL_KEY][COUNTER_STATE].setdefault(
+                self.name, Counter[Event[Any]](self.max_size)
             )
         else:
-            counter = Counter(self.max_size)
+            counter = Counter[Event[Any]](self.max_size)
             global_state[BOT_GLOBAL_KEY][COUNTER_STATE] = {self.name: counter}
 
         if self.func:
-            counter.append(
+            counter.record(
+                event,
                 await solve_dependencies_in_bot(
                     self.func,
                     bot=bot,
                     event=event,
                     state=state,
                     global_state=global_state,
-                )
+                ),
+                getattr(event, "time", None),
             )
         else:
-            counter.append(True)
+            counter.record(event, True, getattr(event, "time", None))
 
         trigger_state = {}
         if (
             self.time_window
-            and (time_trigger := counter.count_time(self.time_window)) >= self.min_trigger
+            and len(
+                time_trigger := tuple(
+                    counter.iter_in_time(self.time_window), getattr(event, "time", None)
+                )
+            )
+            >= self.min_trigger
         ):
-            trigger_state[f"time_trigger_{self.time_window}s"] = time_trigger
+            trigger_state[COUNTER_TIME_TIGGERS] = time_trigger
         if (
             self.count_window
-            and (count_trigger := counter.count_events(self.count_window)) >= self.min_trigger
+            and len(count_trigger := tuple(counter.iter_in_latest(self.count_window)))
+            >= self.min_trigger
         ):
-            trigger_state[f"count_trigger_{self.count_window}"] = count_trigger
+            trigger_state[COUNTER_LATEST_TIGGERS] = count_trigger
 
         if trigger_state:
             state[COUNTER_INFO] = trigger_state

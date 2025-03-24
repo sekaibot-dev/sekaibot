@@ -41,13 +41,7 @@ from sekaibot.internal.message import BuildMessageType
 from sekaibot.log import logger
 from sekaibot.permission import Permission
 from sekaibot.rule import Rule
-from sekaibot.typing import (
-    ConfigT,
-    EventT,
-    GlobalStateT,
-    NodeStateT,
-    StateT,
-)
+from sekaibot.typing import ConfigT, EventT, GlobalStateT, NodeStateT, StateT
 from sekaibot.utils import flatten_exception_group, handle_exception, is_config_class
 
 if TYPE_CHECKING:
@@ -56,6 +50,7 @@ if TYPE_CHECKING:
 __all__ = ["Node", "SonNode", "NodeLoadType"]
 
 NameT = TypeVar("NameT", bound="str")
+
 
 class NodeLoadType(Enum):
     """节点加载类型。"""
@@ -129,11 +124,7 @@ class SonNode(Generic[EventT, NodeStateT, ConfigT]):
                         if len(_event_t) > 0
                         else None
                     )
-            if (
-                config is None
-                and inspect.isclass(config_t)
-                and issubclass(config_t, ConfigModel)
-            ):
+            if config is None and inspect.isclass(config_t) and issubclass(config_t, ConfigModel):
                 config = config_t  # pyright: ignore
             if init_state is None:
                 if get_origin(state_t) is Annotated and hasattr(state_t, "__metadata__"):
@@ -348,7 +339,7 @@ class Node(SonNode[EventT, NodeStateT, ConfigT], ABC):
     __node_file_path__: ClassVar[str | None]
 
     def __init_subclass__(cls, *args, **kwargs):
-        super().__init_subclass__(*args, **kwargs) 
+        super().__init_subclass__(*args, **kwargs)
 
     @final
     @property
@@ -398,8 +389,10 @@ class Node(SonNode[EventT, NodeStateT, ConfigT], ABC):
             )
             or (
                 (
-                    isinstance(cls.EventType, type) and issubclass(cls.EventType, Event)
-                    or isinstance(cls.EventType, tuple) and all(issubclass(i, Event) for i in cls.EventType)
+                    isinstance(cls.EventType, type)
+                    and issubclass(cls.EventType, Event)
+                    or isinstance(cls.EventType, tuple)
+                    and all(issubclass(i, Event) for i in cls.EventType)
                 )
                 and isinstance(event, cls.EventType)
             )

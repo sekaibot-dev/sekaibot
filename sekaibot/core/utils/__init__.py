@@ -1,3 +1,3 @@
-from .cachedict import cacheDict
+from ...utils.cachedict import LRUCache
 
-__all__ = ["cacheDict"]
+__all__ = ["LRUCache"]

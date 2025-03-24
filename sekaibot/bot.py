@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any  # type: ignore
 
 import anyio
+import yaml
 from pydantic import ValidationError, create_model  # pyright: ignore[reportUnknownVariableType]
 
 from sekaibot.config import ConfigModel, MainConfig, NodeConfig
@@ -267,7 +268,7 @@ class Bot:
         configure_logging(self.config.bot.log.level, self.config.bot.log.verbose_exception)
 
     def _load_config_dict(self) -> None:
-        """重新加载配置文件。"""
+        """重新加载配置文件，支持 JSON / TOML / YAML 格式。"""
         self._raw_config_dict = {}
 
         if self._config_dict is not None:
@@ -279,13 +280,15 @@ class Bot:
                         self._raw_config_dict = json.load(f)
                     elif self._config_file.endswith(".toml"):
                         self._raw_config_dict = tomllib.load(f)
+                    elif self._config_file.endswith((".yml", ".yaml")):
+                        self._raw_config_dict = yaml.safe_load(f)
                     else:
                         logger.error(
                             "Read config file failed: Unable to determine config file type"
                         )
             except OSError:
                 logger.exception("Can not open config file:")
-            except (ValueError, json.JSONDecodeError, tomllib.TOMLDecodeError):
+            except (ValueError, json.JSONDecodeError, tomllib.TOMLDecodeError, yaml.YAMLError):
                 logger.exception("Read config file failed:")
 
         try:
