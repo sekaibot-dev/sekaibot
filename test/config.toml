@@ -16,7 +16,7 @@ port = 8080
 url = "/cqhttp/ws"
 
 [node.a]
-a = "http"
+a = "httpa"
 
 [node.b]
-a = "http"
+a = "httpb"

@@ -4,7 +4,6 @@
 """
 
 import inspect
-from abc import ABC, abstractmethod
 from contextlib import AsyncExitStack
 from enum import Enum
 from typing import (
@@ -47,7 +46,7 @@ from sekaibot.utils import flatten_exception_group, handle_exception, is_config_
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
 
-__all__ = ["Node", "SonNode", "NodeLoadType"]
+__all__ = ["Node", "Node", "NodeLoadType"]
 
 NameT = TypeVar("NameT", bound="str")
 
@@ -61,7 +60,35 @@ class NodeLoadType(Enum):
     CLASS = "class"
 
 
-class SonNode(Generic[EventT, NodeStateT, ConfigT]):
+class Node(Generic[EventT, NodeStateT, ConfigT]):
+    """所有 SekaiBot 节点的基类。
+
+    Attributes:
+        parent: 节点的父节点名称。
+        EventType: 节点处理的事件类型。
+        Config: 节点的配置类。
+        state: 节点的状态。
+        bot: 节点所在的 Bot 实例。
+        event: 当前正在被此节点处理的事件。
+        priority: 节点的优先级，数字越小表示优先级越高，默认为 0。
+        block: 节点执行结束后是否阻止事件的传播。`True` 表示阻止。
+        load: 节点是否被加载，默认为 `True`，等同于使用以 `_` 开头的节点名。
+        __node_load_type__: 节点加载类型，由 SekaiBot 自动设置，反映了此节点是如何被加载的。
+        __node_file_path__: 当节点加载类型为 `NodeLoadType.CLASS` 时为 `None`，
+            否则为定义节点在的 Python 模块的位置。
+    """
+
+    parent: ClassVar[str] = None
+    priority: ClassVar[int] = 0
+    block: ClassVar[bool] = False
+    load: ClassVar[bool] = True
+
+    __node_rule__: ClassVar[Rule] = Rule()
+    __node_perm__: ClassVar[Permission] = Permission()
+
+    __node_load_type__: ClassVar[NodeLoadType]
+    __node_file_path__: ClassVar[str | None]
+
     # 不能使用 ClassVar 因为 PEP 526 不允许这样做
     EventType: str | type[Event] | tuple[type[Event]]
     Config: type[ConfigT]
@@ -70,12 +97,14 @@ class SonNode(Generic[EventT, NodeStateT, ConfigT]):
         event: EventT
         state: StateT
         bot: "Bot"
-        name: NameT
     else:
         event = Depends(Event)
         bot = Depends("Bot")
         state = Depends(StateT)
-        name = Depends(NameT)
+        # 以下两个依赖项在节点作为依赖项时会被导入，并覆盖原有的 `name` 和 `config` 属性，应该交由 SekaiBot 处理
+        # 由于依赖注入发生在类实例化时，因此 `Config` 不会被修改，但是 `config` 会被修改
+        _name = Depends(NameT)
+        _config = Depends(ConfigT)
 
     def __init_state__(self) -> NodeStateT | None:
         """初始化节点状态。"""
@@ -99,7 +128,7 @@ class SonNode(Generic[EventT, NodeStateT, ConfigT]):
         orig_bases: tuple[type, ...] = getattr(cls, "__orig_bases__", ())
         for orig_base in orig_bases:
             origin_class = get_origin(orig_base)
-            if not (inspect.isclass(origin_class) and issubclass(origin_class, SonNode)):
+            if not (inspect.isclass(origin_class) and issubclass(origin_class, Node)):
                 continue
             try:
                 event_t, state_t, config_t = cast(
@@ -135,15 +164,24 @@ class SonNode(Generic[EventT, NodeStateT, ConfigT]):
             cls.EventType = event_type
         if not hasattr(cls, "Config") and config is not None:
             cls.Config = config
-        if cls.__init_state__ is SonNode.__init_state__ and init_state is not None:
+        if cls.__init_state__ is Node.__init_state__ and init_state is not None:
             cls.__init_state__ = lambda _: init_state  # type: ignore
+
+        if cls.__name__.startswith("_"):
+            cls.load = False
+
+    @final
+    @property
+    def name(self) -> str:
+        """节点类名称。"""
+        return getattr(self, "_name", None) or self.__class__.__name__
 
     @final
     @property
     def config(self) -> ConfigT:
         """节点配置。"""
         default: Any = None
-        config_class = getattr(self, "Config", None)
+        config_class = getattr(self, "Config", None) or getattr(self, "_config", None)
         if is_config_class(config_class):
             _config = getattr(
                 self.bot.config.node,
@@ -174,6 +212,20 @@ class SonNode(Generic[EventT, NodeStateT, ConfigT]):
     @final
     def global_state(self, value: dict) -> None:
         self.bot.manager.global_state = value
+
+    async def handle(self) -> None:
+        """处理事件的方法。当 `rule()` 方法返回 `True` 时 SekaiBot 会调用此方法。每个节点必须实现此方法。"""
+
+    async def rule(self) -> bool:
+        """匹配事件的方法。事件处理时，会按照节点的优先级依次调用此方法，当此方法返回 `True` 时将事件交由此节点处理。每个节点不一定要实现此方法。
+        注意：不建议直接在此方法内实现对事件的处理，事件的具体处理请交由 node 方法。
+        """
+        return True
+
+    async def fallback(self) -> None:
+        """事件不通过时执行的善后方法。当 `rule()` 方法返回 `False` 时 SekaiBot 会调用此方法。每个节点不一定要实现此方法。
+        注意：此方法最好用于执行拒绝（`reject()`）等方法，不建议直接在此方法内实现对事件的处理，事件的具体处理请交由 node 方法。
+        """
 
     async def reply(self, message: BuildMessageType) -> NoReturn:
         """回复消息。"""
@@ -269,84 +321,6 @@ class SonNode(Generic[EventT, NodeStateT, ConfigT]):
         self.state[REJECT_TARGET] = (max_try_times, timeout)
         raise RejectException
 
-    @final
-    async def run(
-        self,
-        dependent: Dependency[_T],
-    ) -> _T:
-        """在节点内运行 SekaiBot 内置的，或自定义的函数，以及具有 `__call__` 的类。
-        这些函数只能含有 Bot, Event, State 三个参数。
-        """
-        result: _T = ...
-        async with AsyncExitStack() as stack:
-            result = await solve_dependencies_in_bot(
-                dependent,
-                bot=self.bot,
-                event=self.event,
-                state=self.state,
-                node_state=self.node_state,
-                global_state=self.bot.manager.global_state,
-                stack=stack,
-            )
-        return result
-
-    @final
-    async def gather(
-        self, *dependencies: Dependency[_T], return_exceptions: bool = False
-    ) -> tuple[_T, ...]:
-        """类似 `asyncio.gather()` 并发执行多个任务，支持 `return_exceptions`"""
-
-        results = {}
-
-        async def wrapper(dep):
-            nonlocal results
-            try:
-                results[dep] = await self.run(dep)
-            except Exception as e:
-                if return_exceptions:
-                    results[dep] = e
-                else:
-                    raise
-
-        async with anyio.create_task_group() as tg:
-            for dependency in dependencies:
-                tg.start_soon(wrapper, dependency)
-
-        return tuple(results[dep] for dep in dependencies)
-
-
-class Node(SonNode[EventT, NodeStateT, ConfigT], ABC):
-    """所有 SekaiBot 节点的基类。
-
-    Attributes:
-        event: 当前正在被此节点处理的事件。
-        priority: 节点的优先级，数字越小表示优先级越高，默认为 0。
-        block: 节点执行结束后是否阻止事件的传播。`True` 表示阻止。
-        __node_load_type__: 节点加载类型，由 SekaiBot 自动设置，反映了此节点是如何被加载的。
-        __node_file_path__: 当节点加载类型为 `NodeLoadType.CLASS` 时为 `None`，
-            否则为定义节点在的 Python 模块的位置。
-    """
-
-    parent: ClassVar[str] = None
-    priority: ClassVar[int] = 0
-    sand_box: ClassVar[bool] = False
-    block: ClassVar[bool] = False
-
-    __node_rule__: ClassVar[Rule] = Rule()
-    __node_perm__: ClassVar[Permission] = Permission()
-
-    __node_load_type__: ClassVar[NodeLoadType]
-    __node_file_path__: ClassVar[str | None]
-
-    def __init_subclass__(cls, *args, **kwargs):
-        super().__init_subclass__(*args, **kwargs)
-
-    @final
-    @property
-    def name(self) -> str:
-        """节点类名称。"""
-        return self.__class__.__name__
-
     '''async def call_api(self, api: str, **params: Any):
         """调用 API，协程会等待直到获得 API 响应。
 
@@ -426,22 +400,6 @@ class Node(SonNode[EventT, NodeStateT, ConfigT], ABC):
             stack=stack,
             dependency_cache=dependency_cache,
         )
-
-    @abstractmethod
-    async def handle(self) -> None:
-        """处理事件的方法。当 `rule()` 方法返回 `True` 时 SekaiBot 会调用此方法。每个节点必须实现此方法。"""
-        raise NotImplementedError
-
-    async def rule(self) -> bool:
-        """匹配事件的方法。事件处理时，会按照节点的优先级依次调用此方法，当此方法返回 `True` 时将事件交由此节点处理。每个节点不一定要实现此方法。
-        注意：不建议直接在此方法内实现对事件的处理，事件的具体处理请交由 node 方法。
-        """
-        return True
-
-    async def fallback(self) -> None:
-        """事件不通过时执行的善后方法。当 `rule()` 方法返回 `False` 时 SekaiBot 会调用此方法。每个节点不一定要实现此方法。
-        注意：此方法最好用于执行拒绝（`reject()`）等方法，不建议直接在此方法内实现对事件的处理，事件的具体处理请交由 node 方法。
-        """
 
     @final
     async def _run_rule(self):
@@ -622,3 +580,48 @@ class Node(SonNode[EventT, NodeStateT, ConfigT], ABC):
             raise StopException
 
         return exc
+
+    @final
+    async def run(
+        self,
+        dependent: Dependency[_T],
+    ) -> _T:
+        """在节点内运行 SekaiBot 内置的，或自定义的函数，以及具有 `__call__` 的类。
+        这些函数只能含有 Bot, Event, State 三个参数。
+        """
+        result: _T = ...
+        async with AsyncExitStack() as stack:
+            result = await solve_dependencies_in_bot(
+                dependent,
+                bot=self.bot,
+                event=self.event,
+                state=self.state,
+                node_state=self.node_state,
+                global_state=self.bot.manager.global_state,
+                stack=stack,
+            )
+        return result
+
+    @final
+    async def gather(
+        self, *dependencies: Dependency[_T], return_exceptions: bool = False
+    ) -> tuple[_T, ...]:
+        """类似 `asyncio.gather()` 并发执行多个任务，支持 `return_exceptions`"""
+
+        results = {}
+
+        async def wrapper(dep):
+            nonlocal results
+            try:
+                results[dep] = await self.run(dep)
+            except Exception as e:
+                if return_exceptions:
+                    results[dep] = e
+                else:
+                    raise
+
+        async with anyio.create_task_group() as tg:
+            for dependency in dependencies:
+                tg.start_soon(wrapper, dependency)
+
+        return tuple(results[dep] for dep in dependencies)

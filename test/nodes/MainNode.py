@@ -1,11 +1,13 @@
-#from typing import Any
+# from typing import Any
 
-from sekaibot import ConfigModel, Depends, Event, Node, SonNode
+from sekaibot import ConfigModel, Depends, Event, Node
 
 
 class ConfigA(ConfigModel):
     __config_name__ = "a"
     a: str = None
+
+
 class ConfigB(ConfigModel):
     __config_name__ = "b"
     a: str = None
@@ -17,9 +19,9 @@ class BEvent(Event):
     adapter: str = "test_adapter"
 
 
-class BNode(SonNode[Event, str, ConfigB]):
+class _BNode(Node[Event, dict | str, ConfigB]):
     def main(self):
-        print(self.node_state, self.event.get_event_name(), self.config.a)
+        print(self.name, self.node_state, self.event.get_event_name(), self.config.a)
 
 
 class HelloWorldNode(Node[Event | BEvent, dict, ConfigA]):
@@ -28,13 +30,14 @@ class HelloWorldNode(Node[Event | BEvent, dict, ConfigA]):
 
     """Hello, World! 示例节点。"""
 
-    B: BNode = Depends()
+    B: _BNode = Depends()
 
     priority = 0
 
     async def handle(self):
-        print("HelloWorldNode", self.name, self.config.a)
+        #print("HelloWorldNode", self._name, self.config.a)
         self.node_state["async"] = True
+        self.B.Config = ConfigA
         self.B.main()
         return None
 
@@ -45,23 +48,22 @@ class HelloWorldNode1(Node):
     parent = "HelloWorldNode"
     priority = 5
 
-    async def handle(self):
-        # print(self.bot.config.model_dump_json(indent=4))
-        return None
 
     async def rule(self):
         # result = await self.run(StartsWith._rule_check("Hello, World"))
         return True
 
 
-class HelloWorldNode2(Node):
+class HelloWorldNode2(Node[Event | BEvent, str, dict]):
     """Hello, World! 示例节点。"""
 
     parent = "HelloWorldNode"
     priority = 2
+    B: _BNode = Depends()
 
     async def handle(self):
-        pass
+        self.node_state = "HelloWorldNode2"
+        self.B.main()
 
     async def rule(self):
         return True

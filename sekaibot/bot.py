@@ -370,7 +370,7 @@ class Bot:
                 logger.exception("Import module failed", module_name=name)
         if node_classes:
             nodes = [
-                (node_class, node_load_type, module.__file__) for node_class, module in node_classes
+                (node_class, node_load_type, module.__file__) for node_class, module in node_classes if node_class.load
             ]
             self._load_node_classes(*nodes)
 
@@ -392,8 +392,8 @@ class Bot:
             node_load_type: 节点加载类型，如果为 `None` 则自动判断，否则使用指定的类型。
             reload: 是否重新加载模块。
         """
-        node_classes = []
-        module_names = []
+        node_classes: list[type[Node[Any, Any, Any]]] = []
+        module_names: list[str] = []
 
         for node_ in nodes:
             try:
@@ -440,7 +440,7 @@ class Bot:
         if node_classes:
             nodes = [
                 (node_class, node_load_type or NodeLoadType.CLASS, None)
-                for node_class in node_classes
+                for node_class in node_classes if node_class.load
             ]
             self._load_node_classes(*nodes)
 
