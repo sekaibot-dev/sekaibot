@@ -11,7 +11,7 @@ from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStre
 from exceptiongroup import BaseExceptionGroup, catch
 
 from sekaibot.consts import JUMO_TO_TARGET, MAX_TIMEOUT
-from sekaibot.dependencies import Dependency, solve_dependencies_in_bot
+from sekaibot.dependencies import solve_dependencies_in_bot
 from sekaibot.exceptions import (
     GetEventTimeout,
     IgnoreException,
@@ -23,7 +23,7 @@ from sekaibot.exceptions import (
 from sekaibot.internal.event import Event, EventHandleOption
 from sekaibot.log import logger
 from sekaibot.node import NameT, Node
-from sekaibot.typing import EventT, StateT
+from sekaibot.typing import ConfigT, DependencyCacheT, EventT, StateT
 from sekaibot.utils import cancel_on_exit, handle_exception, run_coro_with_catch, wrap_get_func
 
 if TYPE_CHECKING:
@@ -240,7 +240,7 @@ class NodeManager:
         current_event: Event[Any],
         state: StateT,
         stack: AsyncExitStack | None = None,
-        dependency_cache: Dependency | None = None,
+        dependency_cache: DependencyCacheT | None = None,
     ) -> bool:
         """检查事件响应器是否符合运行条件。
 
@@ -286,7 +286,7 @@ class NodeManager:
         current_event: Event[Any],
         state: StateT,
         stack: AsyncExitStack | None = None,
-        dependency_cache: Dependency | None = None,
+        dependency_cache: DependencyCacheT | None = None,
     ) -> tuple[PruningException | JumpToException | None, StateT]:
         _node = await solve_dependencies_in_bot(
             node_class,
@@ -313,7 +313,7 @@ class NodeManager:
         current_event: Event[Any],
         state: StateT,
         stack: AsyncExitStack | None,
-        dependency_cache: Dependency | None = None,
+        dependency_cache: DependencyCacheT | None = None,
     ) -> tuple[PruningException | JumpToException | None, StateT | None]:
         if not await self._check_node(node_class, current_event, state, stack, dependency_cache):
             return PruningException(), None
@@ -380,6 +380,7 @@ class NodeManager:
                         dependency_cache
                         | {
                             NameT: node_class.__name__,
+                            ConfigT: getattr(node_class, "Config", None),
                         },
                     )
 

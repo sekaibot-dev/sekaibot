@@ -75,7 +75,7 @@ def get_dependency_name(dependency: Dependency[Any]) -> str:
 async def _execute_callable(
     dependent: Callable[..., Any],
     stack: AsyncExitStack,
-    dependency_cache: dict[Dependency[Any], Any],
+    dependency_cache: dict,
 ) -> Any:
     """执行可调用对象（函数或 __call__ 方法），并注入参数。"""
     func_params = inspect.signature(dependent).parameters
@@ -83,6 +83,7 @@ async def _execute_callable(
 
     for param_name, param in func_params.items():
         param_type = get_type_hints(dependent).get(param_name)
+        print(dependency_cache)
         if isinstance(param.default, InnerDepends):
             func_args[param_name] = await solve_dependencies(
                 param.default.dependency,
@@ -115,7 +116,7 @@ async def _execute_callable(
 async def _execute_class(
     dependent: Callable[..., Any],
     stack: AsyncExitStack,
-    dependency_cache: dict[Dependency[Any], Any],
+    dependency_cache: dict,
 ) -> Any:
     values: dict[str, Any] = {}
     ann = get_annotations(dependent)
@@ -161,7 +162,7 @@ async def solve_dependencies(
     *,
     use_cache: bool,
     stack: AsyncExitStack | None = None,
-    dependency_cache: dict[Dependency[Any], Any],
+    dependency_cache: dict,
 ) -> _T:
     """解析子依赖，包括 `__call__` 方法的可调用类实例。
 
@@ -190,15 +191,6 @@ async def solve_dependencies(
     if isinstance(dependent, type):
         # type of dependent is Type[T] (Class, not instance)
         depend = await _execute_class(dependent, stack, dependency_cache)
-    elif isinstance(dependent, object) and callable(dependent) and callable(dependent):
-        # type of dependent is an instance with __call__ method (Callable class instance)
-        call_method = dependent.__call__
-        if inspect.iscoroutinefunction(call_method) or inspect.isfunction(call_method):
-            depend = await _execute_callable(call_method, stack, dependency_cache)
-        else:
-            raise TypeError(
-                f"__call__ method in {dependent.__class__.__name__} is not a valid function"
-            )
     elif inspect.iscoroutinefunction(dependent) or inspect.isfunction(dependent):
         # type of dependent is Callable[..., T] | Callable[..., Awaitable[T]]
         depend = await _execute_callable(dependent, stack, dependency_cache)
@@ -214,6 +206,15 @@ async def solve_dependencies(
             raise TypeError("stack cannot be None when entering a generator context")
         cm = sync_ctx_manager_wrapper(contextmanager(dependent)())
         depend = cast(_T, await stack.enter_async_context(cm))
+    elif isinstance(dependent, object) and callable(dependent):
+        # type of dependent is an instance with __call__ method (Callable class instance)
+        call_method = dependent.__call__
+        if inspect.iscoroutinefunction(call_method) or inspect.isfunction(call_method):
+            depend = await _execute_callable(call_method, stack, dependency_cache)
+        else:
+            raise TypeError(
+                f"__call__ method in {dependent.__class__.__name__} is not a valid function"
+            )
     elif isinstance(dependent, str):
         name_cache = {get_dependency_name(_cache): _cache for _cache in dependency_cache.keys()}
         if dependent in name_cache:

@@ -2,7 +2,6 @@ from contextlib import AsyncExitStack
 from itertools import chain
 from typing import (
     TYPE_CHECKING,
-    Any,
     NoReturn,
     Self,
     Union,
@@ -14,7 +13,7 @@ from exceptiongroup import BaseExceptionGroup, catch
 from sekaibot.dependencies import Dependency, solve_dependencies_in_bot
 from sekaibot.exceptions import SkipException
 from sekaibot.internal.event import Event
-from sekaibot.typing import GlobalStateT, PermissionCheckerT
+from sekaibot.typing import DependencyCacheT, GlobalStateT, PermissionCheckerT
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
@@ -58,7 +57,7 @@ class Permission:
         event: Event,
         global_state: GlobalStateT,
         stack: AsyncExitStack | None = None,
-        dependency_cache: dict[Dependency[Any], Any] | None = None,
+        dependency_cache: DependencyCacheT | None = None,
     ) -> bool:
         """检查是否满足某个权限。
 

@@ -4,7 +4,6 @@ from contextlib import AsyncExitStack
 from itertools import chain
 from typing import (  # noqa: UP035
     TYPE_CHECKING,
-    Any,
     Generic,
     NoReturn,
     Self,
@@ -21,6 +20,7 @@ from sekaibot.dependencies import Dependency, Depends, solve_dependencies_in_bot
 from sekaibot.exceptions import SkipException
 from sekaibot.internal.event import Event
 from sekaibot.typing import (
+    DependencyCacheT,
     GlobalStateT,
     NodeT,
     RuleCheckerT,
@@ -69,7 +69,7 @@ class Rule:
         state: StateT,
         global_state: GlobalStateT,
         stack: AsyncExitStack | None = None,
-        dependency_cache: dict[Dependency[Any], Any] | None = None,
+        dependency_cache: DependencyCacheT | None = None,
     ) -> bool:
         """检查是否符合所有规则
 
@@ -186,7 +186,7 @@ class RuleChecker(ABC, Generic[ArgsT, ParamT]):
         state: StateT,
         global_state: GlobalStateT,
         stack: AsyncExitStack | None = None,
-        dependency_cache: dict[Dependency[Any], Any] | None = None,
+        dependency_cache: DependencyCacheT | None = None,
     ) -> bool:
         """直接运行检查器并获取结果。"""
         return await self.__rule__(bot, event, state, global_state, stack, dependency_cache)

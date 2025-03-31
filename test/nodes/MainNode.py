@@ -1,6 +1,6 @@
 # from typing import Any
 
-from sekaibot import ConfigModel, Depends, Event, Node
+from sekaibot import ConfigModel, Event, Import, Node
 
 
 class ConfigA(ConfigModel):
@@ -24,21 +24,28 @@ class _BNode(Node[Event, dict | str, ConfigB]):
         print(self.name, self.node_state, self.event.get_event_name(), self.config.a)
 
 
+def a(event: Event):
+    print(event.get_event_name())
+
+
 class HelloWorldNode(Node[Event | BEvent, dict, ConfigA]):
     # if_startswith = StartsWith.Checker("Hello, World", True)
     # param = StartsWith.Param()
 
     """Hello, World! 示例节点。"""
 
-    B: _BNode = Depends()
+    a_func = Import(a)
+
+    # B: _BNode = Depends()
 
     priority = 0
 
     async def handle(self):
-        #print("HelloWorldNode", self._name, self.config.a)
-        self.node_state["async"] = True
-        self.B.Config = ConfigA
-        self.B.main()
+        # print("HelloWorldNode", self._name, self.config.a)
+        # self.node_state["async"] = True
+        # self.B.Config = ConfigA
+        # self.B.main()
+        await self.a_func()
         return None
 
 
@@ -47,7 +54,6 @@ class HelloWorldNode1(Node):
 
     parent = "HelloWorldNode"
     priority = 5
-
 
     async def rule(self):
         # result = await self.run(StartsWith._rule_check("Hello, World"))
@@ -59,11 +65,12 @@ class HelloWorldNode2(Node[Event | BEvent, str, dict]):
 
     parent = "HelloWorldNode"
     priority = 2
-    B: _BNode = Depends()
+    # B: _BNode = Depends()
 
     async def handle(self):
-        self.node_state = "HelloWorldNode2"
-        self.B.main()
+        pass
+        # self.node_state = "HelloWorldNode2"
+        # self.B.main()
 
     async def rule(self):
         return True

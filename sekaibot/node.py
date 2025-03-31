@@ -40,7 +40,14 @@ from sekaibot.internal.message import BuildMessageType
 from sekaibot.log import logger
 from sekaibot.permission import Permission
 from sekaibot.rule import Rule
-from sekaibot.typing import ConfigT, EventT, GlobalStateT, NodeStateT, StateT
+from sekaibot.typing import (
+    ConfigT,
+    DependencyCacheT,
+    EventT,
+    GlobalStateT,
+    NodeStateT,
+    StateT,
+)
 from sekaibot.utils import flatten_exception_group, handle_exception, is_config_class
 
 if TYPE_CHECKING:
@@ -347,7 +354,7 @@ class Node(Generic[EventT, NodeStateT, ConfigT]):
         event: Event,
         global_state: GlobalStateT,
         stack: AsyncExitStack | None = None,
-        dependency_cache: Dependency | None = None,
+        dependency_cache: DependencyCacheT | None = None,
     ) -> bool:
         """
         检查节点权限。
@@ -387,7 +394,7 @@ class Node(Generic[EventT, NodeStateT, ConfigT]):
         state: StateT,
         global_state: GlobalStateT,
         stack: AsyncExitStack | None = None,
-        dependency_cache: Dependency | None = None,
+        dependency_cache: DependencyCacheT | None = None,
     ) -> bool:
         """
         检查节点规则。
