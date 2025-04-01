@@ -1,6 +1,6 @@
 # from typing import Any
 
-from sekaibot import ConfigModel, Event, Import, Node
+from sekaibot import ConfigModel, Event, Node
 
 
 class ConfigA(ConfigModel):
@@ -34,7 +34,7 @@ class HelloWorldNode(Node[Event | BEvent, dict, ConfigA]):
 
     """Hello, World! 示例节点。"""
 
-    a_func = Import(a)
+    #a_func = Import(a)
 
     # B: _BNode = Depends()
 
@@ -45,7 +45,7 @@ class HelloWorldNode(Node[Event | BEvent, dict, ConfigA]):
         # self.node_state["async"] = True
         # self.B.Config = ConfigA
         # self.B.main()
-        await self.a_func()
+        #await self.a_func()
         return None
 
 

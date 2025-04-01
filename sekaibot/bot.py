@@ -65,6 +65,7 @@ class Bot:
 
     nodes_tree: TreeType[type[Node[Any, Any, Any]]]
     nodes_list: list[tuple[type[Node[Any, Any, Any]], int]]
+    plugin_dict: dict[str, Any]
 
     _should_exit: anyio.Event
     _restart_flag: bool  # 重启标记
@@ -106,6 +107,7 @@ class Bot:
         self.manager = NodeManager(self)
         self.nodes_tree = {}
         self.nodes_list = []
+        self.plugin_dict = defaultdict(lambda: None)
 
         self._module_path_finder = ModulePathFinder()
 

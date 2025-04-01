@@ -46,7 +46,7 @@ def Depends(  # noqa: N802 # pylint: disable=invalid-name
     return InnerDepends(dependency=dependency, use_cache=use_cache)  # type: ignore
 
 
-DependencyT = TypeVar("DependencyT", bound="Dependency")
+'''DependencyT = TypeVar("DependencyT", bound="Dependency")
 
 
 def Import(dependency: DependencyT | None = None, *, use_cache: bool = True) -> DependencyT:
@@ -82,7 +82,7 @@ def Import(dependency: DependencyT | None = None, *, use_cache: bool = True) -> 
 
         return util
 
-    return Depends(wrap, use_cache=use_cache)
+    return Depends(wrap, use_cache=use_cache)'''
 
 
 async def solve_dependencies_in_bot(
