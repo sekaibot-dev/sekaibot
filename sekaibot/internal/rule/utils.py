@@ -24,7 +24,7 @@ from sekaibot.consts import (
     CMD_KEY,
     CMD_START_KEY,
     CMD_WHITESPACE_KEY,
-    COUNTER_INFO,
+    COUNTER_KEY,
     COUNTER_LATEST_TIGGERS,
     COUNTER_STATE,
     COUNTER_TIME_TIGGERS,
@@ -339,9 +339,33 @@ class CountTriggerRule:
             trigger_state[COUNTER_LATEST_TIGGERS] = count_trigger
 
         if trigger_state:
-            state[COUNTER_INFO] = trigger_state
+            state[COUNTER_KEY] = trigger_state
             return True
 
+        return False
+
+
+class SingleSessionRule:
+    """检查事件是否为单会话。
+
+    Args:
+        session_id: 会话 ID
+    """
+
+    __slots__ = ("session_id",)
+
+    def __repr__(self) -> str:
+        return "SingleSession"
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, SingleSessionRule)
+
+    def __hash__(self) -> int:
+        return hash("SingleSession")
+
+    async def __call__(self, event: Event, state: StateT, global_state: GlobalStateT) -> bool:
+        if event.get_session_id() == self.session_id:
+            return True
         return False
 
 

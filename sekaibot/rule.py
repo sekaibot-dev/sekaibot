@@ -2,7 +2,7 @@ import re
 from typing import Any
 
 from sekaibot.consts import (
-    COUNTER_INFO,
+    COUNTER_KEY,
     ENDSWITH_KEY,
     FULLMATCH_KEY,
     KEYWORD_KEY,
@@ -12,13 +12,11 @@ from sekaibot.consts import (
 from sekaibot.dependencies import Dependency
 from sekaibot.internal.event import Event
 from sekaibot.internal.rule import MatchRule, Rule, RuleChecker
-from sekaibot.internal.rule.utils import (
+from sekaibot.internal.rule.utils import (  # CommandRule,; ShellCommandRule,
     CountTriggerRule,
     EndswithRule,
     FullmatchRule,
     KeywordsRule,
-    # CommandRule,
-    # ShellCommandRule,
     RegexRule,
     StartswithRule,
     ToMeRule,
@@ -175,7 +173,7 @@ class CountTrigger(RuleChecker[tuple[str, Dependency[bool], int, int, int, int],
 
     @classmethod
     def _param(cls, state: StateT):
-        return state[COUNTER_INFO]
+        return state[COUNTER_KEY]
 
 
 class ToMe(RuleChecker[Any, bool]):
