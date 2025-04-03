@@ -12,10 +12,10 @@ import yaml
 from pydantic import ValidationError, create_model  # pyright: ignore[reportUnknownVariableType]
 
 from sekaibot.config import ConfigModel, MainConfig, NodeConfig
+from sekaibot.internal.node import Node
+from sekaibot.internal.node.load import NodesLoader
+from sekaibot.internal.node.manager import NodeManager
 from sekaibot.log import configure_logging, logger
-from sekaibot.node import Node
-from sekaibot.node.load import NodesLoader
-from sekaibot.node.manager import NodeManager
 from sekaibot.typing import BotHook, EventHook
 from sekaibot.utils import (
     ModulePathFinder,
