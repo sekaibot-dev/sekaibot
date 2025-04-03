@@ -29,7 +29,6 @@ from sekaibot.utils import cancel_on_exit, handle_exception, run_coro_with_catch
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
 
-
 class NodeManager:
     bot: "Bot"
 
@@ -60,7 +59,7 @@ class NodeManager:
         current_event: Event[Any],
         state: StateT,
         stack: AsyncExitStack | None = None,
-        dependency_cache: dict | None = None,
+        dependency_cache: DependencyCacheT | None = None,
     ) -> bool:
         """运行事件预处理。
 
@@ -111,7 +110,7 @@ class NodeManager:
         current_event: Event[Any],
         state: StateT,
         stack: AsyncExitStack | None = None,
-        dependency_cache: dict | None = None,
+        dependency_cache: DependencyCacheT | None = None,
     ) -> None:
         """运行事件后处理。
 
@@ -135,6 +134,101 @@ class NodeManager:
                             bot=self.bot,
                             event=current_event,
                             state=state,
+                            stack=stack,
+                            dependency_cache=dependency_cache,
+                        ),
+                        (SkipException,),
+                    )
+
+    async def _run_node_preprocessors(
+        self,
+        current_event: Event[Any],
+        state: StateT,
+        node: Node,
+        stack: AsyncExitStack | None = None,
+        dependency_cache: DependencyCacheT | None = None,
+    ) -> bool:
+        """运行事件响应器运行前处理。
+
+        参数:
+            bot: Bot 对象
+            event: Event 对象
+            state: 会话状态
+            matcher: 事件响应器
+            stack: 异步上下文栈
+            dependency_cache: 依赖缓存
+
+        返回:
+            是否继续处理事件
+        """
+        if not self.bot._node_preprocessor_hooks:
+            return True
+
+        with (
+            catch(
+                {
+                    IgnoreException: handle_exception(
+                        "running is cancelled", level="info", node=node.name
+                    ),
+                    Exception: handle_exception(
+                        "Error when running RunPreProcessors. Running cancelled!"
+                    ),
+                }
+            ),
+        ):
+            async with anyio.create_task_group() as tg:
+                for proc in self.bot._node_preprocessor_hooks:
+                    tg.start_soon(
+                        run_coro_with_catch,
+                        proc(
+                            node=node,
+                            bot=self.bot,
+                            event=current_event,
+                            state=state,
+                            stack=stack,
+                            dependency_cache=dependency_cache,
+                        ),
+                        (SkipException,),
+                    )
+
+            return True
+
+        return False
+
+    async def _run_node_postprocessors(
+        self,
+        current_event: "Event",
+        node: Node,
+        exception: Exception | None = None,
+        stack: AsyncExitStack | None = None,
+        dependency_cache: DependencyCacheT | None = None,
+    ) -> None:
+        """运行事件响应器运行后处理。
+
+        参数:
+            bot: Bot 对象
+            event: Event 对象
+            matcher: 事件响应器
+            exception: 事件响应器运行异常
+            stack: 异步上下文栈
+            dependency_cache: 依赖缓存
+        """
+        if not self.bot._node_postprocessor_hooks:
+            return
+
+        with (
+            catch({Exception: handle_exception("Error when running RunPostProcessors. ")}),
+        ):
+            async with anyio.create_task_group() as tg:
+                for proc in self.bot._node_postprocessor_hooks:
+                    tg.start_soon(
+                        run_coro_with_catch,
+                        proc(
+                            node=node,
+                            exception=exception,
+                            bot=self.bot,
+                            event=current_event,
+                            state=node.state,
                             stack=stack,
                             dependency_cache=dependency_cache,
                         ),
@@ -283,6 +377,8 @@ class NodeManager:
         stack: AsyncExitStack | None = None,
         dependency_cache: DependencyCacheT | None = None,
     ) -> tuple[PruningException | JumpToException | None, StateT]:
+        logger.info("Event will be handled by node", node=node_class)
+
         _node = await solve_dependencies_in_bot(
             node_class,
             bot=self.bot,
@@ -300,7 +396,25 @@ class NodeManager:
             if state is not None:
                 self.bot.node_state[_node.name] = state
 
-        return (await _node._run_node()), _node.state
+        if not await self._run_node_preprocessors(
+            current_event=current_event,
+            state=state,
+            node=_node,
+            stack=stack,
+            dependency_cache=dependency_cache,
+        ):
+            return None, None
+
+        exception = await _node._run_node()
+
+        await self._run_node_postprocessors(
+            current_event=current_event,
+            node=_node,
+            exception=exception,
+            stack=stack,
+            dependency_cache=dependency_cache,
+        )
+        return exception, _node.state
 
     async def _check_and_run_node(
         self,

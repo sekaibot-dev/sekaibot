@@ -1,18 +1,20 @@
 import logging
-from typing import TYPE_CHECKING
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+from sekaibot.bot import Bot
 from sekaibot.dependencies import Depends
 from sekaibot.log import StructLogHandler, logger
 
-if TYPE_CHECKING:
-    from sekaibot.bot import Bot
+
+@Bot.bot_run_hook
+def load(bot: Bot):
+    bot.plugin_dict["scheduler"] = SekaibotScheduler(bot)
 
 
 def Scheduler():
     async def wrapper(
-        bot: "Bot" = Depends("Bot")  # noqa: B008
+        bot: "Bot" = Depends("Bot"),  # noqa: B008
     ) -> AsyncIOScheduler:
         if isinstance(bot_scheduler := bot.plugin_dict["scheduler"], SekaibotScheduler):
             return bot_scheduler.scheduler
@@ -20,7 +22,7 @@ def Scheduler():
             bot.plugin_dict["scheduler"] = SekaibotScheduler(bot)
             await bot.plugin_dict["scheduler"].startup()
             return bot.plugin_dict["scheduler"].scheduler
-        
+
     return Depends(wrapper)
 
 
@@ -41,8 +43,8 @@ class SekaibotScheduler:
         aps_logger.addHandler(StructLogHandler())
 
         if config.apscheduler_autostart:
-            self.bot.bot_run_hook(self.startup)
-            self.bot.bot_exit_hook(self.shutdown)
+            Bot.bot_run_hook(self.startup)
+            Bot.bot_exit_hook(self.shutdown)
 
     async def startup(self):
         if not self.scheduler.running:

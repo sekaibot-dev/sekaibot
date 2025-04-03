@@ -6,8 +6,9 @@ if TYPE_CHECKING:
 
     from sekaibot.bot import Bot
     from sekaibot.config import ConfigModel
+    from sekaibot.internal.adapter import Adapter
     from sekaibot.internal.event import Event
-    from sekaibot.node import Node
+    from sekaibot.internal.node import Node
 
 __all__ = [
     "EventT",
@@ -23,7 +24,7 @@ __all__ = [
 
 EventT = TypeVar("EventT", bound="Event")
 ConfigT = TypeVar("ConfigT", bound="ConfigModel | None")
-AdapterT = TypeVar("AdapterT")
+AdapterT = TypeVar("AdapterT", bound="Adapter[Any, Any]")
 NodeT = TypeVar("NodeT", bound="Node")
 StateT = TypeVar("StateT", bound="dict[str, dict[str, Any] | Any]")
 NodeStateT = TypeVar("NodeStateT")
@@ -34,7 +35,9 @@ RuleCheckerT = Callable[..., bool | Awaitable[bool]]
 PermissionCheckerT = Callable[..., bool | Awaitable[bool]]
 
 BotHook = Callable[["Bot"], Awaitable[None]]
+AdapterHook = Callable[["Adapter[Any, Any]"], Awaitable[None]]
 EventHook = Callable[["Event[Any]"], Awaitable[None]]
+NodeHook = Callable[..., Awaitable[None]]
 
 _T = TypeVar("_T")
 

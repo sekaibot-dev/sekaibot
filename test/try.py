@@ -1,9 +1,22 @@
-import structlog
+class A:
+    a: list = []
 
-logger = structlog.get_logger()
+    @classmethod
+    def hook(cls, func):
+        cls.a.append(func)
+        return func
+    
+    def run(self):
+        if self.a:
+            for _a in self.a:
+                _a()
 
-try:
-    1 / 0
-except ZeroDivisionError as exc:
-    logger.error("Error occurred", exc_info=exc, a="a")  # ✅ 详细异常信息
-    logger.exception("Exception occurred")  # ✅ 详细异常信息
+@A.hook
+def aaa():
+    print("aaa...")
+
+a = A()
+@A.hook
+def nbb():
+    print("bbb...")
+a.run()

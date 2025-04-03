@@ -51,7 +51,7 @@ class BotConfig(ConfigModel):
     node_dirs: set[DirectoryPath] = Field(default_factory=set)
     plugins: set[str] = Field(default_factory=set)
     plugin_dirs: set[DirectoryPath] = Field(default_factory=set)
-    adapters: set[str] = Field(default_factory=set)
+    adapter: str | None = None
     log: LogConfig | None = None
     scheduler: SchedulerConfig | None = None
 

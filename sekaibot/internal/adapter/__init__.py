@@ -26,7 +26,7 @@ if os.getenv("ALICEBOT_DEV") == "1":  # pragma: no cover
     __import__("pkg_resources").declare_namespace(__name__)
 
 
-_EventT = TypeVar("_EventT", bound="Event[Any]", default="Event[Any]")
+_EventT = TypeVar("_EventT", bound="Event[Any]")
 
 
 class Adapter(Generic[EventT, ConfigT], ABC):
