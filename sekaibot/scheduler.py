@@ -11,13 +11,14 @@ if TYPE_CHECKING:
 
 
 def Scheduler():
-    def wrapper(
+    async def wrapper(
         bot: "Bot" = Depends("Bot")  # noqa: B008
     ) -> AsyncIOScheduler:
         if isinstance(bot_scheduler := bot.plugin_dict["scheduler"], SekaibotScheduler):
             return bot_scheduler.scheduler
         else:
             bot.plugin_dict["scheduler"] = SekaibotScheduler(bot)
+            await bot.plugin_dict["scheduler"].startup()
             return bot.plugin_dict["scheduler"].scheduler
         
     return Depends(wrapper)

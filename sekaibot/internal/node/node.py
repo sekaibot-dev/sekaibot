@@ -53,7 +53,7 @@ from sekaibot.utils import flatten_exception_group, handle_exception, is_config_
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
 
-__all__ = ["Node", "Node", "NodeLoadType"]
+__all__ = ["Node", "NodeLoadType"]
 
 NameT = TypeVar("NameT", bound="str")
 

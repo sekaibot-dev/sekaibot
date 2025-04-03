@@ -49,6 +49,8 @@ class BotConfig(ConfigModel):
     event_queue_size: int = Field(default=0, ge=0)
     nodes: set[str] = Field(default_factory=set)
     node_dirs: set[DirectoryPath] = Field(default_factory=set)
+    plugins: set[str] = Field(default_factory=set)
+    plugin_dirs: set[DirectoryPath] = Field(default_factory=set)
     adapters: set[str] = Field(default_factory=set)
     log: LogConfig | None = None
     scheduler: SchedulerConfig | None = None

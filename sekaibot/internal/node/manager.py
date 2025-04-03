@@ -21,8 +21,8 @@ from sekaibot.exceptions import (
     StopException,
 )
 from sekaibot.internal.event import Event, EventHandleOption
+from sekaibot.internal.node import NameT, Node
 from sekaibot.log import logger
-from sekaibot.node import NameT, Node
 from sekaibot.typing import ConfigT, DependencyCacheT, EventT, StateT
 from sekaibot.utils import cancel_on_exit, handle_exception, run_coro_with_catch, wrap_get_func
 
@@ -33,9 +33,6 @@ if TYPE_CHECKING:
 class NodeManager:
     bot: "Bot"
 
-    node_state: dict[str, Any]
-    global_state: dict[str, Any]
-
     _condition: anyio.Condition
     _cancel_event: anyio.Event
     _current_event: Event | None
@@ -45,8 +42,6 @@ class NodeManager:
 
     def __init__(self, bot: "Bot"):
         self.bot = bot
-        self.node_state = defaultdict(lambda: None)
-        self.global_state = defaultdict(dict)
 
     async def startup(self) -> None:
         self._condition = anyio.Condition()
@@ -260,7 +255,7 @@ class NodeManager:
 
         try:
             if not await node_class.check_perm(
-                self.bot, current_event, self.global_state, stack, dependency_cache
+                self.bot, current_event, self.bot.global_state, stack, dependency_cache
             ):
                 logger.info("permission conditions not met", node=node_class.__name__)
                 return False
@@ -270,7 +265,7 @@ class NodeManager:
 
         try:
             if not await node_class.check_rule(
-                self.bot, current_event, state, self.global_state, stack, dependency_cache
+                self.bot, current_event, state, self.bot.global_state, stack, dependency_cache
             ):
                 logger.info("rule conditions not met", node=node_class.__name__)
                 return False
@@ -293,17 +288,17 @@ class NodeManager:
             bot=self.bot,
             event=current_event,
             state=state,
-            node_state=self.node_state.get(node_class.__name__),
-            global_state=self.global_state,
+            node_state=self.bot.node_state.get(node_class.__name__),
+            global_state=self.bot.global_state,
             use_cache=True,
             stack=stack,
             dependency_cache=dependency_cache,
         )
 
-        if _node.name not in self.node_state:
+        if _node.name not in self.bot.node_state:
             state = _node.__init_state__()
             if state is not None:
-                self.node_state[_node.name] = state
+                self.bot.node_state[_node.name] = state
 
         return (await _node._run_node()), _node.state
 
@@ -426,7 +421,7 @@ class NodeManager:
     async def shutdown(self) -> None:
         """关闭并清理事件。"""
         self._cancel_event.set()
-        self.node_state.clear()
+        self.bot.node_state.clear()
 
     @overload
     async def get(
