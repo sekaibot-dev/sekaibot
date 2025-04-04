@@ -1,9 +1,7 @@
 from collections.abc import Awaitable, Callable  # type: ignore
-from typing import TYPE_CHECKING, Literal, TypeVar, override
+from typing import TYPE_CHECKING, Any, Literal, TypeVar, override
 
 if TYPE_CHECKING:
-    from typing import Any  # type: ignore
-
     from sekaibot.bot import Bot
     from sekaibot.config import ConfigModel
     from sekaibot.internal.adapter import Adapter
@@ -38,6 +36,8 @@ BotHook = Callable[["Bot"], Awaitable[None]]
 AdapterHook = Callable[["Adapter[Any, Any]"], Awaitable[None]]
 EventHook = Callable[["Event[Any]"], Awaitable[None]]
 NodeHook = Callable[..., Awaitable[None]]
+CallingAPIHook = Callable[["Bot", str, dict[str, Any]], Awaitable[None]]
+CalledAPIHook = Callable[["Bot", Exception | None, str, dict[str, Any], Any], Awaitable[None]]
 
 _T = TypeVar("_T")
 

@@ -4,7 +4,7 @@
 """
 
 from contextlib import AsyncExitStack
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from sekaibot.internal.event import Event
 from sekaibot.typing import (
@@ -89,13 +89,14 @@ async def solve_dependencies_in_bot(
     dependent: Dependency[_T],
     *,
     bot: "Bot",
-    event: Event,
+    event: Event | None = None,
     state: StateT | None = None,
     node_state: NodeStateT | None = None,
     global_state: GlobalStateT | None = None,
     use_cache: bool = True,
     stack: AsyncExitStack | None = None,
     dependency_cache: DependencyCacheT | None = None,
+    **kwargs: Any,
 ) -> _T:
     """解析子依赖。
 
@@ -127,28 +128,19 @@ async def solve_dependencies_in_bot(
             Event: event,
             "event": event,
             "Event": event,
-        }
-    )
-    dependency_cache.update(
-        {
             StateT: state,
             "state": state,
-        }
-    )
-    dependency_cache.update(
-        {
             GlobalStateT: global_state,
             "global_state": global_state,
-        }
-    )
-    dependency_cache.update(
-        {
             NodeStateT: node_state,
             "node_state": node_state,
         }
     )
     if dependency_cache is not None:
         dependency_cache.update({DependencyCacheT: dependency_cache})
+    for key, value in kwargs.items():
+        dependency_cache[key] = value
+        dependency_cache[type(value)] = value
     return await solve_dependencies(
         dependent, use_cache=use_cache, stack=stack, dependency_cache=dependency_cache
     )

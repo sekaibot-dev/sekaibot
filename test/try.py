@@ -1,22 +1,27 @@
-class A:
-    a: list = []
+import asyncio
 
-    @classmethod
-    def hook(cls, func):
-        cls.a.append(func)
-        return func
-    
-    def run(self):
-        if self.a:
-            for _a in self.a:
-                _a()
+import structlog
 
-@A.hook
-def aaa():
-    print("aaa...")
+from sekaibot.dependencies import solve_dependencies
 
-a = A()
-@A.hook
-def nbb():
-    print("bbb...")
-a.run()
+logger = structlog.get_logger()
+
+class AE(Exception):
+    """"""
+
+
+def a(args: str):
+    """"""
+    raise AE
+
+
+async def main():
+    """"""
+    try:
+        deps = await solve_dependencies(a, dependency_cache={str: "a"})
+    except Exception as e:
+        print(e)
+    print(deps)
+
+
+asyncio.run(main())

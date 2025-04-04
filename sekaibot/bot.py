@@ -1,19 +1,23 @@
+import importlib
 import json
 import pkgutil
 import signal
 import sys
 import threading
 import tomllib
+import traceback
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import anyio
 import yaml
+from exceptiongroup import catch
 from pydantic import ValidationError, create_model  # pyright: ignore[reportUnknownVariableType]
 
 from sekaibot.config import ConfigModel, MainConfig, NodeConfig
-from sekaibot.exceptions import LoadModuleError
+from sekaibot.dependencies import solve_dependencies_in_bot
+from sekaibot.exceptions import LoadModuleError, SkipException
 from sekaibot.internal.adapter import Adapter
 from sekaibot.internal.node import Node, NodeLoadType
 from sekaibot.internal.node.manager import NodeManager
@@ -25,8 +29,11 @@ from sekaibot.utils import (
     TreeType,
     cancel_on_exit,
     flatten_tree_with_jumps,
+    get_classes_from_module,
     get_classes_from_module_name,
+    handle_exception,
     is_config_class,
+    run_coro_with_catch,
 )
 
 HANDLED_SIGNALS = (
@@ -37,6 +44,7 @@ HANDLED_SIGNALS = (
 __all__ = [
     "Bot",
 ]
+
 
 class Bot:
     config: MainConfig
@@ -62,16 +70,18 @@ class Bot:
         type[Node[Any, Any, Any]] | str | Path
     ]  # 使用 load_nodes() 方法程序化加载的节点列表
     _extend_node_dirs: list[Path]  # 使用 load_nodes_from_dirs() 方法程序化加载的节点路径列表
+    _extend_plugin_dirs: list[Path]
 
-    _bot_run_hooks: list[BotHook] = []
-    _bot_exit_hooks: list[BotHook] = []
-    _adapter_startup_hooks: list[AdapterHook] = []
-    _adapter_run_hooks: list[AdapterHook] = []
-    _adapter_shutdown_hooks: list[AdapterHook] = []
-    _event_preprocessor_hooks: list[EventHook] = []
-    _event_postprocessor_hooks: list[EventHook] = []
-    _node_preprocessor_hooks: list[NodeHook] = []
-    _node_postprocessor_hooks: list[NodeHook] = []
+    _bot_startup_hooks: ClassVar[list[BotHook]] = []
+    _bot_run_hooks: ClassVar[list[BotHook]] = []
+    _bot_exit_hooks: ClassVar[list[BotHook]] = []
+    _adapter_startup_hooks: ClassVar[list[AdapterHook]] = []
+    _adapter_run_hooks: ClassVar[list[AdapterHook]] = []
+    _adapter_shutdown_hooks: ClassVar[list[AdapterHook]] = []
+    _event_preprocessor_hooks: ClassVar[list[EventHook]] = []
+    _event_postprocessor_hooks: ClassVar[list[EventHook]] = []
+    _node_preprocessor_hooks: ClassVar[list[NodeHook]] = []
+    _node_postprocessor_hooks: ClassVar[list[NodeHook]] = []
 
     def __init__(
         self,
@@ -106,7 +116,42 @@ class Bot:
 
         sys.meta_path.insert(0, self._module_path_finder)
 
-        # self.chat_agent = ChatAgentExecutor(self)
+    async def _run_bot_hooks(self, hooks: list[BotHook], name: str):
+        if not hooks:
+            return
+
+        logger.debug(f"Running {name}...")
+
+        with catch({Exception: handle_exception(f"Error when running {name}")}):
+            async with anyio.create_task_group() as tg:
+                for hook_func in hooks:
+                    tg.start_soon(
+                        run_coro_with_catch,
+                        solve_dependencies_in_bot(
+                            hook_func,
+                            bot=self,
+                        ),
+                        (SkipException,),
+                    )
+
+    async def _run_adapter_hooks(self, hooks: list[AdapterHook], name: str):
+        if not hooks:
+            return
+
+        logger.debug(f"Running {name}...")
+
+        with catch({Exception: handle_exception(f"Error when running {name}")}):
+            async with anyio.create_task_group() as tg:
+                for hook_func in hooks:
+                    tg.start_soon(
+                        run_coro_with_catch,
+                        solve_dependencies_in_bot(
+                            hook_func,
+                            bot=self,
+                            adapter=self.adapter,
+                        ),
+                        (SkipException,),
+                    )
 
     @property
     def nodes(self) -> list[type[Node[Any, Any, Any]]]:
@@ -127,14 +172,16 @@ class Bot:
         while self._restart_flag:
             self._restart_flag = False
             self._load_config_dict()
-            await self.startup(init=True)
+            await self.startup()
             async with anyio.create_task_group() as tg:
                 tg.start_soon(self._run)
                 tg.start_soon(cancel_on_exit, self._should_exit, tg.cancel_scope)
                 if self._handle_signals:  # pragma: no cover
                     tg.start_soon(self._handle_exit_signal)
             if self._restart_flag:
-                await self.startup()
+                self._load_nodes(*self._extend_nodes)
+                self._load_nodes_from_dirs(*self._extend_node_dirs)
+                self.load_adapter(type(self.adapter))
 
     def restart(self) -> None:
         """退出并重新运行 SekaiBot。"""
@@ -142,35 +189,29 @@ class Bot:
         self._restart_flag = True
         self._should_exit.set()
 
-    async def startup(self, init: bool = False) -> None:
+    async def startup(self) -> None:
         """加载或重加载 SekaiBot 的所有加载项"""
 
         self.nodes_tree.clear()
         self.nodes_list.clear()
-
-        if init:
-            self._load_nodes_from_dirs(*self.config.bot.node_dirs)
-            self._load_nodes(*self.config.bot.nodes)
-            self.load_adapter(self.config.bot.adapter)
-        else:
-            self._load_nodes(*self._extend_nodes)
-            self._load_nodes_from_dirs(*self._extend_node_dirs)
-            self.load_adapter(type(self.adapter))
+        
+        self._load_nodes_from_dirs(*self.config.bot.node_dirs)
+        self._load_nodes(*self.config.bot.nodes)
+        self.load_adapter(self.config.bot.adapter)
         self._update_config()
+        await self._run_bot_hooks(self._bot_startup_hooks, "BotStartupHooks")
 
     async def _run(self) -> None:
         """运行 SekaiBot。"""
         # 启动 SekaiBot
         logger.info("Running SekaiBot...")
 
-        # 执行启动钩子
-        for bot_run_hook_func in self._bot_run_hooks:
-            await bot_run_hook_func(self)
+        await self._run_bot_hooks(self._bot_run_hooks, "BotRunHooks")
 
         try:
             if self.adapter:
-                for adapter_startup_hook_func in self._adapter_startup_hooks:
-                    await adapter_startup_hook_func(self.adapter)
+                await self._run_adapter_hooks(self._adapter_startup_hooks, "AdapterStartupHooks")
+
                 try:
                     await self.adapter.startup()
                 except Exception:
@@ -183,8 +224,7 @@ class Bot:
 
             if self.adapter:
                 async with anyio.create_task_group() as tg:
-                    for adapter_run_hook_func in self._adapter_run_hooks:
-                        await adapter_run_hook_func(self.adapter)
+                    await self._run_adapter_hooks(self._adapter_run_hooks, "AdapterRunHooks")
                     tg.start_soon(self.adapter.safe_run)
 
             from sekaibot.internal.event import Event
@@ -201,14 +241,12 @@ class Bot:
             await self._should_exit.wait()
         finally:
             if self.adapter:
-                for adapter_shutdown_hook_func in self._adapter_shutdown_hooks:
-                    await adapter_shutdown_hook_func(self.adapter)
+                await self._run_adapter_hooks(self._adapter_shutdown_hooks, "AdapterShutdownHooks")
                 await self.adapter.shutdown()
 
             await self.manager.shutdown()
 
-            for bot_exit_hook_func in self._bot_exit_hooks:
-                await bot_exit_hook_func(self)
+            await self._run_bot_hooks(self._bot_exit_hooks, "BotExitHooks")
 
             self.nodes_tree.clear()
             self.nodes_list.clear()
@@ -498,6 +536,23 @@ class Bot:
         self._extend_node_dirs.extend(dirs)
         self._load_nodes_from_dirs(*dirs)
 
+    def get_node(self, name: str) -> type[Node[Any, Any, Any]]:
+        """按照名称获取已经加载的插件类。
+
+        Args:
+            name: 插件名称
+
+        Returns:
+            获取到的插件类。
+
+        Raises:
+            LookupError: 找不到此名称的插件类。
+        """
+        for _plugin in self.nodes:
+            if _plugin.__name__ == name:
+                return _plugin
+        raise LookupError(f'Can not find node named "{name}"')
+
     def load_adapter(self, adapter: type[Adapter[Any, Any]] | str | None) -> None:
         """加载适配器。
 
@@ -543,22 +598,41 @@ class Bot:
         else:
             self.adapter = adapter_object
 
-    def get_node(self, name: str) -> type[Node[Any, Any, Any]]:
-        """按照名称获取已经加载的插件类。
+    @classmethod
+    def require(cls, name: str, *, reload: bool = False):
+        """声明依赖插件。
+
+        参数:
+            name: 插件模块名或插件标识符，仅在已声明插件的情况下可使用标识符。
+
+        异常:
+            RuntimeError: 插件无法加载
+        """
+        try:
+            importlib.invalidate_caches()
+            module = importlib.import_module(name)
+            if reload:
+                importlib.reload(module)
+            [(x, module) for x in get_classes_from_module(module, Node)]
+        except KeyboardInterrupt:
+            # 不捕获 KeyboardInterrupt
+            # 捕获 KeyboardInterrupt 会阻止用户关闭 Python 当正在导入的模块陷入死循环时
+            raise
+        except BaseException as e:
+            raise ImportError(e, traceback.format_exc()) from e
+
+    @classmethod
+    def bot_startup_hook(cls, func: BotHook) -> BotHook:
+        """注册一个 Bot 初始化时的函数。
 
         Args:
-            name: 插件名称
+            func: 被注册的函数。
 
         Returns:
-            获取到的插件类。
-
-        Raises:
-            LookupError: 找不到此名称的插件类。
+            被注册的函数。
         """
-        for _plugin in self.nodes:
-            if _plugin.__name__ == name:
-                return _plugin
-        raise LookupError(f'Can not find node named "{name}"')
+        cls._bot_startup_hooks.append(func)
+        return func
 
     @classmethod
     def bot_run_hook(cls, func: BotHook) -> BotHook:

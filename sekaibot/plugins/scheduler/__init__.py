@@ -6,9 +6,11 @@ from sekaibot.bot import Bot
 from sekaibot.dependencies import Depends
 from sekaibot.log import StructLogHandler, logger
 
+from .config import SchedulerConfig
 
-@Bot.bot_run_hook
-def load(bot: Bot):
+
+@Bot.bot_startup_hook
+async def load(bot: Bot):
     bot.plugin_dict["scheduler"] = SekaibotScheduler(bot)
 
 
@@ -32,7 +34,7 @@ class SekaibotScheduler:
 
     def __init__(self, bot: "Bot"):
         self.bot = bot
-        config = bot.config.bot.scheduler
+        config = SchedulerConfig(**getattr(bot.config, "scheduler", {}))
 
         self.scheduler = AsyncIOScheduler()
         self.scheduler.configure(config.apscheduler_config)

@@ -35,13 +35,6 @@ class LogConfig(ConfigModel):
     level: str | int = "DEBUG"
     verbose_exception: bool = False
 
-class SchedulerConfig(ConfigModel):
-    apscheduler_autostart: bool = True
-    apscheduler_log_level: int = 30
-    apscheduler_config: dict = Field(
-        default_factory=lambda: {"apscheduler.timezone": "Asia/Shanghai"}
-    )
-
 
 class BotConfig(ConfigModel):
     """Bot 相关设置。"""
@@ -53,7 +46,6 @@ class BotConfig(ConfigModel):
     plugin_dirs: set[DirectoryPath] = Field(default_factory=set)
     adapter: str | None = None
     log: LogConfig | None = None
-    scheduler: SchedulerConfig | None = None
 
 
 class LLMConfig(ConfigModel):

@@ -39,8 +39,10 @@ class NodeManager:
     _event_send_stream: MemoryObjectSendStream[EventHandleOption]  # pyright: ignore[reportUninitializedInstanceVariable]
     _event_receive_stream: MemoryObjectReceiveStream[EventHandleOption]  # pyright: ignore[reportUninitializedInstanceVariable]
 
+
     def __init__(self, bot: "Bot"):
         self.bot = bot
+
 
     async def startup(self) -> None:
         self._condition = anyio.Condition()
@@ -49,10 +51,12 @@ class NodeManager:
             max_buffer_size=self.bot.config.bot.event_queue_size
         )
 
+
     async def run(self) -> None:
         async with anyio.create_task_group() as tg:
             tg.start_soon(self._handle_event_receive)
             tg.start_soon(cancel_on_exit, self._cancel_event, tg)
+
 
     async def _run_event_preprocessors(
         self,
@@ -91,7 +95,8 @@ class NodeManager:
                 for hook_func in self.bot._event_preprocessor_hooks:
                     tg.start_soon(
                         run_coro_with_catch,
-                        hook_func(
+                        solve_dependencies_in_bot(
+                            hook_func,
                             bot=self.bot,
                             event=current_event,
                             state=state,
@@ -104,6 +109,7 @@ class NodeManager:
             return True
 
         return False
+
 
     async def _run_event_postprocessors(
         self,
@@ -130,7 +136,8 @@ class NodeManager:
                 for hook_func in self.bot._event_postprocessor_hooks:
                     tg.start_soon(
                         run_coro_with_catch,
-                        hook_func(
+                        solve_dependencies_in_bot(
+                            hook_func,
                             bot=self.bot,
                             event=current_event,
                             state=state,
@@ -139,6 +146,7 @@ class NodeManager:
                         ),
                         (SkipException,),
                     )
+
 
     async def _run_node_preprocessors(
         self,
@@ -177,10 +185,11 @@ class NodeManager:
             ),
         ):
             async with anyio.create_task_group() as tg:
-                for proc in self.bot._node_preprocessor_hooks:
+                for hook_func in self.bot._node_preprocessor_hooks:
                     tg.start_soon(
                         run_coro_with_catch,
-                        proc(
+                        solve_dependencies_in_bot(
+                            hook_func,
                             node=node,
                             bot=self.bot,
                             event=current_event,
@@ -194,6 +203,7 @@ class NodeManager:
             return True
 
         return False
+
 
     async def _run_node_postprocessors(
         self,
@@ -220,10 +230,11 @@ class NodeManager:
             catch({Exception: handle_exception("Error when running RunPostProcessors. ")}),
         ):
             async with anyio.create_task_group() as tg:
-                for proc in self.bot._node_postprocessor_hooks:
+                for hook_func in self.bot._node_postprocessor_hooks:
                     tg.start_soon(
                         run_coro_with_catch,
-                        proc(
+                        solve_dependencies_in_bot(
+                            hook_func,
                             node=node,
                             exception=exception,
                             bot=self.bot,
@@ -234,6 +245,7 @@ class NodeManager:
                         ),
                         (SkipException,),
                     )
+
 
     async def handle_event(
         self,
@@ -264,6 +276,7 @@ class NodeManager:
             )
         )
 
+
     async def _handle_event_receive(self) -> None:
         async with anyio.create_task_group() as tg, self._event_receive_stream:
             async for current_event, handle_get in self._event_receive_stream:
@@ -275,6 +288,7 @@ class NodeManager:
                 else:
                     tg.start_soon(self._handle_event, current_event)
 
+
     async def _handle_event_wait_condition(
         self, *, task_status: TaskStatus[None] = anyio.TASK_STATUS_IGNORED
     ) -> None:
@@ -284,6 +298,7 @@ class NodeManager:
             assert self._current_event is not None
             current_event = self._current_event
         await self._handle_event(current_event)
+
 
     async def _add_temporary_task(
         self,
@@ -322,6 +337,7 @@ class NodeManager:
 
         async with anyio.create_task_group() as tg:
             tg.start_soon(temporary_task)
+
 
     async def _check_node(
         self,
@@ -368,6 +384,7 @@ class NodeManager:
             return False
 
         return True
+
 
     async def _run_node(
         self,
@@ -416,6 +433,7 @@ class NodeManager:
         )
         return exception, _node.state
 
+
     async def _check_and_run_node(
         self,
         node_class: type[Node],
@@ -428,6 +446,7 @@ class NodeManager:
             return PruningException(), None
 
         return await self._run_node(node_class, current_event, state, stack, dependency_cache)
+
 
     async def _handle_event(
         self,
@@ -532,10 +551,12 @@ class NodeManager:
 
         logger.info("Event Finished")
 
+
     async def shutdown(self) -> None:
         """关闭并清理事件。"""
         self._cancel_event.set()
         self.bot.node_state.clear()
+
 
     @overload
     async def get(
@@ -547,6 +568,7 @@ class NodeManager:
         timeout: int | float | None = None,
     ) -> Event: ...
 
+
     @overload
     async def get(
         self,
@@ -557,6 +579,7 @@ class NodeManager:
         timeout: int | float | None = None,
     ) -> EventT: ...
 
+
     @overload
     async def get(
         self,
@@ -566,6 +589,7 @@ class NodeManager:
         max_try_times: int | None = None,
         timeout: int | float | None = None,
     ) -> EventT: ...
+
 
     async def get(
         self,
@@ -582,7 +606,6 @@ class NodeManager:
                 要求接受一个事件作为参数，返回布尔值。当协程返回 `True` 时返回当前事件。
                 当为 `None` 时相当于输入对于任何事件均返回真的协程，即返回适配器接收到的下一个事件。
             event_type: 当指定时，只接受指定类型的事件，先于 func 条件生效。默认为 `None`。
-            adapter_type: 当指定时，只接受指定适配器产生的事件，先于 func 条件生效。默认为 `None`。
             max_try_times: 最大事件数。
             timeout: 超时时间。
 

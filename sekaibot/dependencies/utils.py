@@ -83,7 +83,6 @@ async def _execute_callable(
 
     for param_name, param in func_params.items():
         param_type = get_type_hints(dependent).get(param_name)
-        print(dependency_cache)
         if isinstance(param.default, InnerDepends):
             func_args[param_name] = await solve_dependencies(
                 param.default.dependency,
@@ -160,7 +159,7 @@ async def _execute_class(
 async def solve_dependencies(
     dependent: Dependency[_T],
     *,
-    use_cache: bool,
+    use_cache: bool = False,
     stack: AsyncExitStack | None = None,
     dependency_cache: dict,
 ) -> _T:
