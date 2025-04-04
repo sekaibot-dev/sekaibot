@@ -124,10 +124,8 @@ async def solve_dependencies_in_bot(
         {
             Bot: bot,
             "bot": bot,
-            "Bot": bot,
             Event: event,
             "event": event,
-            "Event": event,
             StateT: state,
             "state": state,
             GlobalStateT: global_state,

@@ -4,24 +4,16 @@
 """
 
 from abc import ABC
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Generic,
-    NamedTuple,
-    override,
-)
+from typing import NamedTuple, override
 
 from pydantic import BaseModel, ConfigDict
-
-from sekaibot.typing import AdapterT
 
 from .message import Message
 
 __all__ = ["Event", "EventHandleOption"]
 
 
-class Event(ABC, BaseModel, Generic[AdapterT]):
+class Event(ABC, BaseModel):
     """事件类的基类。
 
     Attributes:
@@ -32,10 +24,6 @@ class Event(ABC, BaseModel, Generic[AdapterT]):
 
     model_config = ConfigDict(extra="allow")
 
-    if TYPE_CHECKING:
-        adapter: AdapterT
-    else:
-        adapter: Any
     type: str | None
     __handled__: bool = False
 
@@ -47,10 +35,9 @@ class Event(ABC, BaseModel, Generic[AdapterT]):
     def __repr__(self) -> str:
         return self.__str__()
 
-    # @abstractmethod
     def get_event_name(self) -> str:
         """获取事件名称的方法。"""
-        return "eventA"  # raise NotImplementedError
+        return self.__class__.__name__
 
     # @abstractmethod
     def get_event_description(self) -> str:
@@ -69,20 +56,19 @@ class Event(ABC, BaseModel, Generic[AdapterT]):
         return f"[{self.get_event_name()}]: {self.get_event_description()}"
 
     # @abstractmethod
-    @property
-    def user_id(self) -> str:
+    def get_user_id(self) -> str | None:
         """获取事件主体 id 的方法，通常是用户 id 。"""
         return "eventA"  # raise NotImplementedError
 
     # @abstractmethod
-    def get_session_id(self) -> str:
+    def get_session_id(self) -> str | None:
         """获取会话 id 的方法，用于判断当前事件属于哪一个会话，
         通常是用户 id、群组 id 组合。
         """
         return "eventA"  # raise NotImplementedError
 
     # @abstractmethod
-    def get_message(self) -> "Message":
+    def get_message(self) -> Message | None:
         """获取事件消息内容的方法。"""
         return "eventA"  # raise NotImplementedError
 
@@ -107,5 +93,5 @@ class EventHandleOption(NamedTuple):
         handle_get: 当前事件是否可以被 get 方法捕获。
     """
 
-    event: Event[Any]
+    event: Event
     handle_get: bool

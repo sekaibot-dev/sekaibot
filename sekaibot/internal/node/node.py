@@ -13,7 +13,6 @@ from typing import (
     ClassVar,  # type: ignore
     Generic,
     NoReturn,
-    Self,
     TypeVar,
     cast,
     final,
@@ -40,14 +39,7 @@ from sekaibot.internal.message import BuildMessageType
 from sekaibot.log import logger
 from sekaibot.permission import Permission
 from sekaibot.rule import Rule
-from sekaibot.typing import (
-    ConfigT,
-    DependencyCacheT,
-    EventT,
-    GlobalStateT,
-    NodeStateT,
-    StateT,
-)
+from sekaibot.typing import ConfigT, DependencyCacheT, EventT, GlobalStateT, NodeStateT, StateT
 from sekaibot.utils import flatten_exception_group, handle_exception, is_config_class
 
 if TYPE_CHECKING:
@@ -234,8 +226,17 @@ class Node(Generic[EventT, NodeStateT, ConfigT]):
         注意：此方法最好用于执行拒绝（`reject()`）等方法，不建议直接在此方法内实现对事件的处理，事件的具体处理请交由 node 方法。
         """
 
-    async def reply(self, message: BuildMessageType) -> NoReturn:
+    @final
+    async def reply(
+        self,
+        message: BuildMessageType,
+        **kwargs: Any,
+    ) -> None:
         """回复消息。"""
+        await self.bot.adapter.send(
+            self.event, 
+            message=message, 
+            **kwargs)
 
     @final
     async def get(
@@ -243,7 +244,7 @@ class Node(Generic[EventT, NodeStateT, ConfigT]):
         *,
         max_try_times: int | None = None,
         timeout: int | float = MAX_TIMEOUT,
-    ) -> Self:
+    ):
         """获取用户回复消息。
 
         相当于 `Bot` 的 `get()`，条件为适配器、事件类型、发送人相同。
@@ -271,7 +272,7 @@ class Node(Generic[EventT, NodeStateT, ConfigT]):
         message: str,
         max_try_times: int | None = None,
         timeout: int | float = MAX_TIMEOUT,
-    ) -> Self:
+    ):
         """询问消息。
 
         表示回复一个消息后获取用户的回复。
@@ -328,7 +329,8 @@ class Node(Generic[EventT, NodeStateT, ConfigT]):
         self.state[REJECT_TARGET] = (max_try_times, timeout)
         raise RejectException
 
-    '''async def call_api(self, api: str, **params: Any):
+    @final
+    async def call_api(self, api: str, **params: Any):
         """调用 API，协程会等待直到获得 API 响应。
 
         Args:
@@ -344,11 +346,11 @@ class Node(Generic[EventT, NodeStateT, ConfigT]):
             ActionFailed: API 请求响应 failed， API 操作失败。
             ApiTimeout: API 请求响应超时。
         """
-        return await self.comm.adapter.call_api(api, **params)'''
+        return await self.bot.adapter.call_api(api, **params)
 
     @final
     @classmethod
-    async def check_perm(
+    async def _check_perm(
         cls,
         bot: "Bot",
         event: Event,
@@ -387,7 +389,7 @@ class Node(Generic[EventT, NodeStateT, ConfigT]):
 
     @final
     @classmethod
-    async def check_rule(
+    async def _check_rule(
         cls,
         bot: "Bot",
         event: Event,

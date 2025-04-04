@@ -159,7 +159,7 @@ async def _execute_class(
 async def solve_dependencies(
     dependent: Dependency[_T],
     *,
-    use_cache: bool = False,
+    use_cache: bool = True,
     stack: AsyncExitStack | None = None,
     dependency_cache: dict,
 ) -> _T:

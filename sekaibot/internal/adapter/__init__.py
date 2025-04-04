@@ -5,13 +5,7 @@
 
 import os
 from abc import ABC, abstractmethod
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    ClassVar,
-    Generic,
-    final,
-)
+from typing import TYPE_CHECKING, Any, ClassVar, Generic, final
 
 import anyio
 import structlog
@@ -19,13 +13,9 @@ from exceptiongroup import catch
 
 from sekaibot.exceptions import MockApiException
 from sekaibot.internal.event import Event
-from sekaibot.internal.message import MessageSegmentT, MessageT
-from sekaibot.typing import CalledAPIHook, CallingAPIHook, ConfigT, EventT
-from sekaibot.utils import (
-    flatten_exception_group,
-    handle_exception,
-    is_config_class,
-)
+from sekaibot.internal.message import BuildMessageType, MessageSegmentT
+from sekaibot.typing import CalledAPIHook, CallingAPIHook, ConfigT
+from sekaibot.utils import flatten_exception_group, handle_exception, is_config_class
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
@@ -39,7 +29,7 @@ if os.getenv("ALICEBOT_DEV") == "1":  # pragma: no cover
     __import__("pkg_resources").declare_namespace(__name__)
 
 
-class Adapter(ABC, Generic[EventT, ConfigT]):
+class Adapter(ABC, Generic[MessageSegmentT, ConfigT]):
     """协议适配器基类。
 
     Attributes:
@@ -214,7 +204,7 @@ class Adapter(ABC, Generic[EventT, ConfigT]):
     async def send(
         self,
         event: Event,
-        message: str | MessageT | MessageSegmentT,
+        message: BuildMessageType[MessageSegmentT],
         **kwargs: Any,
     ) -> Any:
         """调用机器人基础发送消息接口

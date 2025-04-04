@@ -16,7 +16,7 @@ from exceptiongroup import catch
 from pydantic import ValidationError, create_model  # pyright: ignore[reportUnknownVariableType]
 
 from sekaibot.config import ConfigModel, MainConfig, NodeConfig
-from sekaibot.dependencies import solve_dependencies_in_bot
+from sekaibot.dependencies import solve_dependencies
 from sekaibot.exceptions import LoadModuleError, SkipException
 from sekaibot.internal.adapter import Adapter
 from sekaibot.internal.node import Node, NodeLoadType
@@ -127,9 +127,12 @@ class Bot:
                 for hook_func in hooks:
                     tg.start_soon(
                         run_coro_with_catch,
-                        solve_dependencies_in_bot(
+                        solve_dependencies(
                             hook_func,
-                            bot=self,
+                            dependency_cache={
+                                Bot: self,
+                                "bot": self,
+                            },
                         ),
                         (SkipException,),
                     )
@@ -145,10 +148,14 @@ class Bot:
                 for hook_func in hooks:
                     tg.start_soon(
                         run_coro_with_catch,
-                        solve_dependencies_in_bot(
+                        solve_dependencies(
                             hook_func,
-                            bot=self,
-                            adapter=self.adapter,
+                            dependency_cache={
+                                Adapter: self.adapter,
+                                "adapter": self.adapter,
+                                Bot: self,
+                                "bot": self,
+                            },
                         ),
                         (SkipException,),
                     )
@@ -194,7 +201,7 @@ class Bot:
 
         self.nodes_tree.clear()
         self.nodes_list.clear()
-        
+
         self._load_nodes_from_dirs(*self.config.bot.node_dirs)
         self._load_nodes(*self.config.bot.nodes)
         self.load_adapter(self.config.bot.adapter)

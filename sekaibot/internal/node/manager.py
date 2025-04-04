@@ -29,6 +29,7 @@ from sekaibot.utils import cancel_on_exit, handle_exception, run_coro_with_catch
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
 
+
 class NodeManager:
     bot: "Bot"
 
@@ -39,10 +40,8 @@ class NodeManager:
     _event_send_stream: MemoryObjectSendStream[EventHandleOption]  # pyright: ignore[reportUninitializedInstanceVariable]
     _event_receive_stream: MemoryObjectReceiveStream[EventHandleOption]  # pyright: ignore[reportUninitializedInstanceVariable]
 
-
     def __init__(self, bot: "Bot"):
         self.bot = bot
-
 
     async def startup(self) -> None:
         self._condition = anyio.Condition()
@@ -51,16 +50,14 @@ class NodeManager:
             max_buffer_size=self.bot.config.bot.event_queue_size
         )
 
-
     async def run(self) -> None:
         async with anyio.create_task_group() as tg:
             tg.start_soon(self._handle_event_receive)
             tg.start_soon(cancel_on_exit, self._cancel_event, tg)
 
-
     async def _run_event_preprocessors(
         self,
-        current_event: Event[Any],
+        current_event: Event,
         state: StateT,
         stack: AsyncExitStack | None = None,
         dependency_cache: DependencyCacheT | None = None,
@@ -110,10 +107,9 @@ class NodeManager:
 
         return False
 
-
     async def _run_event_postprocessors(
         self,
-        current_event: Event[Any],
+        current_event: Event,
         state: StateT,
         stack: AsyncExitStack | None = None,
         dependency_cache: DependencyCacheT | None = None,
@@ -147,10 +143,9 @@ class NodeManager:
                         (SkipException,),
                     )
 
-
     async def _run_node_preprocessors(
         self,
-        current_event: Event[Any],
+        current_event: Event,
         state: StateT,
         node: Node,
         stack: AsyncExitStack | None = None,
@@ -204,7 +199,6 @@ class NodeManager:
 
         return False
 
-
     async def _run_node_postprocessors(
         self,
         current_event: "Event",
@@ -246,10 +240,9 @@ class NodeManager:
                         (SkipException,),
                     )
 
-
     async def handle_event(
         self,
-        current_event: Event[Any],
+        current_event: Event,
         *,
         handle_get: bool = True,
         show_log: bool = True,
@@ -276,7 +269,6 @@ class NodeManager:
             )
         )
 
-
     async def _handle_event_receive(self) -> None:
         async with anyio.create_task_group() as tg, self._event_receive_stream:
             async for current_event, handle_get in self._event_receive_stream:
@@ -288,7 +280,6 @@ class NodeManager:
                 else:
                     tg.start_soon(self._handle_event, current_event)
 
-
     async def _handle_event_wait_condition(
         self, *, task_status: TaskStatus[None] = anyio.TASK_STATUS_IGNORED
     ) -> None:
@@ -299,11 +290,10 @@ class NodeManager:
             current_event = self._current_event
         await self._handle_event(current_event)
 
-
     async def _add_temporary_task(
         self,
         node_class: type[Node],
-        current_event: Event[Any],
+        current_event: Event,
         state: StateT,
         max_try_times: int | None = None,
         timeout: int | float = MAX_TIMEOUT,
@@ -317,7 +307,7 @@ class NodeManager:
         """
 
         async def temporary_task(func: Callable[[Event], bool | Awaitable[bool]] | None = None):
-            async def check(event: Event[Any]) -> bool:
+            async def check(event: Event) -> bool:
                 if event.get_session_id() != current_event.get_session_id():
                     return False
                 return await wrap_get_func(func)(event)
@@ -338,11 +328,10 @@ class NodeManager:
         async with anyio.create_task_group() as tg:
             tg.start_soon(temporary_task)
 
-
     async def _check_node(
         self,
         node_class: type[Node],
-        current_event: Event[Any],
+        current_event: Event,
         state: StateT,
         stack: AsyncExitStack | None = None,
         dependency_cache: DependencyCacheT | None = None,
@@ -364,7 +353,7 @@ class NodeManager:
         """
 
         try:
-            if not await node_class.check_perm(
+            if not await node_class._check_perm(
                 self.bot, current_event, self.bot.global_state, stack, dependency_cache
             ):
                 logger.info("permission conditions not met", node=node_class.__name__)
@@ -374,7 +363,7 @@ class NodeManager:
             return False
 
         try:
-            if not await node_class.check_rule(
+            if not await node_class._check_rule(
                 self.bot, current_event, state, self.bot.global_state, stack, dependency_cache
             ):
                 logger.info("rule conditions not met", node=node_class.__name__)
@@ -385,11 +374,10 @@ class NodeManager:
 
         return True
 
-
     async def _run_node(
         self,
         node_class: type[Node],
-        current_event: Event[Any],
+        current_event: Event,
         state: StateT,
         stack: AsyncExitStack | None = None,
         dependency_cache: DependencyCacheT | None = None,
@@ -433,11 +421,10 @@ class NodeManager:
         )
         return exception, _node.state
 
-
     async def _check_and_run_node(
         self,
         node_class: type[Node],
-        current_event: Event[Any],
+        current_event: Event,
         state: StateT,
         stack: AsyncExitStack | None,
         dependency_cache: DependencyCacheT | None = None,
@@ -447,10 +434,9 @@ class NodeManager:
 
         return await self._run_node(node_class, current_event, state, stack, dependency_cache)
 
-
     async def _handle_event(
         self,
-        current_event: Event[Any],
+        current_event: Event,
         state: StateT | None = None,
         start_class: type[Node[Any, Any, Any]] | None = None,
     ) -> None:
@@ -551,12 +537,10 @@ class NodeManager:
 
         logger.info("Event Finished")
 
-
     async def shutdown(self) -> None:
         """关闭并清理事件。"""
         self._cancel_event.set()
         self.bot.node_state.clear()
-
 
     @overload
     async def get(
@@ -568,7 +552,6 @@ class NodeManager:
         timeout: int | float | None = None,
     ) -> Event: ...
 
-
     @overload
     async def get(
         self,
@@ -579,7 +562,6 @@ class NodeManager:
         timeout: int | float | None = None,
     ) -> EventT: ...
 
-
     @overload
     async def get(
         self,
@@ -589,7 +571,6 @@ class NodeManager:
         max_try_times: int | None = None,
         timeout: int | float | None = None,
     ) -> EventT: ...
-
 
     async def get(
         self,

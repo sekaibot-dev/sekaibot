@@ -298,11 +298,11 @@ class CountTriggerRule:
         self, bot: "Bot", event: Event, state: StateT, global_state: GlobalStateT
     ) -> bool:
         if isinstance(global_state[BOT_GLOBAL_KEY][COUNTER_STATE], dict):
-            counter: Counter[Event[Any]] = global_state[BOT_GLOBAL_KEY][COUNTER_STATE].setdefault(
-                self.name, Counter[Event[Any]](self.max_size)
+            counter: Counter[Event] = global_state[BOT_GLOBAL_KEY][COUNTER_STATE].setdefault(
+                self.name, Counter[Event](self.max_size)
             )
         else:
-            counter = Counter[Event[Any]](self.max_size)
+            counter = Counter[Event](self.max_size)
             global_state[BOT_GLOBAL_KEY][COUNTER_STATE] = {self.name: counter}
 
         if self.func:

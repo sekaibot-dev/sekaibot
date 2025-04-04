@@ -20,6 +20,8 @@ __all__ = [
     "EventHook",
 ]
 
+_T = TypeVar("_T")
+
 EventT = TypeVar("EventT", bound="Event")
 ConfigT = TypeVar("ConfigT", bound="ConfigModel | None")
 AdapterT = TypeVar("AdapterT", bound="Adapter[Any, Any]")
@@ -32,14 +34,15 @@ DependencyCacheT = TypeVar("DependencyCacheT", bound="dict")
 RuleCheckerT = Callable[..., bool | Awaitable[bool]]
 PermissionCheckerT = Callable[..., bool | Awaitable[bool]]
 
-BotHook = Callable[["Bot"], Awaitable[None]]
-AdapterHook = Callable[["Adapter[Any, Any]"], Awaitable[None]]
-EventHook = Callable[["Event[Any]"], Awaitable[None]]
-NodeHook = Callable[..., Awaitable[None]]
-CallingAPIHook = Callable[["Bot", str, dict[str, Any]], Awaitable[None]]
-CalledAPIHook = Callable[["Bot", Exception | None, str, dict[str, Any], Any], Awaitable[None]]
+HookT = Callable[..., _T] | Callable[..., Awaitable[_T]]
+BotHook = HookT[None]
+AdapterHook = HookT[None]
+EventHook = HookT[None]
+NodeHook = HookT[None]
+CallingAPIHook = Callable[["Bot", str, dict[str, Any]], Awaitable[Any]]
+CalledAPIHook = Callable[["Bot", Exception | None, str, dict[str, Any], Any], Awaitable[Any]]
 
-_T = TypeVar("_T")
+
 
 
 class NotGiven:
