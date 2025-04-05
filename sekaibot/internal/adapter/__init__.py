@@ -8,12 +8,12 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, ClassVar, Generic, final
 
 import anyio
-import structlog
 from exceptiongroup import catch
 
 from sekaibot.exceptions import MockApiException
 from sekaibot.internal.event import Event
 from sekaibot.internal.message import BuildMessageType, MessageSegmentT
+from sekaibot.log import logger
 from sekaibot.typing import CalledAPIHook, CallingAPIHook, ConfigT
 from sekaibot.utils import flatten_exception_group, handle_exception, is_config_class
 
@@ -21,8 +21,6 @@ if TYPE_CHECKING:
     from sekaibot.bot import Bot
 
 __all__ = ["Adapter"]
-
-logger = structlog.stdlib.get_logger()
 
 if os.getenv("ALICEBOT_DEV") == "1":  # pragma: no cover
     # 当处于开发环境时，使用 pkg_resources 风格的命名空间包
@@ -41,8 +39,8 @@ class Adapter(ABC, Generic[MessageSegmentT, ConfigT]):
     bot: "Bot"
     Config: type[ConfigT]
 
-    _calling_api_hooks: ClassVar[list[CallingAPIHook]] = []
-    _called_api_hooks: ClassVar[list[CalledAPIHook]] = []
+    _calling_api_hooks: ClassVar[set[CallingAPIHook]] = set()
+    _called_api_hooks: ClassVar[set[CalledAPIHook]] = set()
 
     def __init__(self, bot: "Bot") -> None:
         """初始化。
@@ -226,7 +224,7 @@ class Adapter(ABC, Generic[MessageSegmentT, ConfigT]):
         - api: 调用的 api 名称
         - data: api 调用的参数字典
         """
-        cls._calling_api_hooks.append(func)
+        cls._calling_api_hooks.add(func)
         return func
 
     @classmethod
@@ -241,5 +239,5 @@ class Adapter(ABC, Generic[MessageSegmentT, ConfigT]):
         - data: api 调用的参数字典
         - result: api 调用的返回
         """
-        cls._called_api_hooks.append(func)
+        cls._called_api_hooks.add(func)
         return func

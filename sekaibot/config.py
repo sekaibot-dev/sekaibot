@@ -42,8 +42,6 @@ class BotConfig(ConfigModel):
     event_queue_size: int = Field(default=0, ge=0)
     nodes: set[str] = Field(default_factory=set)
     node_dirs: set[DirectoryPath] = Field(default_factory=set)
-    plugins: set[str] = Field(default_factory=set)
-    plugin_dirs: set[DirectoryPath] = Field(default_factory=set)
     adapter: str | None = None
     log: LogConfig | None = None
 
@@ -178,11 +176,15 @@ class NodeConfig(ConfigModel):
     """节点配置。"""
 
 
+class PluginConfig(ConfigModel):
+    """节点配置。"""
+
+
 class MainConfig(ConfigModel):
     """SekaiBot 主体配置。"""
 
     bot: BotConfig = BotConfig()
-    agent: AgentConfig = AgentConfig()
     node: NodeConfig = NodeConfig()
     adapter: AdapterConfig = AdapterConfig()
+    plugin: PluginConfig = PluginConfig()
     # database: DatabaseConfig = DatabaseConfig()

@@ -5,55 +5,58 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sekaibot.bot import Bot
 from sekaibot.dependencies import Depends
 from sekaibot.log import StructLogHandler, logger
+from sekaibot.plugin import Plugin
 
 from .config import SchedulerConfig
 
-
-@Bot.bot_startup_hook
-async def load(bot: Bot):
-    bot.plugin_dict["scheduler"] = SekaibotScheduler(bot)
+__all__ = ["SchedulerArg"]
 
 
-def Scheduler():
+
+
+def SchedulerArg():
     async def wrapper(
-        bot: "Bot" = Depends("Bot"),  # noqa: B008
+        bot: Bot = Depends(Bot),  # noqa: B008
     ) -> AsyncIOScheduler:
-        if isinstance(bot_scheduler := bot.plugin_dict["scheduler"], SekaibotScheduler):
+        if isinstance(bot_scheduler := bot.get_plugins(Scheduler.name), Scheduler):
             return bot_scheduler.scheduler
-        else:
-            bot.plugin_dict["scheduler"] = SekaibotScheduler(bot)
-            await bot.plugin_dict["scheduler"].startup()
-            return bot.plugin_dict["scheduler"].scheduler
+        raise RuntimeError("Scheduler not found.")
 
     return Depends(wrapper)
 
 
-class SekaibotScheduler:
+class Scheduler(Plugin[SchedulerConfig]):
+    """Scheduler 组件，使用 APScheduler 实现定时任务调度器。"""
+
+    name: str = "Scheduler"
     bot: "Bot"
+    Config: type[SchedulerConfig] = SchedulerConfig
+
     scheduler: AsyncIOScheduler
 
     def __init__(self, bot: "Bot"):
-        self.bot = bot
-        config = SchedulerConfig(**getattr(bot.config, "scheduler", {}))
-
-        self.scheduler = AsyncIOScheduler()
-        self.scheduler.configure(config.apscheduler_config)
-
-        aps_logger = logging.getLogger("apscheduler")
-        aps_logger.setLevel(config.apscheduler_log_level)
-        aps_logger.handlers.clear()
-        aps_logger.addHandler(StructLogHandler())
-
-        if config.apscheduler_autostart:
-            Bot.bot_run_hook(self.startup)
-            Bot.bot_exit_hook(self.shutdown)
+        super().__init__(bot)
+        Bot.bot_run_hook(self.startup)
 
     async def startup(self):
-        if not self.scheduler.running:
-            self.scheduler.start()
-            logger.info("Scheduler Started...")
+
+        self.scheduler = AsyncIOScheduler()
+        self.scheduler.configure(self.config.apscheduler_config)
+
+        aps_logger = logging.getLogger("apscheduler")
+        aps_logger.setLevel(self.config.apscheduler_log_level)
+        aps_logger.handlers.clear()
+        aps_logger.addHandler(StructLogHandler())
+        if self.config.apscheduler_autostart:
+            if not self.scheduler.running:
+                self.scheduler.start()
+                logger.info("Running Scheduler...")
+            Bot.bot_exit_hook(self.shutdown)
 
     async def shutdown(self):
         if self.scheduler.running:
             self.scheduler.shutdown()
-            logger.info("Scheduler Shutdown")
+            logger.info("Stopping Scheduler...")
+
+
+Bot.require_plugin(Scheduler)

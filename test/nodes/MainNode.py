@@ -1,7 +1,7 @@
 # from typing import Any
 
 from sekaibot import ConfigModel, Event, Node
-from sekaibot.plugins.scheduler import Scheduler
+from sekaibot.plugins.scheduler import SchedulerArg
 
 
 class ConfigA(ConfigModel):
@@ -35,7 +35,7 @@ class HelloWorldNode(Node[Event | BEvent, dict, ConfigA]):
 
     """Hello, World! 示例节点。"""
 
-    #a_func = Import(a)
+    # a_func = Import(a)
 
     # B: _BNode = Depends()
 
@@ -46,22 +46,23 @@ class HelloWorldNode(Node[Event | BEvent, dict, ConfigA]):
         # self.node_state["async"] = True
         # self.B.Config = ConfigA
         # self.B.main()
-        #await self.a_func()
+        # await self.a_func()
         return None
 
 
 class HelloWorldNode1(Node):
     """Hello, World! 示例节点。"""
 
-    scheduler = Scheduler()
+    scheduler = SchedulerArg()
 
     parent = "HelloWorldNode"
     priority = 5
-
+    
     async def handle(self):
-        def a():
-            print("a")
-        self.scheduler.add_job(a, trigger="interval", seconds=10)
+        def a(event):
+            print("a", event)
+
+        self.scheduler.add_job(a, trigger="interval", seconds=5, args=[self.event])
 
     async def rule(self):
         # result = await self.run(StartsWith._rule_check("Hello, World"))

@@ -195,22 +195,22 @@ class Node(Generic[EventT, NodeStateT, ConfigT]):
     @property
     def node_state(self) -> NodeStateT:
         """节点状态。"""
-        return self.bot.manager.node_state[self.name]
+        return self.bot.node_state[self.name]
 
     @node_state.setter
     @final
     def node_state(self, value: NodeStateT) -> None:
-        self.bot.manager.node_state[self.name] = value
+        self.bot.node_state[self.name] = value
 
     @property
     def global_state(self) -> dict:
         """通用状态。"""
-        return self.bot.manager.global_state
+        return self.bot.global_state
 
     @global_state.setter
     @final
     def global_state(self, value: dict) -> None:
-        self.bot.manager.global_state = value
+        self.bot.global_state = value
 
     async def handle(self) -> None:
         """处理事件的方法。当 `rule()` 方法返回 `True` 时 SekaiBot 会调用此方法。每个节点必须实现此方法。"""
@@ -606,7 +606,7 @@ class Node(Generic[EventT, NodeStateT, ConfigT]):
                 event=self.event,
                 state=self.state,
                 node_state=self.node_state,
-                global_state=self.bot.manager.global_state,
+                global_state=self.bot.global_state,
                 stack=stack,
             )
         return result

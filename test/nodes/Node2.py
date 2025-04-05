@@ -1,4 +1,5 @@
 from sekaibot import Bot, Depends, Node
+from sekaibot.plugins.scheduler import SchedulerArg
 
 # from MainNode import HelloWorldNode1
 # from sekaibot.rule import rule
@@ -25,8 +26,13 @@ class HelloWorldNode1_2(Node):
     parent = "HelloWorldNode2"
     priority = 1
 
+    scheduler = SchedulerArg()
+
     async def handle(self):
-        return None
+        def a():
+            print("b")
+
+        self.scheduler.add_job(a, trigger="interval", seconds=1)
 
     async def rule(self):
         return True

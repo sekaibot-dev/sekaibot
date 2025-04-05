@@ -14,7 +14,7 @@ FrontMatter:
 import re
 from argparse import Namespace as Namespace
 from contextvars import ContextVar
-from typing import TYPE_CHECKING, Any, NamedTuple, Self, TypedDict, TypeVar
+from typing import TYPE_CHECKING, NamedTuple, Self, TypedDict, TypeVar
 
 from pygtrie import CharTrie
 

@@ -8,11 +8,11 @@ from typing import Literal, override
 
 import aiohttp
 import anyio
-import structlog
 from aiohttp import web
 from anyio.lowlevel import checkpoint
 
 from sekaibot.internal.adapter import Adapter
+from sekaibot.log import logger
 from sekaibot.typing import ConfigT, EventT
 
 __all__ = [
@@ -23,8 +23,6 @@ __all__ = [
     "WebSocketClientAdapter",
     "WebSocketServerAdapter",
 ]
-
-logger = structlog.stdlib.get_logger()
 
 
 class PollingAdapter(Adapter[EventT, ConfigT], metaclass=ABCMeta):

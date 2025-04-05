@@ -17,6 +17,7 @@ from sekaibot.config import ConfigModel
 from sekaibot.dependencies import Depends
 from sekaibot.internal.event import Event
 from sekaibot.internal.node import Node
+from sekaibot.plugin import Plugin
 
 __all__ = [
     "Bot",
@@ -24,5 +25,5 @@ __all__ = [
     "Depends",
     "Event",
     "Node",
-
+    "Plugin",
 ]

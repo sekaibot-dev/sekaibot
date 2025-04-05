@@ -55,7 +55,7 @@ class Permission:
         self,
         bot: "Bot",
         event: Event,
-        global_state: GlobalStateT,
+        global_state: GlobalStateT | None = None,
         stack: AsyncExitStack | None = None,
         dependency_cache: DependencyCacheT | None = None,
     ) -> bool:

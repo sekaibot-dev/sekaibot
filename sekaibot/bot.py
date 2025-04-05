@@ -1,11 +1,10 @@
-import importlib
+import inspect
 import json
 import pkgutil
 import signal
 import sys
 import threading
 import tomllib
-import traceback
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, ClassVar
@@ -15,13 +14,14 @@ import yaml
 from exceptiongroup import catch
 from pydantic import ValidationError, create_model  # pyright: ignore[reportUnknownVariableType]
 
-from sekaibot.config import ConfigModel, MainConfig, NodeConfig
+from sekaibot.config import ConfigModel, MainConfig, NodeConfig, PluginConfig
 from sekaibot.dependencies import solve_dependencies
 from sekaibot.exceptions import LoadModuleError, SkipException
 from sekaibot.internal.adapter import Adapter
 from sekaibot.internal.node import Node, NodeLoadType
 from sekaibot.internal.node.manager import NodeManager
 from sekaibot.log import configure_logging, logger
+from sekaibot.plugin import Plugin
 from sekaibot.typing import AdapterHook, BotHook, EventHook, NodeHook
 from sekaibot.utils import (
     ModulePathFinder,
@@ -29,7 +29,6 @@ from sekaibot.utils import (
     TreeType,
     cancel_on_exit,
     flatten_tree_with_jumps,
-    get_classes_from_module,
     get_classes_from_module_name,
     handle_exception,
     is_config_class,
@@ -54,7 +53,7 @@ class Bot:
     nodes_tree: TreeType[type[Node[Any, Any, Any]]]
     nodes_list: list[tuple[type[Node[Any, Any, Any]], int]]
     node_state: dict[str, Any]
-    plugin_dict: dict[str, Any]
+    plugin_dict: dict[str, Plugin[Any]]
     global_state: dict[str, Any]
 
     _should_exit: anyio.Event
@@ -70,18 +69,20 @@ class Bot:
         type[Node[Any, Any, Any]] | str | Path
     ]  # 使用 load_nodes() 方法程序化加载的节点列表
     _extend_node_dirs: list[Path]  # 使用 load_nodes_from_dirs() 方法程序化加载的节点路径列表
-    _extend_plugin_dirs: list[Path]
+    _extend_plugins: ClassVar[list[
+        tuple[type[Plugin[Any]], bool]  # | str | Path
+    ]] = []
 
-    _bot_startup_hooks: ClassVar[list[BotHook]] = []
-    _bot_run_hooks: ClassVar[list[BotHook]] = []
-    _bot_exit_hooks: ClassVar[list[BotHook]] = []
-    _adapter_startup_hooks: ClassVar[list[AdapterHook]] = []
-    _adapter_run_hooks: ClassVar[list[AdapterHook]] = []
-    _adapter_shutdown_hooks: ClassVar[list[AdapterHook]] = []
-    _event_preprocessor_hooks: ClassVar[list[EventHook]] = []
-    _event_postprocessor_hooks: ClassVar[list[EventHook]] = []
-    _node_preprocessor_hooks: ClassVar[list[NodeHook]] = []
-    _node_postprocessor_hooks: ClassVar[list[NodeHook]] = []
+    _bot_startup_hooks: ClassVar[set[BotHook]] = set()
+    _bot_run_hooks: ClassVar[set[BotHook]] = set()
+    _bot_exit_hooks: ClassVar[set[BotHook]] = set()
+    _adapter_startup_hooks: ClassVar[set[AdapterHook]] = set()
+    _adapter_run_hooks: ClassVar[set[AdapterHook]] = set()
+    _adapter_shutdown_hooks: ClassVar[set[AdapterHook]] = set()
+    _event_preprocessor_hooks: ClassVar[set[EventHook]] = set()
+    _event_postprocessor_hooks: ClassVar[set[EventHook]] = set()
+    _node_preprocessor_hooks: ClassVar[set[NodeHook]] = set()
+    _node_postprocessor_hooks: ClassVar[set[NodeHook]] = set()
 
     def __init__(
         self,
@@ -205,8 +206,11 @@ class Bot:
         self._load_nodes_from_dirs(*self.config.bot.node_dirs)
         self._load_nodes(*self.config.bot.nodes)
         self.load_adapter(self.config.bot.adapter)
-        self._update_config()
+        self.load_plugins()
+
         await self._run_bot_hooks(self._bot_startup_hooks, "BotStartupHooks")
+
+        self._update_config()
 
     async def _run(self) -> None:
         """运行 SekaiBot。"""
@@ -309,6 +313,7 @@ class Bot:
         self.config = create_model(
             "Config",
             node=update_config(self.nodes, "NodeConfig", NodeConfig),
+            plugin=update_config(list(self.plugin_dict.values()), "PluginConfig", PluginConfig),
             __base__=MainConfig,
         )(**self._raw_config_dict)
 
@@ -560,6 +565,37 @@ class Bot:
                 return _plugin
         raise LookupError(f'Can not find node named "{name}"')
 
+    def load_plugins(self):
+        """加载插件。"""
+        for plugin_class, reload in self._extend_plugins:
+            try:
+                if plugin_class.name not in self.plugin_dict or reload:
+                    _plugin = plugin_class(self)
+                    self.plugin_dict[plugin_class.name] = _plugin
+                    logger.info(
+                        "Succeeded to load plugin from class",
+                        name=_plugin.name,
+                        plugin=_plugin,
+                    )
+            except Exception:
+                logger.exception("Load plugin failed:", plugin=_plugin)
+
+    def get_plugins(self, name: str):
+        """按照名称获取已经加载的插件类。
+
+        Args:
+            name: 插件名称
+
+        Returns:
+            获取到的插件类。
+
+        Raises:
+            LookupError: 找不到此名称的插件类。
+        """
+        if _plugin := self.plugin_dict.get(name):
+            return _plugin
+        raise LookupError(f'Can not find plugin named "{name}"')
+
     def load_adapter(self, adapter: type[Adapter[Any, Any]] | str | None) -> None:
         """加载适配器。
 
@@ -606,7 +642,7 @@ class Bot:
             self.adapter = adapter_object
 
     @classmethod
-    def require(cls, name: str, *, reload: bool = False):
+    def require_plugin(cls, plugin_class: type[Plugin], *, reload: bool = False):
         """声明依赖插件。
 
         参数:
@@ -615,18 +651,20 @@ class Bot:
         异常:
             RuntimeError: 插件无法加载
         """
-        try:
-            importlib.invalidate_caches()
-            module = importlib.import_module(name)
-            if reload:
-                importlib.reload(module)
-            [(x, module) for x in get_classes_from_module(module, Node)]
-        except KeyboardInterrupt:
-            # 不捕获 KeyboardInterrupt
-            # 捕获 KeyboardInterrupt 会阻止用户关闭 Python 当正在导入的模块陷入死循环时
-            raise
-        except BaseException as e:
-            raise ImportError(e, traceback.format_exc()) from e
+        if (
+            inspect.isclass(plugin_class)
+            and issubclass(plugin_class, Plugin)
+            and plugin_class != Plugin
+        ):
+            if plugin_class not in cls._extend_plugins:
+                cls._extend_plugins.append((plugin_class, reload))
+            elif reload:
+                cls._extend_plugins[cls._extend_plugins.index(plugin_class)] = (
+                    plugin_class,
+                    reload,
+                )
+        else:
+            logger.error("Require plugin failed: Not a plugin class", plugin_class=plugin_class)
 
     @classmethod
     def bot_startup_hook(cls, func: BotHook) -> BotHook:
@@ -638,7 +676,7 @@ class Bot:
         Returns:
             被注册的函数。
         """
-        cls._bot_startup_hooks.append(func)
+        cls._bot_startup_hooks.add(func)
         return func
 
     @classmethod
@@ -651,7 +689,7 @@ class Bot:
         Returns:
             被注册的函数。
         """
-        cls._bot_run_hooks.append(func)
+        cls._bot_run_hooks.add(func)
         return func
 
     @classmethod
@@ -664,7 +702,7 @@ class Bot:
         Returns:
             被注册的函数。
         """
-        cls._bot_exit_hooks.append(func)
+        cls._bot_exit_hooks.add(func)
         return func
 
     @classmethod
@@ -677,7 +715,7 @@ class Bot:
         Returns:
             被注册的函数。
         """
-        cls._adapter_startup_hooks.append(func)
+        cls._adapter_startup_hooks.add(func)
         return func
 
     @classmethod
@@ -690,7 +728,7 @@ class Bot:
         Returns:
             被注册的函数。
         """
-        cls._adapter_run_hooks.append(func)
+        cls._adapter_run_hooks.add(func)
         return func
 
     @classmethod
@@ -703,7 +741,7 @@ class Bot:
         Returns:
             被注册的函数。
         """
-        cls._adapter_shutdown_hooks.append(func)
+        cls._adapter_shutdown_hooks.add(func)
         return func
 
     @classmethod
@@ -716,7 +754,7 @@ class Bot:
         Returns:
             被注册的函数。
         """
-        cls._event_preprocessor_hooks.append(func)
+        cls._event_preprocessor_hooks.add(func)
         return func
 
     @classmethod
@@ -729,7 +767,7 @@ class Bot:
         Returns:
             被注册的函数。
         """
-        cls._event_postprocessor_hooks.append(func)
+        cls._event_postprocessor_hooks.add(func)
         return func
 
     @classmethod
@@ -742,7 +780,7 @@ class Bot:
         Returns:
             被注册的函数。
         """
-        cls._node_preprocessor_hooks.append(func)
+        cls._node_preprocessor_hooks.add(func)
         return func
 
     @classmethod
@@ -755,7 +793,7 @@ class Bot:
         Returns:
             被注册的函数。
         """
-        cls._node_postprocessor_hooks.append(func)
+        cls._node_postprocessor_hooks.add(func)
         return func
 
 
