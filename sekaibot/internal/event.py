@@ -4,16 +4,18 @@
 """
 
 from abc import ABC
-from typing import NamedTuple, override
+from typing import TYPE_CHECKING, Any, Generic, NamedTuple, override
 
 from pydantic import BaseModel, ConfigDict
+
+from sekaibot.typing import AdapterT
 
 from .message import Message
 
 __all__ = ["Event", "EventHandleOption"]
 
 
-class Event(ABC, BaseModel):
+class Event(ABC, BaseModel, Generic[AdapterT]):
     """事件类的基类。
 
     Attributes:
@@ -26,6 +28,11 @@ class Event(ABC, BaseModel):
 
     type: str | None
     __handled__: bool = False
+
+    if TYPE_CHECKING:
+        adapter: AdapterT
+    else:
+        adapter: Any
 
     @override
     def __str__(self) -> str:

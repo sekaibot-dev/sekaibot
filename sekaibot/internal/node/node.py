@@ -95,10 +95,8 @@ class Node(Generic[EventT, NodeStateT, ConfigT]):
     if TYPE_CHECKING:
         event: EventT
         state: StateT
-        bot: "Bot"
     else:
         event = Depends(Event)
-        bot = Depends("Bot")
         state = Depends(StateT)
         # 以下两个依赖项在节点作为依赖项时会被导入，并覆盖原有的 `name` 和 `config` 属性，应该交由 SekaiBot 处理
         # 由于依赖注入发生在类实例化时，因此 `Config` 不会被修改，但是 `config` 会被修改
@@ -177,6 +175,11 @@ class Node(Generic[EventT, NodeStateT, ConfigT]):
 
     @final
     @property
+    def bot(self) -> "Bot":
+        return self.event.adapter.bot
+
+    @final
+    @property
     def config(self) -> ConfigT:
         """节点配置。"""
         default: Any = None
@@ -233,10 +236,11 @@ class Node(Generic[EventT, NodeStateT, ConfigT]):
         **kwargs: Any,
     ) -> None:
         """回复消息。"""
-        await self.bot.adapter.send(
-            self.event, 
-            message=message, 
-            **kwargs)
+        await self.event.adapter.send(
+            self.event,
+            message=message,
+            **kwargs,
+        )
 
     @final
     async def get(
@@ -262,6 +266,7 @@ class Node(Generic[EventT, NodeStateT, ConfigT]):
         return await self.bot.manager.get(
             lambda e: e.get_session_id() == self.event.get_session_id(),
             event_type=type(self.event),
+            adapter_type=type(self.event.adapter),
             max_try_times=max_try_times,
             timeout=timeout,
         )
@@ -346,14 +351,14 @@ class Node(Generic[EventT, NodeStateT, ConfigT]):
             ActionFailed: API 请求响应 failed， API 操作失败。
             ApiTimeout: API 请求响应超时。
         """
-        return await self.bot.adapter.call_api(api, **params)
+        return await self.event.adapter.call_api(api, **params)
 
     @final
     @classmethod
     async def _check_perm(
         cls,
         bot: "Bot",
-        event: Event,
+        event: Event[Any],
         global_state: GlobalStateT,
         stack: AsyncExitStack | None = None,
         dependency_cache: DependencyCacheT | None = None,
@@ -392,7 +397,7 @@ class Node(Generic[EventT, NodeStateT, ConfigT]):
     async def _check_rule(
         cls,
         bot: "Bot",
-        event: Event,
+        event: Event[Any],
         state: StateT,
         global_state: GlobalStateT,
         stack: AsyncExitStack | None = None,

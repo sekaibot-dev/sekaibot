@@ -12,13 +12,11 @@ from .config import SchedulerConfig
 __all__ = ["SchedulerArg"]
 
 
-
-
 def SchedulerArg():
     async def wrapper(
         bot: Bot = Depends(Bot),  # noqa: B008
     ) -> AsyncIOScheduler:
-        if isinstance(bot_scheduler := bot.get_plugins(Scheduler.name), Scheduler):
+        if isinstance(bot_scheduler := bot.get_plugin(Scheduler.name), Scheduler):
             return bot_scheduler.scheduler
         raise RuntimeError("Scheduler not found.")
 
@@ -39,7 +37,6 @@ class Scheduler(Plugin[SchedulerConfig]):
         Bot.bot_run_hook(self.startup)
 
     async def startup(self):
-
         self.scheduler = AsyncIOScheduler()
         self.scheduler.configure(self.config.apscheduler_config)
 

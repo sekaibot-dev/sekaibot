@@ -42,7 +42,7 @@ class BotConfig(ConfigModel):
     event_queue_size: int = Field(default=0, ge=0)
     nodes: set[str] = Field(default_factory=set)
     node_dirs: set[DirectoryPath] = Field(default_factory=set)
-    adapter: str | None = None
+    adapters: set[str] = Field(default_factory=set)
     log: LogConfig | None = None
 
 

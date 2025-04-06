@@ -40,6 +40,8 @@ from pydantic import BaseModel
 from typing_extensions import ParamSpec
 
 from sekaibot.config import ConfigModel
+from sekaibot.internal.adapter import Adapter
+from sekaibot.internal.event import Event
 from sekaibot.log import logger
 from sekaibot.typing import EventT
 
@@ -385,21 +387,34 @@ async def sync_ctx_manager_wrapper(
 
 
 def wrap_get_func(
-    func: Callable[[EventT], bool | Awaitable[bool]] | None,
+    func: Callable[[EventT], bool | Awaitable[bool]] | None = None,
+    *,
+    event_type: type["Event[Any]"] | None = None,
+    adapter_type: type["Adapter[Any, Any]"] | None = None,
 ) -> Callable[[EventT], Awaitable[bool]]:
     """将 `get()` 函数接受的参数包装为一个异步函数。
 
     Args:
         func: `get()` 函数接受的参数。
+        event_type: 事件类型。
+        adapter_type: 适配器类型。
 
     Returns:
         异步函数。
     """
     if func is None:
-        return sync_func_wrapper(lambda _: True)
-    if not asyncio.iscoroutinefunction(func):
-        return sync_func_wrapper(func)  # type: ignore
-    return func
+        func = sync_func_wrapper(lambda _: True)
+    elif not inspect.iscoroutinefunction(func):
+        func = sync_func_wrapper(cast(Callable[[EventT], bool], func))
+
+    async def _func(event: EventT) -> bool:
+        return (
+            (event_type is None or isinstance(event, event_type))
+            and (adapter_type is None or isinstance(event.adapter, adapter_type))
+            and await func(event)
+        )
+
+    return _func
 
 
 async def cancel_on_exit(

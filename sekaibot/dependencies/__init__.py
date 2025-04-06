@@ -7,12 +7,7 @@ from contextlib import AsyncExitStack
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from sekaibot.internal.event import Event
-from sekaibot.typing import (
-    DependencyCacheT,
-    GlobalStateT,
-    NodeStateT,
-    StateT,
-)
+from sekaibot.typing import DependencyCacheT, GlobalStateT, NodeStateT, StateT
 
 from .utils import Dependency, InnerDepends, solve_dependencies
 
@@ -46,50 +41,11 @@ def Depends(  # noqa: N802 # pylint: disable=invalid-name
     return InnerDepends(dependency=dependency, use_cache=use_cache)  # type: ignore
 
 
-'''DependencyT = TypeVar("DependencyT", bound="Dependency")
-
-
-def Import(dependency: DependencyT | None = None, *, use_cache: bool = True) -> DependencyT:
-    """子依赖装饰器，返回对象依赖对象封装后的类本身。
-
-    Args:
-        dependency: 依赖类。如果不指定则根据字段的类型注释自动判断。
-        use_cache: 是否使用缓存。默认为 `True`。
-
-    Returns:
-        对象的依赖对象封装后的类本身。
-    """
-    from sekaibot.bot import Bot
-    def wrap(
-        bot: Bot,
-        event: Event,
-        state: StateT,
-        node_state: NodeStateT,
-        global_state: GlobalStateT,
-        dependency_cache: DependencyCacheT,
-    ) -> DependencyT:
-        async def util():
-            return await solve_dependencies_in_bot(
-                dependency,
-                bot=bot,
-                event=event,
-                state=state,
-                node_state=node_state,
-                global_state=global_state,
-                use_cache=use_cache,
-                dependency_cache=dependency_cache,
-            )
-
-        return util
-
-    return Depends(wrap, use_cache=use_cache)'''
-
-
 async def solve_dependencies_in_bot(
     dependent: Dependency[_T],
     *,
     bot: "Bot",
-    event: Event | None = None,
+    event: Event[Any] | None = None,
     state: StateT | None = None,
     node_state: NodeStateT | None = None,
     global_state: GlobalStateT | None = None,

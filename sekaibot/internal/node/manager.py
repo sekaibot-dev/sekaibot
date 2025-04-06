@@ -1,4 +1,3 @@
-import asyncio
 import time
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
@@ -20,6 +19,7 @@ from sekaibot.exceptions import (
     SkipException,
     StopException,
 )
+from sekaibot.internal.adapter import Adapter
 from sekaibot.internal.event import Event, EventHandleOption
 from sekaibot.internal.node import NameT, Node
 from sekaibot.log import logger
@@ -35,7 +35,7 @@ class NodeManager:
 
     _condition: anyio.Condition
     _cancel_event: anyio.Event
-    _current_event: Event | None
+    _current_event: Event[Any][Any] | None
 
     _event_send_stream: MemoryObjectSendStream[EventHandleOption]  # pyright: ignore[reportUninitializedInstanceVariable]
     _event_receive_stream: MemoryObjectReceiveStream[EventHandleOption]  # pyright: ignore[reportUninitializedInstanceVariable]
@@ -57,7 +57,7 @@ class NodeManager:
 
     async def _run_event_preprocessors(
         self,
-        current_event: Event,
+        current_event: Event[Any],
         state: StateT,
         stack: AsyncExitStack | None = None,
         dependency_cache: DependencyCacheT | None = None,
@@ -65,7 +65,7 @@ class NodeManager:
         """运行事件预处理。
 
         参数:
-            current_event: Event 对象
+            current_event: Event[Any] 对象
             state: 会话状态
             stack: 异步上下文栈
             dependency_cache: 依赖缓存
@@ -109,7 +109,7 @@ class NodeManager:
 
     async def _run_event_postprocessors(
         self,
-        current_event: Event,
+        current_event: Event[Any],
         state: StateT,
         stack: AsyncExitStack | None = None,
         dependency_cache: DependencyCacheT | None = None,
@@ -117,7 +117,7 @@ class NodeManager:
         """运行事件后处理。
 
         参数:
-            current_event: Event 对象
+            current_event: Event[Any] 对象
             state: 会话状态
             stack: 异步上下文栈
             dependency_cache: 依赖缓存
@@ -145,7 +145,7 @@ class NodeManager:
 
     async def _run_node_preprocessors(
         self,
-        current_event: Event,
+        current_event: Event[Any],
         state: StateT,
         node: Node,
         stack: AsyncExitStack | None = None,
@@ -155,7 +155,7 @@ class NodeManager:
 
         参数:
             bot: Bot 对象
-            event: Event 对象
+            current_event: Event[Any] 对象
             state: 会话状态
             matcher: 事件响应器
             stack: 异步上下文栈
@@ -211,7 +211,7 @@ class NodeManager:
 
         参数:
             bot: Bot 对象
-            event: Event 对象
+            current_event: Event[Any] 对象
             matcher: 事件响应器
             exception: 事件响应器运行异常
             stack: 异步上下文栈
@@ -242,7 +242,7 @@ class NodeManager:
 
     async def handle_event(
         self,
-        current_event: Event,
+        current_event: Event[Any],
         *,
         handle_get: bool = True,
         show_log: bool = True,
@@ -293,7 +293,7 @@ class NodeManager:
     async def _add_temporary_task(
         self,
         node_class: type[Node],
-        current_event: Event,
+        current_event: Event[Any],
         state: StateT,
         max_try_times: int | None = None,
         timeout: int | float = MAX_TIMEOUT,
@@ -307,7 +307,7 @@ class NodeManager:
         """
 
         async def temporary_task(func: Callable[[Event], bool | Awaitable[bool]] | None = None):
-            async def check(event: Event) -> bool:
+            async def check(event: Event[Any]) -> bool:
                 if event.get_session_id() != current_event.get_session_id():
                     return False
                 return await wrap_get_func(func)(event)
@@ -331,7 +331,7 @@ class NodeManager:
     async def _check_node(
         self,
         node_class: type[Node],
-        current_event: Event,
+        current_event: Event[Any],
         state: StateT,
         stack: AsyncExitStack | None = None,
         dependency_cache: DependencyCacheT | None = None,
@@ -343,7 +343,7 @@ class NodeManager:
         参数:
             Matcher: 要检查的事件响应器
             bot: Bot 对象
-            event: Event 对象
+            current_event: Event[Any] 对象
             state: 会话状态
             stack: 异步上下文栈
             dependency_cache: 依赖缓存
@@ -377,7 +377,7 @@ class NodeManager:
     async def _run_node(
         self,
         node_class: type[Node],
-        current_event: Event,
+        current_event: Event[Any],
         state: StateT,
         stack: AsyncExitStack | None = None,
         dependency_cache: DependencyCacheT | None = None,
@@ -424,7 +424,7 @@ class NodeManager:
     async def _check_and_run_node(
         self,
         node_class: type[Node],
-        current_event: Event,
+        current_event: Event[Any],
         state: StateT,
         stack: AsyncExitStack | None,
         dependency_cache: DependencyCacheT | None = None,
@@ -436,7 +436,7 @@ class NodeManager:
 
     async def _handle_event(
         self,
-        current_event: Event,
+        current_event: Event[Any],
         state: StateT | None = None,
         start_class: type[Node[Any, Any, Any]] | None = None,
     ) -> None:
@@ -545,12 +545,13 @@ class NodeManager:
     @overload
     async def get(
         self,
-        func: Callable[[Event], bool | Awaitable[bool]] | None = None,
+        func: Callable[[Event[Any]], bool | Awaitable[bool]] | None = None,
         *,
         event_type: None = None,
+        adapter_type: None = None,
         max_try_times: int | None = None,
         timeout: int | float | None = None,
-    ) -> Event: ...
+    ) -> Event[Any]: ...
 
     @overload
     async def get(
@@ -558,6 +559,7 @@ class NodeManager:
         func: Callable[[EventT], bool | Awaitable[bool]] | None = None,
         *,
         event_type: None = None,
+        adapter_type: type[Adapter[EventT, Any]],
         max_try_times: int | None = None,
         timeout: int | float | None = None,
     ) -> EventT: ...
@@ -568,6 +570,7 @@ class NodeManager:
         func: Callable[[EventT], bool | Awaitable[bool]] | None = None,
         *,
         event_type: type[EventT],
+        adapter_type: type[Adapter[Any, Any]] | None = None,
         max_try_times: int | None = None,
         timeout: int | float | None = None,
     ) -> EventT: ...
@@ -577,9 +580,10 @@ class NodeManager:
         func: Callable[[Any], bool | Awaitable[bool]] | None = None,
         *,
         event_type: type[Event] | None = None,
+        adapter_type: type[Adapter[Any, Any]] | None = None,
         max_try_times: int | None = None,
         timeout: int | float = MAX_TIMEOUT,
-    ) -> EventT:
+    ) -> Event[Any]:
         """获取满足指定条件的的事件，协程会等待直到适配器接收到满足条件的事件、超过最大事件数或超时。
 
         Args:
@@ -587,6 +591,7 @@ class NodeManager:
                 要求接受一个事件作为参数，返回布尔值。当协程返回 `True` 时返回当前事件。
                 当为 `None` 时相当于输入对于任何事件均返回真的协程，即返回适配器接收到的下一个事件。
             event_type: 当指定时，只接受指定类型的事件，先于 func 条件生效。默认为 `None`。
+            adapter_type: 当指定时，只接受指定适配器产生的事件，先于 func 条件生效。默认为 `None`。
             max_try_times: 最大事件数。
             timeout: 超时时间。
 
@@ -596,7 +601,7 @@ class NodeManager:
         Raises:
             GetEventTimeout: 超过最大事件数或超时。
         """
-        _func = wrap_get_func(func)
+        _func = wrap_get_func(func, event_type=event_type, adapter_type=adapter_type)
 
         try_times = 0
         start_time = time.time()
@@ -611,17 +616,14 @@ class NodeManager:
                     await self._condition.wait()
                 else:
                     try:
-                        await asyncio.wait_for(
-                            self._condition.wait(),
-                            timeout=start_time + timeout - time.time(),
-                        )
+                        with anyio.fail_after(start_time + timeout - time.time()):
+                            await self._condition.wait()
                     except TimeoutError:
                         break
 
                 if (
                     self._current_event is not None
                     and not self._current_event.__handled__
-                    and (event_type is None or isinstance(self._current_event, event_type))
                     and await _func(self._current_event)
                 ):
                     self._current_event.__handled__ = True

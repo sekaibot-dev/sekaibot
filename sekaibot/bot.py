@@ -7,7 +7,7 @@ import threading
 import tomllib
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any, ClassVar, overload
 
 import anyio
 import yaml
@@ -22,7 +22,7 @@ from sekaibot.internal.node import Node, NodeLoadType
 from sekaibot.internal.node.manager import NodeManager
 from sekaibot.log import configure_logging, logger
 from sekaibot.plugin import Plugin
-from sekaibot.typing import AdapterHook, BotHook, EventHook, NodeHook
+from sekaibot.typing import AdapterHook, AdapterT, BotHook, EventHook, NodeHook
 from sekaibot.utils import (
     ModulePathFinder,
     ModuleType,
@@ -49,7 +49,7 @@ class Bot:
     config: MainConfig
     manager: NodeManager
 
-    adapter: Adapter[Any, Any]
+    adapters: list[Adapter[Any, Any]]
     nodes_tree: TreeType[type[Node[Any, Any, Any]]]
     nodes_list: list[tuple[type[Node[Any, Any, Any]], int]]
     node_state: dict[str, Any]
@@ -69,9 +69,14 @@ class Bot:
         type[Node[Any, Any, Any]] | str | Path
     ]  # 使用 load_nodes() 方法程序化加载的节点列表
     _extend_node_dirs: list[Path]  # 使用 load_nodes_from_dirs() 方法程序化加载的节点路径列表
-    _extend_plugins: ClassVar[list[
-        tuple[type[Plugin[Any]], bool]  # | str | Path
-    ]] = []
+    _extend_adapters: list[
+        type[Adapter[Any, Any]] | str
+    ]  # 使用 load_adapter() 方法程序化加载的适配器列表
+    _extend_plugins: ClassVar[
+        list[
+            tuple[type[Plugin[Any]], bool]  # | str | Path
+        ]
+    ] = []
 
     _bot_startup_hooks: ClassVar[set[BotHook]] = set()
     _bot_run_hooks: ClassVar[set[BotHook]] = set()
@@ -105,14 +110,19 @@ class Bot:
         self.nodes_tree = {}
         self.nodes_list = []
         self.node_state = defaultdict(lambda: None)
-        self.adapter = None
+        self.adapters = []
         self.plugin_dict = defaultdict(lambda: None)
         self.global_state = defaultdict(dict)
 
+        self._restart_flag = False
         self._module_path_finder = ModulePathFinder()
+        self._extend_nodes = []
+        self._extend_node_dirs = []
+        self._extend_adapters = []
 
         self._config_file = config_file
         self._config_dict = config_dict
+        self._raw_config_dict = {}
         self._handle_signals = handle_signals
 
         sys.meta_path.insert(0, self._module_path_finder)
@@ -138,13 +148,18 @@ class Bot:
                         (SkipException,),
                     )
 
-    async def _run_adapter_hooks(self, hooks: list[AdapterHook], name: str):
+    async def _run_adapter_hooks(
+        self,
+        hooks: list[AdapterHook],
+        adapter: Adapter[Any, Any],
+        name: str,
+    ):
         if not hooks:
             return
 
-        logger.debug(f"Running {name}...")
+        logger.debug(f"Running {name}...", adapter=adapter)
 
-        with catch({Exception: handle_exception(f"Error when running {name}")}):
+        with catch({Exception: handle_exception(f"Error when running {name}")}, adapter=adapter):
             async with anyio.create_task_group() as tg:
                 for hook_func in hooks:
                     tg.start_soon(
@@ -152,8 +167,8 @@ class Bot:
                         solve_dependencies(
                             hook_func,
                             dependency_cache={
-                                Adapter: self.adapter,
-                                "adapter": self.adapter,
+                                Adapter: adapter,
+                                "adapter": adapter,
                                 Bot: self,
                                 "bot": self,
                             },
@@ -189,7 +204,8 @@ class Bot:
             if self._restart_flag:
                 self._load_nodes(*self._extend_nodes)
                 self._load_nodes_from_dirs(*self._extend_node_dirs)
-                self.load_adapter(type(self.adapter))
+                self._load_adapters(*self._extend_adapters)
+                self.load_plugins()
 
     def restart(self) -> None:
         """退出并重新运行 SekaiBot。"""
@@ -205,7 +221,7 @@ class Bot:
 
         self._load_nodes_from_dirs(*self.config.bot.node_dirs)
         self._load_nodes(*self.config.bot.nodes)
-        self.load_adapter(self.config.bot.adapter)
+        self._load_adapters(*self.config.bot.adapters)
         self.load_plugins()
 
         await self._run_bot_hooks(self._bot_startup_hooks, "BotStartupHooks")
@@ -220,40 +236,29 @@ class Bot:
         await self._run_bot_hooks(self._bot_run_hooks, "BotRunHooks")
 
         try:
-            if self.adapter:
-                await self._run_adapter_hooks(self._adapter_startup_hooks, "AdapterStartupHooks")
-
+            for _adapter in self.adapters:
+                await self._run_adapter_hooks(self._adapter_startup_hooks, _adapter, "AdapterStartupHooks")
                 try:
-                    await self.adapter.startup()
+                    await _adapter.startup()
                 except Exception:
-                    logger.exception("Startup adapter failed", adapter=self.adapter)
+                    logger.exception("Startup adapter failed", adapter=_adapter)
 
             try:
                 await self.manager.startup()
             except Exception:
                 logger.exception("Startup manager failed", manager=self.manager)
 
-            if self.adapter:
-                async with anyio.create_task_group() as tg:
-                    await self._run_adapter_hooks(self._adapter_run_hooks, "AdapterRunHooks")
-                    tg.start_soon(self.adapter.safe_run)
-
-            from sekaibot.internal.event import Event
-
-            class AEvent(Event):
-                """"""
-
             async with anyio.create_task_group() as tg:
-                tg.start_soon(self.manager.run)
-                tg.start_soon(
-                    self.manager.handle_event, AEvent(type="a_event", adapter="test_adapter")
-                )
+                for _adapter in self.adapters:
+                    await self._run_adapter_hooks(self._adapter_run_hooks, _adapter, "AdapterRunHooks")
+                    tg.start_soon(_adapter.safe_run)
 
             await self._should_exit.wait()
+
         finally:
-            if self.adapter:
-                await self._run_adapter_hooks(self._adapter_shutdown_hooks, "AdapterShutdownHooks")
-                await self.adapter.shutdown()
+            for _adapter in self.adapters:
+                await self._run_adapter_hooks(self._adapter_shutdown_hooks, _adapter, "AdapterShutdownHooks")
+                await _adapter.shutdown()
 
             await self.manager.shutdown()
 
@@ -567,9 +572,9 @@ class Bot:
 
     def load_plugins(self):
         """加载插件。"""
-        for plugin_class, reload in self._extend_plugins:
+        for plugin_class, _reload in self._extend_plugins:
             try:
-                if plugin_class.name not in self.plugin_dict or reload:
+                if plugin_class.name not in self.plugin_dict or _reload:
                     _plugin = plugin_class(self)
                     self.plugin_dict[plugin_class.name] = _plugin
                     logger.info(
@@ -580,7 +585,7 @@ class Bot:
             except Exception:
                 logger.exception("Load plugin failed:", plugin=_plugin)
 
-    def get_plugins(self, name: str):
+    def get_plugin(self, name: str):
         """按照名称获取已经加载的插件类。
 
         Args:
@@ -596,7 +601,7 @@ class Bot:
             return _plugin
         raise LookupError(f'Can not find plugin named "{name}"')
 
-    def load_adapter(self, adapter: type[Adapter[Any, Any]] | str | None) -> None:
+    def _load_adapters(self, *adapters: type[Adapter[Any, Any]] | str) -> None:
         """加载适配器。
 
         Args:
@@ -605,41 +610,78 @@ class Bot:
                 如果为 `str` 类型时，将作为适配器模块名称进行加载，格式和 Python `import` 语句相同。
                     例如：`path.of.adapter`。
         """
-        if not adapter:
-            return
-        adapter_object: Adapter[Any, Any]
-        try:
-            if isinstance(adapter, type) and issubclass(adapter, Adapter):
-                adapter_object = adapter(self)
-                logger.info(
-                    "Succeeded to load adapter from class",
-                    name=adapter_object.__class__.__name__,
-                    adapter_class=adapter,
-                )
-            elif isinstance(adapter, str):
-                adapter_classes = get_classes_from_module_name(adapter, Adapter)
-                if not adapter_classes:
-                    raise LoadModuleError(  # noqa: TRY301
-                        f"Can not find Adapter class in the {adapter} module"
+        for adapter_ in adapters:
+            adapter_object: Adapter[Any, Any]
+            try:
+                if isinstance(adapter_, type) and issubclass(adapter_, Adapter):
+                    adapter_object = adapter_(self)
+                    logger.info(
+                        "Succeeded to load adapter from class",
+                        name=adapter_object.__class__.__name__,
+                        adapter_class=adapter_,
                     )
-                if len(adapter_classes) > 1:
-                    raise LoadModuleError(  # noqa: TRY301
-                        f"More then one Adapter class in the {adapter} module"
+                elif isinstance(adapter_, str):
+                    adapter_classes = get_classes_from_module_name(adapter_, Adapter)
+                    if not adapter_classes:
+                        raise LoadModuleError(  # noqa: TRY301
+                            f"Can not find Adapter class in the {adapter_} module"
+                        )
+                    if len(adapter_classes) > 1:
+                        raise LoadModuleError(  # noqa: TRY301
+                            f"More then one Adapter class in the {adapter_} module"
+                        )
+                    adapter_object = adapter_classes[0][0](self)  # type: ignore
+                    logger.info(
+                        "Succeeded to load adapter from module",
+                        name=adapter_object.__class__.__name__,
+                        module_name=adapter_,
                     )
-                adapter_object = adapter_classes[0][0](self)  # type: ignore
-                logger.info(
-                    "Succeeded to load adapter from module",
-                    name=adapter_object.__class__.__name__,
-                    module_name=adapter,
-                )
+                else:
+                    raise TypeError(  # noqa: TRY301
+                        f"{adapter_} can not be loaded as adapter"
+                    )
+            except Exception:
+                logger.exception("Load adapter failed", adapter=adapter_)
             else:
-                raise TypeError(  # noqa: TRY301
-                    f"{adapter} can not be loaded as adapter"
-                )
-        except Exception:
-            logger.exception("Load adapter failed", adapter=adapter)
-        else:
-            self.adapter = adapter_object
+                self.adapters.append(adapter_object)
+
+    def load_adapters(self, *adapters: type[Adapter[Any, Any]] | str) -> None:
+        """加载适配器。
+
+        Args:
+            *adapters: 适配器类或适配器名称，类型可以是 `Type[Adapter]` 或 `str`。
+                如果为 `Type[Adapter]` 类型时，将作为适配器类进行加载。
+                如果为 `str` 类型时，将作为适配器模块名称进行加载，格式和 Python `import` 语句相同。
+                    例如：`path.of.adapter`。
+        """
+        self._extend_adapters.extend(adapters)
+        self._load_adapters(*adapters)
+
+    @overload
+    def get_adapter(self, adapter: str) -> Adapter[Any, Any]: ...
+
+    @overload
+    def get_adapter(self, adapter: type[AdapterT]) -> AdapterT: ...
+
+    def get_adapter(self, adapter: str | type[AdapterT]) -> Adapter[Any, Any] | AdapterT:
+        """按照名称或适配器类获取已经加载的适配器。
+
+        Args:
+            adapter: 适配器名称或适配器类。
+
+        Returns:
+            获取到的适配器对象。
+
+        Raises:
+            LookupError: 找不到此名称的适配器对象。
+        """
+        for _adapter in self.adapters:
+            if isinstance(adapter, str):
+                if _adapter.name == adapter:
+                    return _adapter
+            elif isinstance(_adapter, adapter):
+                return _adapter
+        raise LookupError(f'Can not find adapter named "{adapter}"')
 
     @classmethod
     def require_plugin(cls, plugin_class: type[Plugin], *, reload: bool = False):

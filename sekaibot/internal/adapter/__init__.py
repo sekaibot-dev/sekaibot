@@ -5,7 +5,7 @@
 
 import os
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, ClassVar, Generic, final
+from typing import TYPE_CHECKING, Any, ClassVar, Generic, Self, final
 
 import anyio
 from exceptiongroup import catch
@@ -201,7 +201,7 @@ class Adapter(ABC, Generic[MessageSegmentT, ConfigT]):
     @abstractmethod
     async def send(
         self,
-        event: Event,
+        event: Event[Self],
         message: BuildMessageType[MessageSegmentT],
         **kwargs: Any,
     ) -> Any:

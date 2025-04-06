@@ -22,7 +22,7 @@ __all__ = [
 
 _T = TypeVar("_T")
 
-EventT = TypeVar("EventT", bound="Event")
+EventT = TypeVar("EventT", bound="Event[Adapter[Any, Any]]")
 ConfigT = TypeVar("ConfigT", bound="ConfigModel | None")
 AdapterT = TypeVar("AdapterT", bound="Adapter[Any, Any]")
 NodeT = TypeVar("NodeT", bound="Node")
