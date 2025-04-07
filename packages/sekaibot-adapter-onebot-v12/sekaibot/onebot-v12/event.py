@@ -1,19 +1,60 @@
 """OneBot 适配器事件。"""
 # pyright: reportIncompatibleVariableOverride=false
 
-from typing import TYPE_CHECKING, Any, Literal, Optional, get_args, get_origin, override
+from copy import deepcopy
+from datetime import datetime
+from typing import TYPE_CHECKING, Any, Literal, get_args, get_origin, override
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 from pydantic.fields import FieldInfo
 
-from sekaibot.internal.event import Event
-from sekaibot.internal.event import MessageEvent as BaseMessageEvent
-from sekaibot.internal.message import BuildMessageType
+from sekaibot.internal.event import Event as BaseEvent
 
-from .message import OneBotMessage, OneBotMessageSegment
+from .message import OneBotMessage
 
 if TYPE_CHECKING:
     from . import OneBotAdapter
+
+
+class Event(BaseEvent["OneBotAdapter"]):
+    """OneBot V12 协议事件，字段与 OneBot 一致
+
+    参考文档：[OneBot 文档](https://12.1bot.dev)
+    """
+
+    id: str
+    time: datetime
+    type: Literal["message", "notice", "request", "meta"]
+    detail_type: str
+    sub_type: str
+
+    @override
+    def get_type(self) -> str:
+        return self.type
+
+    @override
+    def get_event_name(self) -> str:
+        return ".".join(filter(None, (self.type, self.detail_type, self.sub_type)))
+
+    @override
+    def get_event_description(self) -> str:
+        return str(self.model_dump())
+
+    @override
+    def get_message(self) -> OneBotMessage:
+        raise ValueError("Event has no message!")
+
+    @override
+    def get_user_id(self) -> str:
+        raise ValueError("Event has no user_id!")
+
+    @override
+    def get_session_id(self) -> str:
+        raise ValueError("Event has no session_id!")
+
+    @override
+    def is_tome(self) -> bool:
+        return False
 
 
 class BotSelf(BaseModel):
@@ -59,7 +100,7 @@ def _get_literal_field(field: FieldInfo | None) -> str | None:
     return literal_values[0]
 
 
-class OneBotEvent(Event["OneBotAdapter"]):
+class OneBotEvent(Event):
     """OneBot 事件基类"""
 
     id: str
@@ -82,21 +123,47 @@ class OneBotEvent(Event["OneBotAdapter"]):
         )
 
 
+class Reply(BaseModel):
+    message_id: str
+    user_id: str
+    model_config = ConfigDict(extra="allow")
+
+
 class BotEvent(OneBotEvent):
     """包含 self 字段的机器人事件"""
 
     self: BotSelf
-
-    @property
-    def to_me(self) -> bool:
-        """是否是发给自己的。"""
-        return getattr(self, "user_id", None) == self.self.user_id
 
 
 class MetaEvent(OneBotEvent):
     """元事件"""
 
     type: Literal["meta"]
+
+    def get_user_id(self) -> str | None:
+        """获取事件主体 id 的方法，通常是用户 id 。"""
+        return None
+
+    def get_session_id(self) -> str | None:
+        """获取会话 id 的方法，用于判断当前事件属于哪一个会话，
+        通常是用户 id、群组 id 组合。
+        """
+        return None
+
+    def get_message(self) -> None:
+        """获取事件消息内容的方法。"""
+        return None
+
+    def get_plain_text(self) -> str:
+        """获取消息纯文本的方法。
+
+        通常不需要修改，默认通过 `get_message().get_plain_text` 获取。
+        """
+        return None
+
+    def is_tome(self) -> bool:
+        """获取事件是否与机器人有关的方法。"""
+        return False
 
 
 class ConnectMetaEvent(MetaEvent):
@@ -120,84 +187,102 @@ class StatusUpdateMetaEvent(MetaEvent):
     status: Status
 
 
-class MessageEvent(BotEvent, BaseMessageEvent["OneBotAdapter"]):
+class MessageEvent(BotEvent):
     """消息事件"""
 
     type: Literal["message"]
     message_id: str
     message: OneBotMessage
+    original_message: OneBotMessage
     alt_message: str
     user_id: str
 
-    @override
-    def __repr__(self) -> str:
-        return f'Event<{self.type}>: "{self.message}"'
+    to_me: bool = False
+    """
+    :说明: 消息是否与机器人有关
+
+    :类型: ``bool``
+    """
+    reply: Reply | None = None
+    """
+    :说明: 消息中提取的回复消息，内容为 ``get_msg`` API 返回结果
+
+    :类型: ``Optional[Reply]``
+    """
+
+    @model_validator(mode="before")
+    def check_message(cls, values: dict[str, Any]) -> dict[str, Any]:
+        if "message" in values:
+            values["original_message"] = deepcopy(values["message"])
+        return values
 
     @override
-    def get_plain_text(self) -> str:
-        return self.message.get_plain_text()
+    def get_message(self) -> OneBotMessage:
+        return self.message
 
     @override
-    async def reply(self, message: BuildMessageType[OneBotMessageSegment]) -> dict[str, Any]:
-        """回复消息。
-
-        Args:
-            message: 回复消息的内容，同 `call_api()` 方法。
-
-        Returns:
-            API 请求响应。
-        """
-        raise NotImplementedError
-
-    @override
-    def get_sender_id(self) -> str:
+    def get_user_id(self) -> str:
         return self.user_id
+
+    @override
+    def get_session_id(self) -> str:
+        return "{self.user_id}"
+
+    @override
+    def is_tome(self) -> bool:
+        return self.to_me
 
 
 class PrivateMessageEvent(MessageEvent):
-    """私聊消息事件"""
+    """私聊消息"""
 
     detail_type: Literal["private"]
 
     @override
-    async def reply(self, message: BuildMessageType[OneBotMessageSegment]) -> dict[str, Any]:
-        return await self.adapter.send_message(
-            detail_type="private",
-            user_id=self.user_id,
-            message=message,
+    def get_event_description(self) -> str:
+        return (
+            f"Message {self.message_id} from {self.user_id} "
+            + repr(self.original_message)
         )
-
+    @override
+    def get_user_id(self) -> str:
+        return f"private:{self.user_id}"
 
 class GroupMessageEvent(MessageEvent):
-    """群消息事件"""
+    """群消息"""
 
     detail_type: Literal["group"]
     group_id: str
 
     @override
-    async def reply(self, message: BuildMessageType[OneBotMessageSegment]) -> dict[str, Any]:
-        return await self.adapter.send_message(
-            detail_type="group",
-            group_id=self.group_id,
-            message=message,
+    def get_event_description(self) -> str:
+        return (
+            f"Message {self.message_id} from {self.user_id}@[group:{self.group_id}] "
+            + repr(self.original_message)
         )
+
+    @override
+    def get_session_id(self) -> str:
+        return f"group:{self.group_id}:{self.user_id}"
 
 
 class ChannelMessageEvent(MessageEvent):
-    """频道消息事件"""
+    """频道消息"""
 
     detail_type: Literal["channel"]
     guild_id: str
     channel_id: str
 
     @override
-    async def reply(self, message: BuildMessageType[OneBotMessageSegment]) -> dict[str, Any]:
-        return await self.adapter.send_message(
-            detail_type="channel",
-            guild_id=self.guild_id,
-            channel_id=self.channel_id,
-            message=message,
+    def get_event_description(self) -> str:
+        return (
+            f"Message {self.message_id} from {self.user_id}@"
+            f"[guild:{self.guild_id}, channel:{self.channel_id}] {repr(self.original_message)}"
         )
+
+    @override
+    def get_session_id(self) -> str:
+        return f"guild:{self.guild_id}:channel:{self.channel_id}:{self.user_id}"
 
 
 class NoticeEvent(BotEvent):
