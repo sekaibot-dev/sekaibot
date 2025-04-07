@@ -13,7 +13,7 @@ from sekaibot.internal.event import Event as BaseEvent
 from .message import OneBotMessage
 
 if TYPE_CHECKING:
-    from . import OneBotAdapter
+    from . import OneBotAdapter  # noqa: F401
 
 
 class Event(BaseEvent["OneBotAdapter"]):

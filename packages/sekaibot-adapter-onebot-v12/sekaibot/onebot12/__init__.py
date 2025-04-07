@@ -10,37 +10,36 @@ import sys
 import time
 from collections.abc import Awaitable, Callable
 from functools import partial
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, override
+from typing import Any, ClassVar, override
 
 import aiohttp
 import anyio
-import structlog
 from aiohttp import web
 from anyio.lowlevel import checkpoint
+from pydantic import TypeAdapter
 
 from sekaibot.internal.adapter.utils import WebSocketAdapter
 from sekaibot.internal.message import BuildMessageType
+from sekaibot.log import logger
 from sekaibot.utils import PydanticEncoder
 
 from . import event
 from .config import Config
 from .event import (
-    BotSelf,
     ConnectMetaEvent,
+    Event,
     HeartbeatMetaEvent,
+    MessageEvent,
     MetaEvent,
     OneBotEvent,
+    Reply,
     StatusUpdateMetaEvent,
 )
 from .exceptions import ActionFailed, ApiTimeout, NetworkError
 from .message import OneBotMessage, OneBotMessageSegment
 
-if TYPE_CHECKING:
-    from sekaibot.bot import Bot
-
 __all__ = ["OneBotAdapter"]
 
-logger = structlog.stdlib.get_logger()
 
 EventModels = dict[tuple[str | None, str | None, str | None], type[OneBotEvent]]
 
@@ -65,9 +64,9 @@ def _check_reply(event: MessageEvent) -> None:
     msg_seg = event.message[index]
 
     try:
-        event.reply = type_validate_python(Reply, msg_seg.data)
+        event.reply = TypeAdapter(Reply).validate_python(msg_seg.data)
     except Exception as e:
-        log("WARNING", f"Error when getting message reply info: {e!r}", e)
+        logger.warning(f"Error when getting message reply info: {e!r}", exc_info=e)
         return
 
     # ensure string comparation
@@ -88,10 +87,10 @@ def _check_reply(event: MessageEvent) -> None:
             del event.message[index]
 
     if not event.message:
-        event.message.append(MessageSegment.text(""))
+        event.message.append(OneBotMessageSegment.text(""))
 
 
-def _check_to_me(bot: "Bot", event: MessageEvent) -> None:
+def _check_to_me(event: MessageEvent) -> None:
     """检查消息开头或结尾是否存在 @机器人，去除并赋值 `event.to_me`。
 
     参数:
@@ -103,13 +102,13 @@ def _check_to_me(bot: "Bot", event: MessageEvent) -> None:
 
     # ensure message not empty
     if not event.message:
-        event.message.append(MessageSegment.text(""))
+        event.message.append(OneBotMessageSegment.text(""))
 
     if event.detail_type == "private":
         event.to_me = True
     else:
 
-        def _is_mention_me_seg(segment: MessageSegment) -> bool:
+        def _is_mention_me_seg(segment: OneBotMessageSegment) -> bool:
             return (
                 segment.type == "mention"
                 and str(segment.data.get("user_id", "")) == event.self.user_id
@@ -147,31 +146,7 @@ def _check_to_me(bot: "Bot", event: MessageEvent) -> None:
                 del event.message[i:]
 
         if not event.message:
-            event.message.append(MessageSegment.text(""))
-
-
-def _check_nickname(bot: "Bot", event: MessageEvent) -> None:
-    """检查消息开头是否存在昵称，去除并赋值 `event.to_me`。
-
-    参数:
-        bot: Bot 对象
-        event: MessageEvent 对象
-    """
-    first_msg_seg = event.message[0]
-    if first_msg_seg.type != "text":
-        return
-
-    nicknames = {re.escape(n) for n in bot.config.nickname}
-    if not nicknames:
-        return
-
-    # check if the user is calling me with my nickname
-    nickname_regex = "|".join(nicknames)
-    first_text = first_msg_seg.data["text"]
-    if m := re.search(rf"^({nickname_regex})([\s,，]*|$)", first_text, re.IGNORECASE):
-        log("DEBUG", f"User is calling me {m[1]}")
-        event.to_me = True
-        first_msg_seg.data["text"] = first_text[m.end() :]
+            event.message.append(OneBotMessageSegment.text(""))
 
 
 class OneBotAdapter(WebSocketAdapter[OneBotEvent, Config]):
@@ -181,6 +156,9 @@ class OneBotAdapter(WebSocketAdapter[OneBotEvent, Config]):
     Config = Config
 
     event_models: ClassVar[EventModels] = DEFAULT_EVENT_MODELS
+
+    self_id: str = None
+    platform: str = "onebot"
 
     _api_response: dict[str, Any]
     _api_response_cond: anyio.Condition
@@ -299,6 +277,9 @@ class OneBotAdapter(WebSocketAdapter[OneBotEvent, Config]):
         Args:
             msg: 接收到的信息。
         """
+        self.self_id = msg.get("self_id")
+        self.platform = msg.get("platform", "onebot")
+
         post_type = msg.get("post_type")
         if post_type is None:
             event_class = self.get_event_model(None, None, None)
@@ -327,9 +308,12 @@ class OneBotAdapter(WebSocketAdapter[OneBotEvent, Config]):
                 assert isinstance(onebot_event, StatusUpdateMetaEvent)
                 logger.info("OneBot status update", status=onebot_event.status)
         else:
+            if isinstance(onebot_event, MessageEvent):
+                _check_reply(onebot_event)
+                _check_to_me(onebot_event)
             await self.handle_event(onebot_event)
 
-    async def _call_api(self, api: str, bot_self: BotSelf, **params: Any) -> Any:
+    async def _call_api(self, api: str, **params: Any) -> Any:
         """调用 OneBot API，协程会等待直到获得 API 响应。
 
         Args:
@@ -355,7 +339,10 @@ class OneBotAdapter(WebSocketAdapter[OneBotEvent, Config]):
                         "action": api,
                         "params": params,
                         "echo": api_echo,
-                        "self": bot_self.model_dump(),
+                        "self": {
+                            "platform": self.platform,
+                            "self_id": self.self_id,
+                        },
                     },
                     cls=PydanticEncoder,
                 )
@@ -386,33 +373,37 @@ class OneBotAdapter(WebSocketAdapter[OneBotEvent, Config]):
 
     async def send(
         self,
-        message_: BuildMessageType[OneBotMessageSegment],
-        message_type: Literal["private", "group"] | str,  # noqa: PYI051
-        id_: str,
+        onebot_event: Event,
+        message: BuildMessageType[OneBotMessageSegment],
+        at_sender: bool = False,
+        reply_message: bool = False,
+        **params: Any,
     ) -> Any:
-        """发送消息，调用 `send_message` API 发送消息。
+        """默认回复消息处理函数。"""
+        event_dict = onebot_event.model_dump()
 
-        Args:
-            message_: 消息内容，可以是 `str`, `Mapping`, `Iterable[Mapping]`,
-                `OneBotMessageSegment`, `OneBotMessage`。
-                将使用 `OneBotMessage` 进行封装。
-            message_type: 消息类型。
-                可以为 "private", "group" 或扩展的类型，和消息事件的 `detail_type` 字段对应。
-            id_: 发送对象的 ID， QQ 号码或者群号码。
+        params.setdefault("detail_type", event_dict["detail_type"])
 
-        Returns:
-            API 响应。
+        if "user_id" in event_dict:  # copy the user_id to the API params if exists
+            params.setdefault("user_id", event_dict["user_id"])
+        else:
+            at_sender = False  # if no user_id, force disable at_sender
 
-        Raises:
-            TypeError: message_type 不是 "private" 或 "group"。
-            ...: 同 `call_api()` 方法。
-        """
-        if message_type == "private":
-            return await self.send_message(
-                detail_type=message_type, user_id=id_, message=OneBotMessage(message_)
-            )
-        if message_type == "group":
-            return await self.send_message(
-                detail_type=message_type, group_id=id_, message=OneBotMessage(message_)
-            )
-        raise TypeError('message_type must be "private" or "group"')
+        if "group_id" in event_dict:  # copy the group_id to the API params if exists
+            params.setdefault("group_id", event_dict["group_id"])
+
+        if (
+            "guild_id" in event_dict and "channel_id" in event_dict
+        ):  # copy the guild_id to the API params if exists
+            params.setdefault("guild_id", event_dict["guild_id"])
+            params.setdefault("channel_id", event_dict["channel_id"])
+
+        full_message = OneBotMessage()  # create a new message with at sender segment
+        if reply_message and "message_id" in event_dict:
+            full_message += OneBotMessageSegment.reply(event_dict["message_id"])
+        if at_sender and params["detail_type"] != "private":
+            full_message += OneBotMessageSegment.mention(params["user_id"]) + " "
+        full_message += message
+        params.setdefault("message", full_message)
+
+        return await self._call_api(**params)
