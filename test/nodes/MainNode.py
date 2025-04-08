@@ -1,56 +1,31 @@
 # from typing import Any
 
-from sekaibot import ConfigModel, Event, Node
-from sekaibot.plugins.scheduler import SchedulerArg
+from typing import Any
 
-
-class ConfigA(ConfigModel):
-    __config_name__ = "a"
-    a: str = None
-
-
-class ConfigB(ConfigModel):
-    __config_name__ = "b"
-    a: str = None
-
-
-# from sekaibot.rule import rule_at_me
-class BEvent(Event):
-    type: str = "a_event"
-    adapter: str = "test_adapter"
-
-
-class _BNode(Node[Event, dict | str, ConfigB]):
-    def main(self):
-        print(self.name, self.node_state, self.event.get_event_name(), self.config.a)
+from sekaibot import Event, Node
+from sekaibot.adapters.onebot12 import OneBotAdapter
 
 
 def a(event: Event):
     print(event.get_event_name())
 
 
-class HelloWorldNode(Node[Event | BEvent, dict, ConfigA]):
-    # if_startswith = StartsWith.Checker("Hello, World", True)
-    # param = StartsWith.Param()
-
+class HelloWorldNode(
+    Node[
+        Event[OneBotAdapter],
+        dict,
+        Any
+    ]
+):
     """Hello, World! 示例节点。"""
-
-    # a_func = Import(a)
-
-    # B: _BNode = Depends()
 
     priority = 0
 
     async def handle(self):
-        # print("HelloWorldNode", self._name, self.config.a)
-        # self.node_state["async"] = True
-        # self.B.Config = ConfigA
-        # self.B.main()
-        # await self.a_func()
         return None
 
 
-class HelloWorldNode1(Node):
+'''class HelloWorldNode1(Node):
     """Hello, World! 示例节点。"""
 
     scheduler = SchedulerArg()
@@ -95,4 +70,4 @@ class HelloWorldNode1_1(Node):
         return None
 
     async def rule(self):
-        return True
+        return True'''

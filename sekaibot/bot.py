@@ -14,7 +14,13 @@ import yaml
 from exceptiongroup import catch
 from pydantic import ValidationError, create_model  # pyright: ignore[reportUnknownVariableType]
 
-from sekaibot.config import ConfigModel, MainConfig, NodeConfig, PluginConfig
+from sekaibot.config import (
+    AdapterConfig,
+    ConfigModel,
+    MainConfig,
+    NodeConfig,
+    PluginConfig,
+)
 from sekaibot.dependencies import solve_dependencies
 from sekaibot.exceptions import LoadModuleError, SkipException
 from sekaibot.internal.adapter import Adapter
@@ -237,7 +243,9 @@ class Bot:
 
         try:
             for _adapter in self.adapters:
-                await self._run_adapter_hooks(self._adapter_startup_hooks, _adapter, "AdapterStartupHooks")
+                await self._run_adapter_hooks(
+                    self._adapter_startup_hooks, _adapter, "AdapterStartupHooks"
+                )
                 try:
                     await _adapter.startup()
                 except Exception:
@@ -250,14 +258,18 @@ class Bot:
 
             async with anyio.create_task_group() as tg:
                 for _adapter in self.adapters:
-                    await self._run_adapter_hooks(self._adapter_run_hooks, _adapter, "AdapterRunHooks")
+                    await self._run_adapter_hooks(
+                        self._adapter_run_hooks, _adapter, "AdapterRunHooks"
+                    )
                     tg.start_soon(_adapter.safe_run)
 
             await self._should_exit.wait()
 
         finally:
             for _adapter in self.adapters:
-                await self._run_adapter_hooks(self._adapter_shutdown_hooks, _adapter, "AdapterShutdownHooks")
+                await self._run_adapter_hooks(
+                    self._adapter_shutdown_hooks, _adapter, "AdapterShutdownHooks"
+                )
                 await _adapter.shutdown()
 
             await self.manager.shutdown()
@@ -319,6 +331,7 @@ class Bot:
             "Config",
             node=update_config(self.nodes, "NodeConfig", NodeConfig),
             plugin=update_config(list(self.plugin_dict.values()), "PluginConfig", PluginConfig),
+            adapter=update_config(self.adapters, "AdapterConfig", AdapterConfig),
             __base__=MainConfig,
         )(**self._raw_config_dict)
 

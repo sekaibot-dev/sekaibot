@@ -35,7 +35,7 @@ class NodeManager:
 
     _condition: anyio.Condition
     _cancel_event: anyio.Event
-    _current_event: Event[Any][Any] | None
+    _current_event: Event[Any] | None
 
     _event_send_stream: MemoryObjectSendStream[EventHandleOption]  # pyright: ignore[reportUninitializedInstanceVariable]
     _event_receive_stream: MemoryObjectReceiveStream[EventHandleOption]  # pyright: ignore[reportUninitializedInstanceVariable]

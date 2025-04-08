@@ -24,6 +24,7 @@ from importlib.machinery import ModuleSpec, PathFinder
 from inspect import get_annotations
 from types import ModuleType
 from typing import (
+    TYPE_CHECKING,
     Any,
     ClassVar,
     Literal,
@@ -40,10 +41,12 @@ from pydantic import BaseModel
 from typing_extensions import ParamSpec
 
 from sekaibot.config import ConfigModel
-from sekaibot.internal.adapter import Adapter
-from sekaibot.internal.event import Event
 from sekaibot.log import logger
 from sekaibot.typing import EventT
+
+if TYPE_CHECKING:
+    from sekaibot.internal.adapter import Adapter
+    from sekaibot.internal.event import Event
 
 __all__ = [
     "ModulePathFinder",
