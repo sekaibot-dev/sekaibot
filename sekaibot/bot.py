@@ -14,13 +14,7 @@ import yaml
 from exceptiongroup import catch
 from pydantic import ValidationError, create_model  # pyright: ignore[reportUnknownVariableType]
 
-from sekaibot.config import (
-    AdapterConfig,
-    ConfigModel,
-    MainConfig,
-    NodeConfig,
-    PluginConfig,
-)
+from sekaibot.config import AdapterConfig, ConfigModel, MainConfig, NodeConfig, PluginConfig
 from sekaibot.dependencies import solve_dependencies
 from sekaibot.exceptions import LoadModuleError, SkipException
 from sekaibot.internal.adapter import Adapter
@@ -263,7 +257,7 @@ class Bot:
                     )
                     tg.start_soon(_adapter.safe_run)
 
-            await self._should_exit.wait()
+                tg.start_soon(self.manager.run)
 
         finally:
             for _adapter in self.adapters:

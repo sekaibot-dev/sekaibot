@@ -6,7 +6,7 @@
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Generic, NamedTuple, override
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from sekaibot.typing import AdapterT
 
@@ -32,7 +32,7 @@ class Event(ABC, BaseModel, Generic[AdapterT]):
     if TYPE_CHECKING:
         adapter: AdapterT
     else:
-        adapter: Any
+        adapter: Any = Field(..., exclude=True)
 
     @override
     def __str__(self) -> str:

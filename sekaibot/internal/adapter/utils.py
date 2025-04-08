@@ -256,7 +256,8 @@ class WebSocketAdapter(Adapter[EventT, ConfigT], metaclass=ABCMeta):
         async for msg in self.websocket:
             await checkpoint()
             await self.handle_websocket_msg(msg)
-        logger.warning("WebSocket connection closed!")
+        if not self.bot._should_exit.is_set():
+            logger.warning("WebSocket connection closed!")
 
     @abstractmethod
     async def handle_websocket_msg(self, msg: aiohttp.WSMessage) -> None:

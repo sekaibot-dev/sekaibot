@@ -156,7 +156,7 @@ class Adapter(ABC, Generic[MessageSegmentT, ConfigT]):
 
         if not skip_calling_api:
             try:
-                result = await self._call_api(self, api, **params)
+                result = await self._call_api(api, **params)
             except Exception as e:
                 exception = e
 

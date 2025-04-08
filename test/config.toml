@@ -1,5 +1,6 @@
 [bot]
 # 这里是 KafuBot 自身的配置
+event_queue_size=100
 nodes = []
 node_dirs = ["./test/nodes"]
 adapters = ["sekaibot.adapters.cqhttp"]
@@ -9,7 +10,12 @@ adapters = ["sekaibot.adapters.cqhttp"]
 level = "INFO"
 verbose_exception = true
 
-
+[adapter.cqhttp]
+# 这里是 CQHTTP 适配器的配置
+adapter_type = "reverse-ws"
+host = "127.0.0.1"
+port = 8080
+url = "/cqhttp/ws"
 
 [node.a]
 a = "httpa"

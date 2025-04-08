@@ -382,7 +382,6 @@ class NodeManager:
         stack: AsyncExitStack | None = None,
         dependency_cache: DependencyCacheT | None = None,
     ) -> tuple[PruningException | JumpToException | None, StateT]:
-        logger.info("Event will be handled by node", node=node_class)
 
         _node = await solve_dependencies_in_bot(
             node_class,

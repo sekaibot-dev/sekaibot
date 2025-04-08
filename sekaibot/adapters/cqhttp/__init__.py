@@ -90,7 +90,7 @@ async def _check_reply(adapter: "CQHTTPAdapter", event: MessageEvent) -> None:
         event.message.append(CQHTTPMessageSegment.text(""))
 
 
-def _check_at_me(adapter: "CQHTTPAdapter", event: MessageEvent) -> None:
+async def _check_at_me(adapter: "CQHTTPAdapter", event: MessageEvent) -> None:
     """检查消息开头或结尾是否存在 @机器人，去除并赋值 `event.to_me`。
 
     参数:
@@ -191,6 +191,7 @@ class CQHTTPAdapter(WebSocketAdapter[CQHTTPEvent, Config]):
                 self.websocket.headers.get("Authorization", "")
                 != f"Bearer {self.config.access_token}"
             ):
+                logger.error("WebSocket access token mismatch!")
                 await self.websocket.close()
 
     @override
