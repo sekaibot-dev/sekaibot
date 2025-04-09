@@ -3,7 +3,7 @@
 from typing import Any
 
 from sekaibot import Event, Node
-from sekaibot.adapters.cqhttp import CQHTTPAdapter
+from sekaibot.adapters.cqhttp.event import MessageEvent
 
 
 def a(event: Event):
@@ -12,7 +12,7 @@ def a(event: Event):
 
 class HelloWorldNode(
     Node[
-        Event,
+        MessageEvent,
         dict,
         Any
     ]
@@ -22,7 +22,10 @@ class HelloWorldNode(
     priority = 0
 
     async def handle(self):
-        await self.reply(self.event.get_message())
+        #await self.event.adapter._get_reply(self.event)
+        print(self.event.reply, self.event.is_tome())
+        if self.event.message_type == "private":
+            await self.reply(self.event.get_message())
     
     async def rule(self):
         return self.event.get_user_id() == "2682064633"

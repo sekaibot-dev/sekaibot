@@ -236,7 +236,7 @@ class Node(Generic[EventT, NodeStateT, ConfigT]):
         **kwargs: Any,
     ) -> None:
         """回复消息。"""
-        await self.event.adapter.send(
+        return await self.event.adapter.send(
             self.event,
             message=message,
             **kwargs,

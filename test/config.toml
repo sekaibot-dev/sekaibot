@@ -16,6 +16,7 @@ adapter_type = "reverse-ws"
 host = "127.0.0.1"
 port = 8080
 url = "/cqhttp/ws"
+api_timeout=10
 
 [node.a]
 a = "httpa"

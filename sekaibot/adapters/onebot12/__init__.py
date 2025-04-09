@@ -49,104 +49,6 @@ for _, model in inspect.getmembers(event, inspect.isclass):
         DEFAULT_EVENT_MODELS[model.get_event_type()] = model
 
 
-def _check_reply(event: MessageEvent) -> None:
-    """检查消息中存在的回复，去除并赋值 `event.reply`, `event.to_me`。
-
-    参数:
-        bot: Bot 对象
-        event: MessageEvent 对象
-    """
-    try:
-        index = [x.type == "reply" for x in event.message].index(True)
-    except ValueError:
-        return
-
-    msg_seg = event.message[index]
-
-    try:
-        event.reply = TypeAdapter(Reply).validate_python(msg_seg.data)
-    except Exception as e:
-        logger.warning(f"Error when getting message reply info: {e!r}", exc_info=e)
-        return
-
-    # ensure string comparation
-    if str(event.reply.user_id) == str(event.self.user_id):
-        event.to_me = True
-    del event.message[index]
-
-    if (
-        len(event.message) > index
-        and event.message[index].type == "mention"
-        and event.message[index].data.get("user_id") == str(event.reply.user_id)
-    ):
-        del event.message[index]
-
-    if len(event.message) > index and event.message[index].type == "text":
-        event.message[index].data["text"] = event.message[index].data["text"].lstrip()
-        if not event.message[index].data["text"]:
-            del event.message[index]
-
-    if not event.message:
-        event.message.append(OneBotMessageSegment.text(""))
-
-
-def _check_to_me(event: MessageEvent) -> None:
-    """检查消息开头或结尾是否存在 @机器人，去除并赋值 `event.to_me`。
-
-    参数:
-        bot: Bot 对象
-        event: MessageEvent 对象
-    """
-    if not isinstance(event, MessageEvent):
-        return
-
-    # ensure message not empty
-    if not event.message:
-        event.message.append(OneBotMessageSegment.text(""))
-
-    if event.detail_type == "private":
-        event.to_me = True
-    else:
-
-        def _is_mention_me_seg(segment: OneBotMessageSegment) -> bool:
-            return (
-                segment.type == "mention"
-                and str(segment.data.get("user_id", "")) == event.self.user_id
-            )
-
-        # check the first segment
-        if _is_mention_me_seg(event.message[0]):
-            event.to_me = True
-            event.message.pop(0)
-            if event.message and event.message[0].type == "text":
-                event.message[0].data["text"] = event.message[0].data["text"].lstrip()
-                if not event.message[0].data["text"]:
-                    del event.message[0]
-            if event.message and _is_mention_me_seg(event.message[0]):
-                event.message.pop(0)
-                if event.message and event.message[0].type == "text":
-                    event.message[0].data["text"] = event.message[0].data["text"].lstrip()
-                    if not event.message[0].data["text"]:
-                        del event.message[0]
-
-        if not event.to_me:
-            # check the last segment
-            i = -1
-            last_msg_seg = event.message[i]
-            if (
-                last_msg_seg.type == "text"
-                and not last_msg_seg.data["text"].strip()
-                and len(event.message) >= 2
-            ):
-                i -= 1
-                last_msg_seg = event.message[i]
-
-            if _is_mention_me_seg(last_msg_seg):
-                event.to_me = True
-                del event.message[i:]
-
-        if not event.message:
-            event.message.append(OneBotMessageSegment.text(""))
 
 
 class OneBotAdapter(WebSocketAdapter[OneBotEvent, Config]):
@@ -270,6 +172,104 @@ class OneBotAdapter(WebSocketAdapter[OneBotEvent, Config]):
             or cls.event_models.get((post_type, None, None))
         )
         return event_model or cls.event_models[(None, None, None)]
+    def _get_reply(self, event: MessageEvent) -> None:
+        """检查消息中存在的回复，去除并赋值 `event.reply`, `event.to_me`。
+
+        参数:
+            bot: Bot 对象
+            event: MessageEvent 对象
+        """
+        try:
+            index = [x.type == "reply" for x in event.message].index(True)
+        except ValueError:
+            return
+
+        msg_seg = event.message[index]
+
+        try:
+            event.reply = TypeAdapter(Reply).validate_python(msg_seg.data)
+        except Exception as e:
+            logger.warning(f"Error when getting message reply info: {e!r}", exc_info=e)
+            return
+
+        # ensure string comparation
+        if str(event.reply.user_id) == str(event.self.user_id):
+            event.to_me = True
+        del event.message[index]
+
+        if (
+            len(event.message) > index
+            and event.message[index].type == "mention"
+            and event.message[index].data.get("user_id") == str(event.reply.user_id)
+        ):
+            del event.message[index]
+
+        if len(event.message) > index and event.message[index].type == "text":
+            event.message[index].data["text"] = event.message[index].data["text"].lstrip()
+            if not event.message[index].data["text"]:
+                del event.message[index]
+
+        if not event.message:
+            event.message.append(OneBotMessageSegment.text(""))
+
+
+    def _get_to_me(self, event: MessageEvent) -> None:
+        """检查消息开头或结尾是否存在 @机器人，去除并赋值 `event.to_me`。
+
+        参数:
+            bot: Bot 对象
+            event: MessageEvent 对象
+        """
+        if not isinstance(event, MessageEvent):
+            return
+
+        # ensure message not empty
+        if not event.message:
+            event.message.append(OneBotMessageSegment.text(""))
+
+        if event.detail_type == "private":
+            event.to_me = True
+        else:
+
+            def _is_mention_me_seg(segment: OneBotMessageSegment) -> bool:
+                return (
+                    segment.type == "mention"
+                    and str(segment.data.get("user_id", "")) == event.self.user_id
+                )
+
+            # check the first segment
+            if _is_mention_me_seg(event.message[0]):
+                event.to_me = True
+                event.message.pop(0)
+                if event.message and event.message[0].type == "text":
+                    event.message[0].data["text"] = event.message[0].data["text"].lstrip()
+                    if not event.message[0].data["text"]:
+                        del event.message[0]
+                if event.message and _is_mention_me_seg(event.message[0]):
+                    event.message.pop(0)
+                    if event.message and event.message[0].type == "text":
+                        event.message[0].data["text"] = event.message[0].data["text"].lstrip()
+                        if not event.message[0].data["text"]:
+                            del event.message[0]
+
+            if not event.to_me:
+                # check the last segment
+                i = -1
+                last_msg_seg = event.message[i]
+                if (
+                    last_msg_seg.type == "text"
+                    and not last_msg_seg.data["text"].strip()
+                    and len(event.message) >= 2
+                ):
+                    i -= 1
+                    last_msg_seg = event.message[i]
+
+                if _is_mention_me_seg(last_msg_seg):
+                    event.to_me = True
+                    del event.message[i:]
+
+            if not event.message:
+                event.message.append(OneBotMessageSegment.text(""))
 
     async def handle_onebot_event(self, msg: dict[str, Any]) -> None:
         """处理 OneBot 事件。
@@ -308,11 +308,14 @@ class OneBotAdapter(WebSocketAdapter[OneBotEvent, Config]):
                 assert isinstance(onebot_event, StatusUpdateMetaEvent)
                 logger.info("OneBot status update", status=onebot_event.status)
         else:
-            if isinstance(onebot_event, MessageEvent):
-                _check_reply(onebot_event)
-                _check_to_me(onebot_event)
             await self.handle_event(onebot_event)
+    @override
+    async def event_preprocess(self, cqhttp_event: OneBotEvent):
+        if isinstance(cqhttp_event, MessageEvent):
+            await self._get_reply(cqhttp_event)
+            await self._get_to_me(cqhttp_event)
 
+    @override
     async def _call_api(self, api: str, **params: Any) -> Any:
         """调用 OneBot API，协程会等待直到获得 API 响应。
 
@@ -371,6 +374,7 @@ class OneBotAdapter(WebSocketAdapter[OneBotEvent, Config]):
 
         raise ApiTimeout
 
+    @override
     async def send(
         self,
         event: Event,

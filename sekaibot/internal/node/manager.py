@@ -35,7 +35,7 @@ class NodeManager:
 
     _condition: anyio.Condition
     _cancel_event: anyio.Event
-    _current_event: Event[Any] | None
+    _current_event: Event[Adapter[Any, Any]] | None
 
     _event_send_stream: MemoryObjectSendStream[EventHandleOption]  # pyright: ignore[reportUninitializedInstanceVariable]
     _event_receive_stream: MemoryObjectReceiveStream[EventHandleOption]  # pyright: ignore[reportUninitializedInstanceVariable]
@@ -272,6 +272,7 @@ class NodeManager:
     async def _handle_event_receive(self) -> None:
         async with anyio.create_task_group() as tg, self._event_receive_stream:
             async for current_event, handle_get in self._event_receive_stream:
+                await current_event.adapter.event_preprocess(current_event)
                 if handle_get:
                     await tg.start(self._handle_event_wait_condition)
                     async with self._condition:
@@ -356,7 +357,7 @@ class NodeManager:
             if not await node_class._check_perm(
                 self.bot, current_event, self.bot.global_state, stack, dependency_cache
             ):
-                logger.info("permission conditions not met", node=node_class.__name__)
+                logger.debug("permission conditions not met", node=node_class.__name__)
                 return False
         except Exception:
             logger.exception("permission check failed", node=node_class.__name__)
@@ -366,7 +367,7 @@ class NodeManager:
             if not await node_class._check_rule(
                 self.bot, current_event, state, self.bot.global_state, stack, dependency_cache
             ):
-                logger.info("rule conditions not met", node=node_class.__name__)
+                logger.debug("rule conditions not met", node=node_class.__name__)
                 return False
         except Exception:
             logger.exception("rule check failed", node=node_class.__name__)
@@ -482,7 +483,7 @@ class NodeManager:
                 with catch(
                     {
                         StopException: _handle_stop_propagation,
-                        Exception: handle_exception("Error when checking Node.", node=node_class),
+                        Exception: handle_exception("Error when running Node.", node=node_class),
                     }
                 ):
                     exc, _state = await self._check_and_run_node(

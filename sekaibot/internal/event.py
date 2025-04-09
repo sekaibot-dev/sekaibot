@@ -36,7 +36,7 @@ class Event(ABC, BaseModel, Generic[AdapterT]):
 
     @override
     def __str__(self) -> str:
-        return f"Event<{self.type}>: {self.get_event_description()}"
+        return f"Event<{self.type}>\n{self.get_event_description()}"
 
     @override
     def __repr__(self) -> str:
@@ -60,7 +60,7 @@ class Event(ABC, BaseModel, Generic[AdapterT]):
         异常:
             NoLogException: 希望 NoneBot 隐藏该事件日志
         """
-        return f"Event<{self.type}>: {self.get_event_description()}"
+        return str(self)
 
     @abstractmethod
     def get_user_id(self) -> str | None:
@@ -100,5 +100,5 @@ class EventHandleOption(NamedTuple):
         handle_get: 当前事件是否可以被 get 方法捕获。
     """
 
-    event: Event[Any]
+    event: Event[AdapterT]
     handle_get: bool

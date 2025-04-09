@@ -199,6 +199,12 @@ class Adapter(ABC, Generic[MessageSegmentT, ConfigT]):
         return result
 
     @abstractmethod
+    async def event_preprocess(self, event: Event[Self]) -> None:
+        """
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     async def send(
         self,
         event: Event[Self],

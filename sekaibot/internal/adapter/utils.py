@@ -255,7 +255,8 @@ class WebSocketAdapter(Adapter[EventT, ConfigT], metaclass=ABCMeta):
             return
         async for msg in self.websocket:
             await checkpoint()
-            await self.handle_websocket_msg(msg)
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(self.handle_websocket_msg, msg)
         if not self.bot._should_exit.is_set():
             logger.warning("WebSocket connection closed!")
 

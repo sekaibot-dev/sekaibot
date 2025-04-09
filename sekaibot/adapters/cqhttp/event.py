@@ -201,7 +201,7 @@ class PrivateMessageEvent(MessageEvent):
 
     @override
     def get_event_description(self) -> str:
-        return f"Message {self.message_id} from {self.user_id} " + repr(self.original_message)
+        return f">> MsgID: [{self.message_id}] | User: [{self.user_id}]\n>> " + repr(self.original_message)
 
 
 class GroupMessageEvent(MessageEvent):
@@ -215,7 +215,7 @@ class GroupMessageEvent(MessageEvent):
 
     @override
     def get_event_description(self) -> str:
-        return f"Message {self.message_id} from {self.user_id}@[群:{self.group_id}] " + repr(
+        return f">> MsgID:[{self.message_id}] | User:[{self.user_id}] | Group:[{self.group_id}]\n>> " + repr(
             self.original_message
         )
 
