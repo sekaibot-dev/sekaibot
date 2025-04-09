@@ -10,6 +10,7 @@ import aiohttp
 import anyio
 from aiohttp import web
 from anyio.lowlevel import checkpoint
+from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 
 from sekaibot.internal.adapter import Adapter
 from sekaibot.log import logger
@@ -124,23 +125,33 @@ class WebSocketServerAdapter(Adapter[EventT, ConfigT], metaclass=ABCMeta):
     port: int
     url: str
 
+    _msg_send_stream: MemoryObjectSendStream[aiohttp.WSMessage]
+    _msg_receive_stream: MemoryObjectReceiveStream[aiohttp.WSMessage]
+
     @override
     async def startup(self) -> None:
         self.app = web.Application()
         self.app.add_routes([web.get(self.url, self.handle_response)])
+        self._msg_send_stream, self._msg_receive_stream = anyio.create_memory_object_stream(
+            max_buffer_size=float("inf")
+        )
 
     @override
     async def run(self) -> None:
-        self.runner = web.AppRunner(self.app)
-        await self.runner.setup()
-        self.site = web.TCPSite(self.runner, self.host, self.port)
-        await self.site.start()
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(self._handle_msg_receive)
+            self.runner = web.AppRunner(self.app)
+            await self.runner.setup()
+            self.site = web.TCPSite(self.runner, self.host, self.port)
+            await self.site.start()
 
     @override
     async def shutdown(self) -> None:
         await self.websocket.close()
         await self.site.stop()
         await self.runner.cleanup()
+        await self._msg_send_stream.aclose()
+        await self._msg_receive_stream.aclose()
 
     async def handle_response(self, request: web.Request) -> web.WebSocketResponse:
         """处理 WebSocket。"""
@@ -151,11 +162,16 @@ class WebSocketServerAdapter(Adapter[EventT, ConfigT], metaclass=ABCMeta):
         msg: aiohttp.WSMessage
         async for msg in ws:
             if msg.type == aiohttp.WSMsgType.TEXT:
-                await self.handle_ws_response(msg)
+                await self._msg_send_stream.send(msg)
             elif msg.type == aiohttp.WSMsgType.ERROR:
                 break
 
         return ws
+
+    async def _handle_msg_receive(self) -> None:
+        async with anyio.create_task_group() as tg, self._msg_receive_stream:
+            async for msg in self._msg_receive_stream:
+                tg.start_soon(self.handle_ws_response, msg)
 
     @abstractmethod
     async def handle_ws_response(self, msg: aiohttp.WSMessage) -> None:
@@ -185,6 +201,9 @@ class WebSocketAdapter(Adapter[EventT, ConfigT], metaclass=ABCMeta):
     url: str
     reconnect_interval: int = 3
 
+    _msg_send_stream: MemoryObjectSendStream[aiohttp.WSMessage]
+    _msg_receive_stream: MemoryObjectReceiveStream[aiohttp.WSMessage]
+
     @override
     async def startup(self) -> None:
         """初始化适配器。"""
@@ -198,22 +217,27 @@ class WebSocketAdapter(Adapter[EventT, ConfigT], metaclass=ABCMeta):
                 'Config "adapter_type" must be "ws" or "reverse-ws"',
                 adapter_type=self.adapter_type,
             )
+        self._msg_send_stream, self._msg_receive_stream = anyio.create_memory_object_stream(
+            max_buffer_size=float("inf")
+        )
 
     @override
     async def run(self) -> None:
-        if self.adapter_type == "ws":
-            while True:
-                try:
-                    await self.websocket_connect()
-                except aiohttp.ClientError:
-                    logger.exception("WebSocket connection error")
-                await anyio.sleep(self.reconnect_interval)
-        elif self.adapter_type == "reverse-ws":
-            assert self.app is not None
-            self.runner = web.AppRunner(self.app)
-            await self.runner.setup()
-            self.site = web.TCPSite(self.runner, self.host, self.port)
-            await self.site.start()
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(self._handle_msg_receive)
+            if self.adapter_type == "ws":
+                while True:
+                    try:
+                        await self.websocket_connect()
+                    except aiohttp.ClientError:
+                        logger.exception("WebSocket connection error")
+                    await anyio.sleep(self.reconnect_interval)
+            elif self.adapter_type == "reverse-ws":
+                assert self.app is not None
+                self.runner = web.AppRunner(self.app)
+                await self.runner.setup()
+                self.site = web.TCPSite(self.runner, self.host, self.port)
+                await self.site.start()
 
     @override
     async def shutdown(self) -> None:
@@ -227,6 +251,8 @@ class WebSocketAdapter(Adapter[EventT, ConfigT], metaclass=ABCMeta):
                 await self.site.stop()
             if self.runner is not None:
                 await self.runner.cleanup()
+        await self._msg_send_stream.aclose()
+        await self._msg_receive_stream.aclose()
 
     async def handle_reverse_ws_response(self, request: web.Request) -> web.WebSocketResponse:
         """处理 aiohttp WebSocket 服务器的接收。"""
@@ -255,10 +281,14 @@ class WebSocketAdapter(Adapter[EventT, ConfigT], metaclass=ABCMeta):
             return
         async for msg in self.websocket:
             await checkpoint()
-            async with anyio.create_task_group() as tg:
-                tg.start_soon(self.handle_websocket_msg, msg)
+            await self._msg_send_stream.send(msg)
         if not self.bot._should_exit.is_set():
             logger.warning("WebSocket connection closed!")
+
+    async def _handle_msg_receive(self) -> None:
+        async with anyio.create_task_group() as tg, self._msg_receive_stream:
+            async for msg in self._msg_receive_stream:
+                tg.start_soon(self.handle_websocket_msg, msg)
 
     @abstractmethod
     async def handle_websocket_msg(self, msg: aiohttp.WSMessage) -> None:

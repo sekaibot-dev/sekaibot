@@ -49,8 +49,6 @@ for _, model in inspect.getmembers(event, inspect.isclass):
         DEFAULT_EVENT_MODELS[model.get_event_type()] = model
 
 
-
-
 class OneBotAdapter(WebSocketAdapter[OneBotEvent, Config]):
     """OneBot 协议适配器。"""
 
@@ -172,6 +170,7 @@ class OneBotAdapter(WebSocketAdapter[OneBotEvent, Config]):
             or cls.event_models.get((post_type, None, None))
         )
         return event_model or cls.event_models[(None, None, None)]
+
     def _get_reply(self, event: MessageEvent) -> None:
         """检查消息中存在的回复，去除并赋值 `event.reply`, `event.to_me`。
 
@@ -211,7 +210,6 @@ class OneBotAdapter(WebSocketAdapter[OneBotEvent, Config]):
 
         if not event.message:
             event.message.append(OneBotMessageSegment.text(""))
-
 
     def _get_to_me(self, event: MessageEvent) -> None:
         """检查消息开头或结尾是否存在 @机器人，去除并赋值 `event.to_me`。
@@ -308,12 +306,10 @@ class OneBotAdapter(WebSocketAdapter[OneBotEvent, Config]):
                 assert isinstance(onebot_event, StatusUpdateMetaEvent)
                 logger.info("OneBot status update", status=onebot_event.status)
         else:
+            if isinstance(onebot_event, MessageEvent):
+                await self._get_reply(onebot_event)
+                await self._get_to_me(onebot_event)
             await self.handle_event(onebot_event)
-    @override
-    async def event_preprocess(self, cqhttp_event: OneBotEvent):
-        if isinstance(cqhttp_event, MessageEvent):
-            await self._get_reply(cqhttp_event)
-            await self._get_to_me(cqhttp_event)
 
     @override
     async def _call_api(self, api: str, **params: Any) -> Any:

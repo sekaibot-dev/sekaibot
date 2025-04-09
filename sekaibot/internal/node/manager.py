@@ -272,7 +272,6 @@ class NodeManager:
     async def _handle_event_receive(self) -> None:
         async with anyio.create_task_group() as tg, self._event_receive_stream:
             async for current_event, handle_get in self._event_receive_stream:
-                await current_event.adapter.event_preprocess(current_event)
                 if handle_get:
                     await tg.start(self._handle_event_wait_condition)
                     async with self._condition:
@@ -541,6 +540,8 @@ class NodeManager:
         """关闭并清理事件。"""
         self._cancel_event.set()
         self.bot.node_state.clear()
+        await self._event_send_stream.aclose()
+        await self._event_receive_stream.aclose()
 
     @overload
     async def get(

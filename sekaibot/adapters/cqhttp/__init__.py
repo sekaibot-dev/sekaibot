@@ -309,13 +309,12 @@ class CQHTTPAdapter(WebSocketAdapter[CQHTTPEvent, Config]):
                         status=cqhttp_event.status.model_dump(),
                     )
         else:
+            if isinstance(cqhttp_event, MessageEvent):
+                await self._get_reply(cqhttp_event)
+                await self._get_at_me(cqhttp_event)
             await self.handle_event(cqhttp_event)
 
-    @override
-    async def event_preprocess(self, cqhttp_event: CQHTTPEvent):
-        if isinstance(cqhttp_event, MessageEvent):
-            await self._get_reply(cqhttp_event)
-            await self._get_at_me(cqhttp_event)
+
 
     @override
     async def _call_api(self, api: str, **params: Any) -> Any:
