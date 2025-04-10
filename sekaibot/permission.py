@@ -5,6 +5,8 @@ from typing import Any
 from sekaibot.internal.permission import Permission, PermissionChecker
 from sekaibot.internal.permission.utils import SuperUserPermission, UserPermission
 
+__all__ = ["User", "SuperUser", "SuperUserPermission", "UserPermission"]
+
 
 class User(PermissionChecker[tuple[tuple[str, ...], Permission]]):
     """匹配当前事件属于指定会话。

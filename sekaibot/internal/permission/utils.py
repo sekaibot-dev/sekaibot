@@ -55,9 +55,7 @@ class UserPermission:
         except Exception:
             return False
         return bool(
-            session in self.users
-            if self.strict
-            else filter(lambda x: x in session, self.users)
+            (session in self.users if self.strict else filter(lambda x: x in session, self.users))
             and (self.perm is None or await self.perm(bot, event, global_state))
         )
 
