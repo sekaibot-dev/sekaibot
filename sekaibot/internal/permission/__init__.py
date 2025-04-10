@@ -1,19 +1,24 @@
+from abc import ABC
+from collections.abc import Awaitable, Callable
 from contextlib import AsyncExitStack
 from itertools import chain
 from typing import (
     TYPE_CHECKING,
+    Generic,
     NoReturn,
     Self,
+    TypeVar,
     Union,
+    final,
 )
 
 import anyio
 from exceptiongroup import BaseExceptionGroup, catch
 
-from sekaibot.dependencies import Dependency, solve_dependencies_in_bot
+from sekaibot.dependencies import Dependency, Depends, solve_dependencies_in_bot
 from sekaibot.exceptions import SkipException
 from sekaibot.internal.event import Event
-from sekaibot.typing import DependencyCacheT, GlobalStateT, PermissionCheckerT
+from sekaibot.typing import DependencyCacheT, GlobalStateT, NodeT, PermissionCheckerT
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
@@ -134,71 +139,50 @@ class Permission:
         raise RuntimeError("Subtraction operation between permissions is not allowed.")
 
 
-class User:
-    """检查当前事件是否属于指定会话。
+ArgsT = TypeVar("T")
 
-    参数:
-        users: 会话 ID 元组
-        perm: 需同时满足的权限
-    """
 
-    __slots__ = ("perm", "users")
+class PermissionChecker(ABC, Generic[ArgsT]):
+    """抽象基类，匹配消息规则。"""
 
-    def __init__(self, users: tuple[str, ...], perm: Permission | None = None) -> None:
-        self.users = users
-        self.perm = perm
+    __perm__: Permission
 
-    def __repr__(self) -> str:
-        return (
-            f"User(users={self.users}" + (f", permission={self.perm})" if self.perm else "") + ")"
+    def __init__(self, perm: Permission) -> None:
+        self.__perm__ = perm
+
+    def __call__(self, cls: NodeT) -> NodeT:
+        """将检查器添加到 Node 类中。"""
+        if not isinstance(cls, type):
+            raise TypeError(f"class should be NodeT, not `{type(cls)}`.")
+        if not hasattr(cls, "__node_perm__"):
+            cls.___node_perm__ = Permission()
+        cls.___node_perm__ += self.__perm__
+        return cls
+
+    @classmethod
+    def _rule_check(cls, *args: ArgsT, **kwargs) -> Callable[..., Awaitable[bool]]:
+        """默认实现检查方法，子类可覆盖。"""
+        return cls(*args, **kwargs)._check
+
+    @classmethod
+    def Checker(cls, *args: ArgsT, **kwargs) -> bool:
+        """默认实现检查方法的依赖注入方法，子类可覆盖。"""
+        return Depends(cls._rule_check(*args, **kwargs), use_cache=False)
+
+    @final
+    async def _check(
+        self,
+        bot: "Bot",
+        event: Event,
+        global_state: GlobalStateT,
+        stack: AsyncExitStack | None = None,
+        dependency_cache: DependencyCacheT | None = None,
+    ) -> bool:
+        """直接运行检查器并获取结果。"""
+        return await self.__perm__(
+            bot,
+            event,
+            global_state,
+            stack,
+            dependency_cache,
         )
-
-    async def __call__(self, bot: "Bot", event: Event) -> bool:
-        try:
-            session = event.get_session_id()
-        except Exception:
-            return False
-        return bool(session in self.users and (self.perm is None or await self.perm(bot, event)))
-
-    @classmethod
-    def _clean_permission(cls, perm: Permission) -> Permission | None:
-        if len(perm.checkers) == 1 and isinstance(user_perm := next(iter(perm.checkers)).call, cls):
-            return user_perm.perm
-        return perm
-
-    @classmethod
-    def from_event(cls, event: Event, perm: Permission | None = None) -> Self:
-        """从事件中获取会话 ID。
-
-        如果 `perm` 中仅有 `User` 类型的权限检查函数，则会去除原有的会话 ID 限制。
-
-        参数:
-            event: Event 对象
-            perm: 需同时满足的权限
-        """
-        return cls((event.get_session_id(),), perm=perm and cls._clean_permission(perm))
-
-    @classmethod
-    def from_permission(cls, *users: str, perm: Permission | None = None) -> Self:
-        """指定会话与权限。
-
-        如果 `perm` 中仅有 `User` 类型的权限检查函数，则会去除原有的会话 ID 限制。
-
-        参数:
-            users: 会话白名单
-            perm: 需同时满足的权限
-        """
-        return cls(users, perm=perm and cls._clean_permission(perm))
-
-
-def USER(*users: str, perm: Permission | None = None):
-    """匹配当前事件属于指定会话。
-
-    如果 `perm` 中仅有 `User` 类型的权限检查函数，则会去除原有检查函数的会话 ID 限制。
-
-    参数:
-        user: 会话白名单
-        perm: 需要同时满足的权限
-    """
-
-    return Permission(User.from_permission(*users, perm=perm))

@@ -164,8 +164,8 @@ class RuleChecker(ABC, Generic[ArgsT, ParamT]):
         if not isinstance(cls, type):
             raise TypeError(f"class should be NodeT, not `{type(cls)}`.")
         if not hasattr(cls, "__node_rule__"):
-            cls.__node_rule__ = Rule()
-        cls.__node_rule__ += self.__rule__
+            cls.___node_perm__ = Rule()
+        cls.___node_perm__ += self.__rule__
         return cls
 
     @classmethod
@@ -189,7 +189,14 @@ class RuleChecker(ABC, Generic[ArgsT, ParamT]):
         dependency_cache: DependencyCacheT | None = None,
     ) -> bool:
         """直接运行检查器并获取结果。"""
-        return await self.__rule__(bot, event, state, global_state, stack, dependency_cache)
+        return await self.__rule__(
+            bot,
+            event,
+            state,
+            global_state,
+            stack,
+            dependency_cache,
+        )
 
     @classmethod
     @abstractmethod
@@ -213,8 +220,8 @@ class MatchRule(RuleChecker[str | bool, str]):
         if self.checker is None:
             raise NotImplementedError("Subclasses of MatchRule must provide a checker.")
 
-        super().__init__(Rule(self.checker(*msgs, ignorecase)))
+        super().__init__(Rule(self.checker(*msgs, ignorecase=ignorecase)))
 
     @classmethod
     def Checker(cls, *msgs: str | tuple[str, ...], ignorecase: bool = False):
-        return super().Checker(*msgs, ignorecase)
+        return super().Checker(*msgs, ignorecase=ignorecase)

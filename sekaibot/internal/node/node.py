@@ -82,7 +82,7 @@ class Node(Generic[EventT, NodeStateT, ConfigT]):
     block: ClassVar[bool] = False
     load: ClassVar[bool] = True
 
-    __node_rule__: ClassVar[Rule] = Rule()
+    ___node_perm__: ClassVar[Rule] = Rule()
     __node_perm__: ClassVar[Permission] = Permission()
 
     __node_load_type__: ClassVar[NodeLoadType]
@@ -406,7 +406,7 @@ class Node(Generic[EventT, NodeStateT, ConfigT]):
         """
         检查节点规则。
         """
-        return await cls.__node_rule__(
+        return await cls.___node_perm__(
             bot=bot,
             event=event,
             state=state,

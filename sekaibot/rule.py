@@ -87,14 +87,12 @@ class Keywords(RuleChecker[tuple[list[str], bool], tuple[str, ...]]):
         keywords: 指定关键字元组
     """
 
-    __slots__ = ("__rule__",)
-
     def __init__(self, *keywords: str, ignorecase: bool = False) -> None:
-        super().__init__(KeywordsRule(*keywords, ignorecase))
+        super().__init__(KeywordsRule(*keywords, ignorecase=ignorecase))
 
     @classmethod
     def Checker(cls, *keywords: str, ignorecase: bool = False):
-        return super().Checker(*keywords, ignorecase)
+        return super().Checker(*keywords, ignorecase=ignorecase)
 
     @classmethod
     def _param(cls, state: StateT):
@@ -122,8 +120,6 @@ class Regex(RuleChecker[tuple[str, re.RegexFlag], re.Match[str]]):
     :::
     """
 
-    __slots__ = ("__rule__",)
-
     def __init__(self, regex: str, flags: int | re.RegexFlag = 0) -> Rule:
         super().__init__(RegexRule(regex, flags))
 
@@ -143,8 +139,6 @@ class CountTrigger(RuleChecker[tuple[str, Dependency[bool], int, int, int, int],
         name: 计数器名称
         times: 计数器次数
     """
-
-    __slots__ = ("__rule__",)
 
     def __init__(
         self,
@@ -178,8 +172,6 @@ class CountTrigger(RuleChecker[tuple[str, Dependency[bool], int, int, int, int],
 
 class ToMe(RuleChecker[Any, bool]):
     """匹配与机器人有关的事件。"""
-
-    __slots__ = ("__rule__",)
 
     def __init__(self) -> None:
         super().__init__(ToMeRule())
