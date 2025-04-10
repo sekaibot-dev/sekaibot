@@ -8,14 +8,7 @@ import os
 import os.path
 import traceback
 from abc import ABC
-from collections.abc import (
-    AsyncGenerator,
-    Awaitable,
-    Callable,
-    Coroutine,
-    Generator,
-    Sequence,
-)
+from collections.abc import AsyncGenerator, Awaitable, Callable, Coroutine, Generator, Sequence
 from contextlib import AbstractContextManager as ContextManager
 from contextlib import asynccontextmanager
 from functools import partial
@@ -23,17 +16,7 @@ from importlib.abc import MetaPathFinder
 from importlib.machinery import ModuleSpec, PathFinder
 from inspect import get_annotations
 from types import ModuleType
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    ClassVar,
-    Literal,
-    TypeGuard,
-    TypeVar,
-    Union,
-    cast,
-    overload,
-)
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, TypeGuard, TypeVar, Union, cast, overload
 
 import anyio
 from exceptiongroup import BaseExceptionGroup, catch
@@ -297,7 +280,7 @@ async def run_coro_with_catch(
 ) -> _T | _R | None:
     """运行协程并当遇到指定异常时返回指定值。
 
-    参数:
+    Args:
         coro: 要运行的协程
         exc: 要捕获的异常
         return_on_err: 当发生异常时返回的值

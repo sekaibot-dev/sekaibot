@@ -104,7 +104,7 @@ class Adapter(ABC, Generic[MessageSegmentT, ConfigT]):
     async def call_api(self, api: str, **params: Any) -> Any:
         """调用机器人 API 接口，可以通过该函数或直接通过 bot 属性进行调用
 
-        参数:
+        Args:
             api: API 名称
             params: API 数据
 
@@ -207,7 +207,7 @@ class Adapter(ABC, Generic[MessageSegmentT, ConfigT]):
     ) -> Any:
         """调用机器人基础发送消息接口
 
-        参数:
+        Args:
             event: 上报事件
             message: 要发送的消息
             kwargs: 任意额外参数
@@ -218,7 +218,7 @@ class Adapter(ABC, Generic[MessageSegmentT, ConfigT]):
     def calling_api_hook(cls, func: CallingAPIHook) -> CallingAPIHook:
         """调用 api 预处理。
 
-        钩子函数参数:
+        钩子函数Args:
 
         - bot: 当前 bot 对象
         - api: 调用的 api 名称
@@ -231,7 +231,7 @@ class Adapter(ABC, Generic[MessageSegmentT, ConfigT]):
     def called_api_hook(cls, func: CalledAPIHook) -> CalledAPIHook:
         """调用 api 后处理。
 
-        钩子函数参数:
+        钩子函数Args:
 
         - bot: 当前 bot 对象
         - exception: 调用 api 时发生的错误

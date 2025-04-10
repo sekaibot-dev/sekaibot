@@ -4,6 +4,7 @@ event_queue_size=100
 nodes = []
 node_dirs = ["./test/nodes"]
 adapters = ["sekaibot.adapters.cqhttp"]
+superusers = ["2682064633", "3613158872", "2641460187", "group_596488203", "group_895484096"]
 
 [bot.log]
 # 这里是 KafuBot 自身日志相关的配置

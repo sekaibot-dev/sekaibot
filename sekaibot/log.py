@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 def configure_logging(level="INFO", verbose_exception=True):
     """配置 structlog 日志系统。
 
-    参数:
+    Args:
         level (str | int): 日志级别，如 `"INFO"`, `"DEBUG"` 或 数值 `10, 20, 30...`
         verbose_exception (bool): 是否记录详细异常信息。
     """

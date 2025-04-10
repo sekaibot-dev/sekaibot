@@ -345,29 +345,6 @@ class CountTriggerRule:
         return False
 
 
-class SingleSessionRule:
-    """检查事件是否为单会话。
-
-    Args:
-        session_id: 会话 ID
-    """
-
-    __slots__ = ("session_id",)
-
-    def __repr__(self) -> str:
-        return "SingleSession"
-
-    def __eq__(self, other: object) -> bool:
-        return isinstance(other, SingleSessionRule)
-
-    def __hash__(self) -> int:
-        return hash("SingleSession")
-
-    async def __call__(self, event: Event, state: StateT, global_state: GlobalStateT) -> bool:
-        if event.get_session_id() == self.session_id:
-            return True
-        return False
-
 
 class TrieRule:
     prefix: CharTrie = CharTrie()

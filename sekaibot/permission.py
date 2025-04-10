@@ -11,7 +11,7 @@ class User(PermissionChecker[tuple[tuple[str, ...], Permission]]):
 
     如果 `perm` 中仅有 `User` 类型的权限检查函数，则会去除原有检查函数的会话 ID 限制。
 
-    参数:
+    Args:
         user: 会话白名单
         perm: 需要同时满足的权限
     """

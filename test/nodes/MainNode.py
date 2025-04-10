@@ -7,6 +7,7 @@ from _randsent import generate_sentence
 
 from sekaibot import Event, Node
 from sekaibot.adapters.cqhttp.event import MessageEvent
+from sekaibot.permission import SuperUser
 from sekaibot.rule import Keywords
 
 
@@ -15,19 +16,16 @@ def a(event: Event):
 
 
 @Keywords("蒸", "松泽", "松", "lrc", "超")
+@SuperUser()
 class AutoReply(Node[MessageEvent, dict, Any]):
     """Hello, World! 示例节点。"""
 
     priority = 1
-    # zb = Keywords.Param()
+    zb = Keywords.Param()
 
     async def handle(self):
-        # await self.event.adapter._get_reply(self.event)
-        print(self.event.reply, self.event.is_tome())
-        if key := self.state.get("_keyword", ()):
-            keyw = key[0]
-        else:
-            keyw = "蒸"
+        
+        keyw = self.zb[0] if self.zb else "蒸"
 
         await self.reply(
             random.choice(
@@ -64,28 +62,15 @@ class AutoReply(Node[MessageEvent, dict, Any]):
             )
         )
 
-    async def rule(self):
-        return (
-            self.event.get_user_id() == "2682064633"
-            or self.event.get_user_id() == "3613158872"
-            or getattr(self.event, "group_id", None) == 596488203
-        )
-
 
 @Keywords("/唐")
+@SuperUser()
 class RandomSens(Node[MessageEvent, dict, Any]):
     priority = 0
     block = True
 
     async def handle(self):
         await self.reply(generate_sentence())
-
-    async def rule(self):
-        return (
-            self.event.get_user_id() == "2682064633"
-            or self.event.get_user_id() == "3613158872"
-            or getattr(self.event, "group_id", None) == 596488203
-        )
 
 
 '''class HelloWorldNode1(Node):

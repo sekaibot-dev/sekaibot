@@ -64,7 +64,7 @@ class NodeManager:
     ) -> bool:
         """运行事件预处理。
 
-        参数:
+        Args:
             current_event: Event[Any] 对象
             state: 会话状态
             stack: 异步上下文栈
@@ -116,7 +116,7 @@ class NodeManager:
     ) -> None:
         """运行事件后处理。
 
-        参数:
+        Args:
             current_event: Event[Any] 对象
             state: 会话状态
             stack: 异步上下文栈
@@ -153,7 +153,7 @@ class NodeManager:
     ) -> bool:
         """运行事件响应器运行前处理。
 
-        参数:
+        Args:
             bot: Bot 对象
             current_event: Event[Any] 对象
             state: 会话状态
@@ -209,7 +209,7 @@ class NodeManager:
     ) -> None:
         """运行事件响应器运行后处理。
 
-        参数:
+        Args:
             bot: Bot 对象
             current_event: Event[Any] 对象
             matcher: 事件响应器
@@ -340,7 +340,7 @@ class NodeManager:
 
         请注意，过时的事件响应器将被**销毁**。对于未过时的事件响应器，将会一次检查其响应类型、权限和规则。
 
-        参数:
+        Args:
             Matcher: 要检查的事件响应器
             bot: Bot 对象
             current_event: Event[Any] 对象
@@ -382,7 +382,6 @@ class NodeManager:
         stack: AsyncExitStack | None = None,
         dependency_cache: DependencyCacheT | None = None,
     ) -> tuple[PruningException | JumpToException | None, StateT]:
-
         _node = await solve_dependencies_in_bot(
             node_class,
             bot=self.bot,

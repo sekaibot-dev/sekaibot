@@ -36,7 +36,7 @@ class Event(ABC, BaseModel, Generic[AdapterT]):
 
     @override
     def __str__(self) -> str:
-        return f"Event<{self.type}>\n{self.get_event_description()}"
+        return f"Event<{self.get_event_name()}>\n{self.get_event_description()}"
 
     @override
     def __repr__(self) -> str:

@@ -174,7 +174,7 @@ class OneBotAdapter(WebSocketAdapter[OneBotEvent, Config]):
     def _get_reply(self, event: MessageEvent) -> None:
         """检查消息中存在的回复，去除并赋值 `event.reply`, `event.to_me`。
 
-        参数:
+        Args:
             bot: Bot 对象
             event: MessageEvent 对象
         """
@@ -214,7 +214,7 @@ class OneBotAdapter(WebSocketAdapter[OneBotEvent, Config]):
     def _get_to_me(self, event: MessageEvent) -> None:
         """检查消息开头或结尾是否存在 @机器人，去除并赋值 `event.to_me`。
 
-        参数:
+        Args:
             bot: Bot 对象
             event: MessageEvent 对象
         """

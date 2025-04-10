@@ -2,15 +2,7 @@ from abc import ABC
 from collections.abc import Awaitable, Callable
 from contextlib import AsyncExitStack
 from itertools import chain
-from typing import (
-    TYPE_CHECKING,
-    Generic,
-    NoReturn,
-    Self,
-    TypeVar,
-    Union,
-    final,
-)
+from typing import TYPE_CHECKING, Generic, NoReturn, Self, TypeVar, Union, final
 
 import anyio
 from exceptiongroup import BaseExceptionGroup, catch
@@ -29,7 +21,7 @@ class Permission:
 
     当事件传递时，在 {ref}`nonebot.matcher.Matcher` 运行前进行检查。
 
-    参数:
+    Args:
         checkers: PermissionChecker
 
     用法:
@@ -155,8 +147,8 @@ class PermissionChecker(ABC, Generic[ArgsT]):
         if not isinstance(cls, type):
             raise TypeError(f"class should be NodeT, not `{type(cls)}`.")
         if not hasattr(cls, "__node_perm__"):
-            cls.___node_perm__ = Permission()
-        cls.___node_perm__ += self.__perm__
+            cls.__node_perm__ = Permission()
+        cls.__node_perm__ += self.__perm__
         return cls
 
     @classmethod

@@ -19,13 +19,7 @@ from exceptiongroup import BaseExceptionGroup, catch
 from sekaibot.dependencies import Dependency, Depends, solve_dependencies_in_bot
 from sekaibot.exceptions import SkipException
 from sekaibot.internal.event import Event
-from sekaibot.typing import (
-    DependencyCacheT,
-    GlobalStateT,
-    NodeT,
-    RuleCheckerT,
-    StateT,
-)
+from sekaibot.typing import DependencyCacheT, GlobalStateT, NodeT, RuleCheckerT, StateT
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
@@ -38,7 +32,7 @@ class Rule:
 
     当事件传递时，在 {ref}`nonebot.matcher.Matcher` 运行前进行检查。
 
-    参数:
+    Args:
         *checkers: RuleChecker
 
     用法:
@@ -164,8 +158,8 @@ class RuleChecker(ABC, Generic[ArgsT, ParamT]):
         if not isinstance(cls, type):
             raise TypeError(f"class should be NodeT, not `{type(cls)}`.")
         if not hasattr(cls, "__node_rule__"):
-            cls.___node_perm__ = Rule()
-        cls.___node_perm__ += self.__rule__
+            cls.__node_rule__ = Rule()
+        cls.__node_rule__ += self.__rule__
         return cls
 
     @classmethod
@@ -198,9 +192,9 @@ class RuleChecker(ABC, Generic[ArgsT, ParamT]):
             dependency_cache,
         )
 
-    @classmethod
+    @staticmethod
     @abstractmethod
-    def _param(cls) -> ParamT:
+    def _param() -> ParamT:
         """获取规则参数，子类需实现。"""
         pass
 

@@ -82,7 +82,10 @@ async def _execute_callable(
     func_args = {}
 
     for param_name, param in func_params.items():
-        param_type = get_type_hints(dependent).get(param_name)
+        try:
+            param_type = get_type_hints(dependent).get(param_name)
+        except NameError:
+            param_type = param.annotation
         if isinstance(param.default, InnerDepends):
             func_args[param_name] = await solve_dependencies(
                 param.default.dependency,

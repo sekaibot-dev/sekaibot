@@ -171,7 +171,7 @@ class CQHTTPAdapter(WebSocketAdapter[CQHTTPEvent, Config]):
     async def _get_reply(self, event: MessageEvent) -> None:
         """检查消息中存在的回复，去除并赋值 `event.reply`, `event.to_me`。
 
-        参数:
+        Args:
             bot: Bot 对象
             event: MessageEvent 对象
         """
@@ -212,7 +212,7 @@ class CQHTTPAdapter(WebSocketAdapter[CQHTTPEvent, Config]):
     async def _get_at_me(self, event: MessageEvent) -> None:
         """检查消息开头或结尾是否存在 @机器人，去除并赋值 `event.to_me`。
 
-        参数:
+        Args:
             bot: Bot 对象
             event: MessageEvent 对象
         """
@@ -313,8 +313,6 @@ class CQHTTPAdapter(WebSocketAdapter[CQHTTPEvent, Config]):
                 await self._get_reply(cqhttp_event)
                 await self._get_at_me(cqhttp_event)
             await self.handle_event(cqhttp_event)
-
-
 
     @override
     async def _call_api(self, api: str, **params: Any) -> Any:

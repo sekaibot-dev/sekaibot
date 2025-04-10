@@ -185,7 +185,9 @@ class MessageEvent(CQHTTPEvent):
 
     @override
     def get_session_id(self) -> str:
-        return str(self.user_id)
+        if hasattr(self, "group_id") and self.group_id:
+            return f"group_{self.group_id}_{self.get_user_id()}"
+        return self.get_user_id()
 
     @override
     def is_tome(self) -> bool:
@@ -201,7 +203,9 @@ class PrivateMessageEvent(MessageEvent):
 
     @override
     def get_event_description(self) -> str:
-        return f">> MsgID:[{self.message_id}] | User:[{self.user_id}]\n>> " + repr(self.original_message)
+        return f">> MsgID:[{self.message_id}] | User:[{self.user_id}]\n>> " + repr(
+            self.original_message
+        )
 
 
 class GroupMessageEvent(MessageEvent):
@@ -215,13 +219,10 @@ class GroupMessageEvent(MessageEvent):
 
     @override
     def get_event_description(self) -> str:
-        return f">> MsgID:[{self.message_id}] | User:[{self.user_id}] | Group:[{self.group_id}]\n>> " + repr(
-            self.original_message
+        return (
+            f">> MsgID:[{self.message_id}] | User:[{self.user_id}] | Group:[{self.group_id}]\n>> "
+            + repr(self.original_message)
         )
-
-    @override
-    def get_session_id(self) -> str:
-        return f"group_{self.group_id}_{self.user_id}"
 
 
 class NoticeEvent(CQHTTPEvent):
@@ -236,6 +237,12 @@ class NoticeEvent(CQHTTPEvent):
         sub_type = getattr(self, "sub_type", None)
         return f"{self.post_type}.{self.notice_type}" + (f".{sub_type}" if sub_type else "")
 
+    @override
+    def get_session_id(self) -> str:
+        if hasattr(self, "group_id") and self.group_id:
+            return f"group_{self.group_id}_{self.get_user_id()}"
+        return self.get_user_id()
+
 
 class GroupUploadNoticeEvent(NoticeEvent):
     """群文件上传"""
@@ -249,10 +256,6 @@ class GroupUploadNoticeEvent(NoticeEvent):
     @override
     def get_user_id(self) -> str:
         return str(self.user_id)
-
-    @override
-    def get_session_id(self) -> str:
-        return f"group_{self.group_id}_{self.user_id}"
 
 
 class GroupAdminNoticeEvent(NoticeEvent):
@@ -271,10 +274,6 @@ class GroupAdminNoticeEvent(NoticeEvent):
     @override
     def get_user_id(self) -> str:
         return str(self.user_id)
-
-    @override
-    def get_session_id(self) -> str:
-        return f"group_{self.group_id}_{self.user_id}"
 
 
 class GroupDecreaseNoticeEvent(NoticeEvent):
@@ -295,10 +294,6 @@ class GroupDecreaseNoticeEvent(NoticeEvent):
     def get_user_id(self) -> str:
         return str(self.user_id)
 
-    @override
-    def get_session_id(self) -> str:
-        return f"group_{self.group_id}_{self.user_id}"
-
 
 class GroupIncreaseNoticeEvent(NoticeEvent):
     """群成员增加"""
@@ -317,10 +312,6 @@ class GroupIncreaseNoticeEvent(NoticeEvent):
     @override
     def get_user_id(self) -> str:
         return str(self.user_id)
-
-    @override
-    def get_session_id(self) -> str:
-        return f"group_{self.group_id}_{self.user_id}"
 
 
 class GroupBanNoticeEvent(NoticeEvent):
@@ -342,10 +333,6 @@ class GroupBanNoticeEvent(NoticeEvent):
     def get_user_id(self) -> str:
         return str(self.user_id)
 
-    @override
-    def get_session_id(self) -> str:
-        return f"group_{self.group_id}_{self.user_id}"
-
 
 class FriendAddNoticeEvent(NoticeEvent):
     """好友添加"""
@@ -356,10 +343,6 @@ class FriendAddNoticeEvent(NoticeEvent):
 
     @override
     def get_user_id(self) -> str:
-        return str(self.user_id)
-
-    @override
-    def get_session_id(self) -> str:
         return str(self.user_id)
 
 
@@ -381,10 +364,6 @@ class GroupRecallNoticeEvent(NoticeEvent):
     def get_user_id(self) -> str:
         return str(self.user_id)
 
-    @override
-    def get_session_id(self) -> str:
-        return f"group_{self.group_id}_{self.user_id}"
-
 
 class FriendRecallNoticeEvent(NoticeEvent):
     """好友消息撤回"""
@@ -396,10 +375,6 @@ class FriendRecallNoticeEvent(NoticeEvent):
 
     @override
     def get_user_id(self) -> str:
-        return str(self.user_id)
-
-    @override
-    def get_session_id(self) -> str:
         return str(self.user_id)
 
 
@@ -418,7 +393,9 @@ class NotifyEvent(NoticeEvent):
 
     @override
     def get_session_id(self) -> str:
-        return f"group_{self.group_id}_{self.user_id}"
+        if hasattr(self, "group_id") and self.group_id:
+            return f"group_{self.group_id}_{self.get_user_id()}"
+        return self.get_user_id()
 
 
 class PokeNotifyEvent(NotifyEvent):
@@ -432,12 +409,6 @@ class PokeNotifyEvent(NotifyEvent):
     @override
     def is_tome(self) -> bool:
         return self.target_id == self.self_id
-
-    @override
-    def get_session_id(self) -> str:
-        if not self.group_id:
-            return str(self.user_id)
-        return super().get_session_id()
 
 
 class GroupLuckyKingNotifyEvent(NotifyEvent):
@@ -455,10 +426,6 @@ class GroupLuckyKingNotifyEvent(NotifyEvent):
     @override
     def get_user_id(self) -> str:
         return str(self.target_id)
-
-    @override
-    def get_session_id(self) -> str:
-        return f"group_{self.group_id}_{self.target_id}"
 
 
 class GroupHonorNotifyEvent(NotifyEvent):
@@ -485,6 +452,12 @@ class RequestEvent(CQHTTPEvent):
     def get_event_name(self) -> str:
         sub_type = getattr(self, "sub_type", None)
         return f"{self.post_type}.{self.request_type}" + (f".{sub_type}" if sub_type else "")
+
+    @override
+    def get_session_id(self) -> str:
+        if hasattr(self, "group_id") and self.group_id:
+            return f"group_{self.group_id}_{self.get_user_id()}"
+        return self.get_user_id()
 
     async def approve(self) -> dict[str, Any]:
         """同意请求。
@@ -514,10 +487,6 @@ class FriendRequestEvent(RequestEvent):
 
     @override
     def get_user_id(self) -> str:
-        return str(self.user_id)
-
-    @override
-    def get_session_id(self) -> str:
         return str(self.user_id)
 
     @override
@@ -553,10 +522,6 @@ class GroupRequestEvent(RequestEvent):
     @override
     def get_user_id(self) -> str:
         return str(self.user_id)
-
-    @override
-    def get_session_id(self) -> str:
-        return f"group_{self.group_id}_{self.user_id}"
 
     @override
     async def approve(self) -> dict[str, Any]:

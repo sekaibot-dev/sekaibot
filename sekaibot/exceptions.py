@@ -30,7 +30,7 @@ class MockApiException(EventException):
     """指示 NoneBot 阻止本次 API 调用或修改本次调用返回值，并返回自定义内容。
     可由 api hook 抛出。
 
-    参数:
+    Args:
         result: 返回的内容
     """
 
@@ -39,8 +39,8 @@ class MockApiException(EventException):
 
     def __repr__(self) -> str:
         return f"MockApiException(result={self.result!r})"
-    
-    
+
+
 class SkipException(EventException):
     """跳过当前节点继续当前事件传播。"""
 

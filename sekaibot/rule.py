@@ -38,52 +38,52 @@ __all__ = [
 class StartsWith(MatchRule):
     """匹配消息纯文本开头。
 
-    参数:
+    Args:
         msg: 指定消息开头字符串元组
         ignorecase: 是否忽略大小写
     """
 
     checker = StartswithRule
 
-    @classmethod
-    def _param(cls, state: StateT):
+    @staticmethod
+    def _param(state: StateT):
         return state[STARTSWITH_KEY]
 
 
 class EndsWith(MatchRule):
     """匹配消息纯文本结尾。
 
-    参数:
+    Args:
         msg: 指定消息开头字符串元组
         ignorecase: 是否忽略大小写
     """
 
     checker = EndswithRule
 
-    @classmethod
-    def _param(cls, state: StateT):
+    @staticmethod
+    def _param(state: StateT):
         return state[ENDSWITH_KEY]
 
 
 class FullMatch(MatchRule):
     """完全匹配消息。
 
-    参数:
+    Args:
         msg: 指定消息全匹配字符串元组
         ignorecase: 是否忽略大小写
     """
 
     checker = FullmatchRule
 
-    @classmethod
-    def _param(cls, state: StateT):
+    @staticmethod
+    def _param(state: StateT):
         return state[FULLMATCH_KEY]
 
 
-class Keywords(RuleChecker[tuple[list[str], bool], tuple[str, ...]]):
+class Keywords(RuleChecker[tuple[tuple[str, ...], bool], tuple[str, ...]]):
     """匹配消息纯文本关键词。
 
-    参数:
+    Args:
         keywords: 指定关键字元组
     """
 
@@ -94,8 +94,8 @@ class Keywords(RuleChecker[tuple[list[str], bool], tuple[str, ...]]):
     def Checker(cls, *keywords: str, ignorecase: bool = False):
         return super().Checker(*keywords, ignorecase=ignorecase)
 
-    @classmethod
-    def _param(cls, state: StateT):
+    @staticmethod
+    def _param(state: StateT):
         return state[KEYWORD_KEY]
 
 
@@ -106,7 +106,7 @@ class Regex(RuleChecker[tuple[str, re.RegexFlag], re.Match[str]]):
     通过 {ref}`nonebot.params.RegexGroup` 获取匹配成功的 group 元组，
     通过 {ref}`nonebot.params.RegexDict` 获取匹配成功的 group 字典。
 
-    参数:
+    Args:
         regex: 正则表达式
         flags: 正则表达式标记
 
@@ -127,15 +127,15 @@ class Regex(RuleChecker[tuple[str, re.RegexFlag], re.Match[str]]):
     def Checker(cls, regex: str, flags: int | re.RegexFlag = 0):
         return super().Checker(regex, flags)
 
-    @classmethod
-    def _param(cls, state: StateT):
+    @staticmethod
+    def _param(state: StateT):
         return state[REGEX_MATCHED]
 
 
 class CountTrigger(RuleChecker[tuple[str, Dependency[bool], int, int, int, int], dict]):
     """计数器规则。
 
-    参数:
+    Args:
         name: 计数器名称
         times: 计数器次数
     """
@@ -165,8 +165,8 @@ class CountTrigger(RuleChecker[tuple[str, Dependency[bool], int, int, int, int],
     ):
         return super().Checker(name, name, func, min_trigger, time_window, count_window, max_size)
 
-    @classmethod
-    def _param(cls, state: StateT):
+    @staticmethod
+    def _param(state: StateT):
         return state[COUNTER_KEY]
 
 
@@ -180,6 +180,6 @@ class ToMe(RuleChecker[Any, bool]):
     def Checker(cls):
         return super().Checker()
 
-    @classmethod
-    def _param(cls, event: Event) -> bool:
+    @staticmethod
+    def _param(event: Event) -> bool:
         return event.is_tome()

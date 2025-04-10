@@ -694,7 +694,7 @@ class Bot:
     def require_plugin(cls, plugin_class: type[Plugin], *, reload: bool = False):
         """声明依赖插件。
 
-        参数:
+        Args:
             name: 插件模块名或插件标识符，仅在已声明插件的情况下可使用标识符。
 
         异常:
