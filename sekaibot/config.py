@@ -3,6 +3,8 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, DirectoryPath, Field
 
+from sekaibot.internal.rule.config import RuleConfig
+
 __all__ = [
     "ConfigModel",
     "LogConfig",
@@ -188,4 +190,5 @@ class MainConfig(ConfigModel):
     node: NodeConfig = NodeConfig()
     adapter: AdapterConfig = AdapterConfig()
     plugin: PluginConfig = PluginConfig()
+    rule: RuleConfig = RuleConfig()
     # database: DatabaseConfig = DatabaseConfig()

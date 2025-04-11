@@ -8,6 +8,7 @@ from typing import Any
 
 __all__ = [
     "EventException",
+    "ParserExit",
     "SkipException",
     "StopException",
     "RejectException",
@@ -16,6 +17,21 @@ __all__ = [
     "AdapterException",
     "LoadModuleError",
 ]
+
+
+class ParserExit(BaseException):
+    """{ref}`nonebot.rule.shell_command` 处理消息失败时返回的异常。"""
+
+    def __init__(self, status: int = 0, message: str | None = None) -> None:
+        self.status = status
+        self.message = message
+
+    def __repr__(self) -> str:
+        return (
+            f"ParserExit(status={self.status}"
+            + (f", message={self.message!r}" if self.message else "")
+            + ")"
+        )
 
 
 class EventException(BaseException):

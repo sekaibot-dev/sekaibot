@@ -2,15 +2,24 @@ import re
 from typing import Any
 
 from sekaibot.consts import (
+    CMD_ARG_KEY,
+    CMD_KEY,
+    CMD_START_KEY,
+    CMD_WHITESPACE_KEY,
     COUNTER_KEY,
     ENDSWITH_KEY,
     FULLMATCH_KEY,
     KEYWORD_KEY,
+    PREFIX_KEY,
+    RAW_CMD_KEY,
     REGEX_MATCHED,
+    SHELL_ARGS,
+    SHELL_ARGV,
     STARTSWITH_KEY,
 )
-from sekaibot.dependencies import Dependency
+from sekaibot.dependencies import Dependency, Depends
 from sekaibot.internal.event import Event
+from sekaibot.internal.message import Message, MessageSegment
 from sekaibot.internal.rule import MatchRule, Rule, RuleChecker
 from sekaibot.internal.rule.utils import (  # CommandRule,; ShellCommandRule,
     CountTriggerRule,
@@ -168,6 +177,69 @@ class CountTrigger(RuleChecker[tuple[str, Dependency[bool], int, int, int, int],
     @staticmethod
     def _param(state: StateT):
         return state[COUNTER_KEY]
+
+
+def _command(state: StateT) -> Message:
+    return state[PREFIX_KEY][CMD_KEY]
+
+
+def Command() -> tuple[str, ...]:
+    """消息命令元组"""
+    return Depends(_command)
+
+
+def _raw_command(state: StateT) -> Message:
+    return state[PREFIX_KEY][RAW_CMD_KEY]
+
+
+def RawCommand() -> str:
+    """消息命令文本"""
+    return Depends(_raw_command)
+
+
+def _command_arg(state: StateT) -> Message:
+    return state[PREFIX_KEY][CMD_ARG_KEY]
+
+
+def CommandArg() -> Any:
+    """消息命令参数"""
+    return Depends(_command_arg)
+
+
+def _command_start(state: StateT) -> str:
+    return state[PREFIX_KEY][CMD_START_KEY]
+
+
+def CommandStart() -> str:
+    """消息命令开头"""
+    return Depends(_command_start)
+
+
+def _command_whitespace(state: StateT) -> str:
+    return state[PREFIX_KEY][CMD_WHITESPACE_KEY]
+
+
+def CommandWhitespace() -> str:
+    """消息命令与参数之间的空白"""
+    return Depends(_command_whitespace)
+
+
+def _shell_command_args(state: StateT) -> Any:
+    return state[SHELL_ARGS]  # Namespace or ParserExit
+
+
+def ShellCommandArgs() -> Any:
+    """shell 命令解析后的参数字典"""
+    return Depends(_shell_command_args, use_cache=False)
+
+
+def _shell_command_argv(state: StateT) -> list[str | MessageSegment]:
+    return state[SHELL_ARGV]
+
+
+def ShellCommandArgv() -> Any:
+    """shell 命令原始参数列表"""
+    return Depends(_shell_command_argv, use_cache=False)
 
 
 class ToMe(RuleChecker[Any, bool]):

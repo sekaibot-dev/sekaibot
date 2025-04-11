@@ -12,8 +12,8 @@ class SchedulerConfig(ConfigModel):
         apscheduler_config: APScheduler 配置。
     """
 
-    __config_name__:str = "scheduler"
-    
+    __config_name__: str = "scheduler"
+
     apscheduler_autostart: bool = True
     apscheduler_log_level: int = 30
     apscheduler_config: dict = Field(

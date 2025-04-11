@@ -12,9 +12,23 @@ FrontMatter:
 """
 
 import re
+import shlex
+from argparse import Action, ArgumentError
+from argparse import ArgumentParser as ArgParser
 from argparse import Namespace as Namespace
+from collections.abc import Sequence
 from contextvars import ContextVar
-from typing import TYPE_CHECKING, NamedTuple, Self, TypedDict, TypeVar
+from gettext import gettext
+from itertools import chain, product
+from typing import (
+    IO,
+    TYPE_CHECKING,
+    NamedTuple,
+    TypedDict,
+    TypeVar,
+    cast,
+    overload,
+)
 
 from pygtrie import CharTrie
 
@@ -34,9 +48,12 @@ from sekaibot.consts import (
     PREFIX_KEY,
     RAW_CMD_KEY,
     REGEX_MATCHED,
+    SHELL_ARGS,
+    SHELL_ARGV,
     STARTSWITH_KEY,
 )
 from sekaibot.dependencies import Dependency, solve_dependencies_in_bot
+from sekaibot.exceptions import ParserExit
 from sekaibot.internal.event import Event
 from sekaibot.internal.message import Message, MessageSegment
 from sekaibot.log import logger
@@ -345,19 +362,19 @@ class CountTriggerRule:
         return False
 
 
-
 class TrieRule:
-    prefix: CharTrie = CharTrie()
+    prefix: CharTrie
 
-    @classmethod
-    def add_prefix(cls: Self, prefix: str, value: TRIE_VALUE) -> None:
-        if prefix in cls.prefix:
+    def __init__(self):
+        self.prefix = CharTrie()
+
+    def add_prefix(self, prefix: str, value: TRIE_VALUE) -> None:
+        if prefix in self.prefix:
             logger.warning(f'Duplicated prefix rule "{prefix}"')
             return
-        cls.prefix[prefix] = value
+        self.prefix[prefix] = value
 
-    @classmethod
-    def get_value(cls, bot: "Bot", event: Event, state: StateT) -> CMD_RESULT:
+    def get_value(self, event: Event, state: StateT) -> CMD_RESULT:
         prefix = CMD_RESULT(
             command=None,
             raw_command=None,
@@ -373,7 +390,7 @@ class TrieRule:
         message_seg: MessageSegment = message[0]
         if message_seg.is_text():
             segment_text = str(message_seg).lstrip()
-            if pf := cls.prefix.longest_prefix(segment_text):
+            if pf := self.prefix.longest_prefix(segment_text):
                 value: TRIE_VALUE = pf.value
                 prefix[RAW_CMD_KEY] = pf.key
                 prefix[CMD_START_KEY] = value.command_start
@@ -404,7 +421,6 @@ class TrieRule:
         return prefix
 
 
-'''
 class CommandRule:
     """检查消息是否为指定命令。
 
@@ -413,7 +429,7 @@ class CommandRule:
         force_whitespace: 是否强制命令后必须有指定空白符
     """
 
-    __slots__ = ("cmds", "force_whitespace")
+    __slots__ = ("cmds", "force_whitespace", "char_trie")
 
     def __init__(
         self,
@@ -422,24 +438,52 @@ class CommandRule:
     ):
         self.cmds = tuple(cmds)
         self.force_whitespace = force_whitespace
+        self.char_trie = TrieRule()
+
+        from sekaibot.bot import Bot
+
+        Bot.bot_startup_hook(self._set_prefix)
+
+    def _set_prefix(self, bot: "Bot"):
+        command_start = bot.config.rule.command_start
+        command_sep = bot.config.rule.command_sep
+
+        commands: list[tuple[str, ...]] = []
+        for command in self.cmds:
+            if isinstance(command, str):
+                command = (command,)
+
+            commands.append(command)
+
+            if len(command) == 1:
+                for start in command_start:
+                    self.char_trie.add_prefix(f"{start}{command[0]}", TRIE_VALUE(start, command))
+            else:
+                for start, sep in product(command_start, command_sep):
+                    self.char_trie.add_prefix(
+                        f"{start}{sep.join(command)}", TRIE_VALUE(start, command)
+                    )
 
     def __repr__(self) -> str:
         return f"Command(cmds={self.cmds})"
 
     def __eq__(self, other: object) -> bool:
-        return isinstance(other, CommandRule) and frozenset(self.cmds) == frozenset(
-            other.cmds
-        )
+        return isinstance(other, CommandRule) and frozenset(self.cmds) == frozenset(other.cmds)
 
     def __hash__(self) -> int:
         return hash((frozenset(self.cmds),))
 
     async def __call__(
         self,
-        cmd: tuple[str, ...] | None = Command(),
-        cmd_arg: Message | None = CommandArg(),
-        cmd_whitespace: str | None = CommandWhitespace(),
+        event: Event,
+        state: StateT,
     ) -> bool:
+        self.char_trie.get_value(event, state)
+
+        cmd = state[PREFIX_KEY][CMD_KEY]
+        cmd_arg = state[PREFIX_KEY][CMD_ARG_KEY]
+        cmd_whitespace = state[PREFIX_KEY][CMD_WHITESPACE_KEY]
+
         if cmd not in self.cmds:
             return False
         if self.force_whitespace is None or not cmd_arg:
@@ -449,54 +493,29 @@ class CommandRule:
         return self.force_whitespace == (cmd_whitespace is not None)
 
 
-def command(
-    *cmds: str | tuple[str, ...] | None,
-    force_whitespace: str | bool | None = None,
-) -> Rule:
-    """匹配消息命令。
+"""匹配消息命令。
 
-    根据配置里提供的 {ref}``command_start` <nonebot.config.Config.command_start>`,
-    {ref}``command_sep` <nonebot.config.Config.command_sep>` 判断消息是否为命令。
+根据配置里提供的 {ref}``command_start` <nonebot.config.Config.command_start>`,
+{ref}``command_sep` <nonebot.config.Config.command_sep>` 判断消息是否为命令。
 
-    可以通过 {ref}`nonebot.params.Command` 获取匹配成功的命令（例: `("test",)`），
-    通过 {ref}`nonebot.params.RawCommand` 获取匹配成功的原始命令文本（例: `"/test"`），
-    通过 {ref}`nonebot.params.CommandArg` 获取匹配成功的命令参数。
+可以通过 {ref}`nonebot.params.Command` 获取匹配成功的命令（例: `("test",)`），
+通过 {ref}`nonebot.params.RawCommand` 获取匹配成功的原始命令文本（例: `"/test"`），
+通过 {ref}`nonebot.params.CommandArg` 获取匹配成功的命令参数。
 
-    Args:
-        cmds: 命令文本或命令元组
-        force_whitespace: 是否强制命令后必须有指定空白符
+Args:
+    cmds: 命令文本或命令元组
+    force_whitespace: 是否强制命令后必须有指定空白符
 
-    用法:
-        使用默认 `command_start`, `command_sep` 配置情况下：
+用法:
+    使用默认 `command_start`, `command_sep` 配置情况下：
 
-        命令 `("test",)` 可以匹配: `/test` 开头的消息
-        命令 `("test", "sub")` 可以匹配: `/test.sub` 开头的消息
+    命令 `("test",)` 可以匹配: `/test` 开头的消息
+    命令 `("test", "sub")` 可以匹配: `/test.sub` 开头的消息
 
-    :::tip 提示
-    命令内容与后续消息间无需空格!
-    :::
-    """
-
-    config = get_driver().config
-    command_start = config.command_start
-    command_sep = config.command_sep
-    commands: list[tuple[str, ...]] = []
-    for command in cmds:
-        if isinstance(command, str):
-            command = (command,)
-
-        commands.append(command)
-
-        if len(command) == 1:
-            for start in command_start:
-                TrieRule.add_prefix(f"{start}{command[0]}", TRIE_VALUE(start, command))
-        else:
-            for start, sep in product(command_start, command_sep):
-                TrieRule.add_prefix(
-                    f"{start}{sep.join(command)}", TRIE_VALUE(start, command)
-                )
-
-    return Rule(CommandRule(commands, force_whitespace))
+:::tip 提示
+命令内容与后续消息间无需空格!
+:::
+"""
 
 
 class ArgumentParser(ArgParser):
@@ -524,9 +543,7 @@ class ArgumentParser(ArgParser):
         ) -> tuple[T, list[str | MessageSegment]]: ...
 
         @overload
-        def parse_known_args(
-            self, *, namespace: T
-        ) -> tuple[T, list[str | MessageSegment]]: ...
+        def parse_known_args(self, *, namespace: T) -> tuple[T, list[str | MessageSegment]]: ...
 
         def parse_known_args(  # pyright: ignore[reportIncompatibleMethodOverride]
             self,
@@ -542,9 +559,7 @@ class ArgumentParser(ArgParser):
     ) -> Namespace: ...
 
     @overload
-    def parse_args(
-        self, args: Sequence[str | MessageSegment] | None, namespace: T
-    ) -> T: ...
+    def parse_args(self, args: Sequence[str | MessageSegment] | None, namespace: T) -> T: ...
 
     @overload
     def parse_args(self, *, namespace: T) -> T: ...
@@ -558,14 +573,12 @@ class ArgumentParser(ArgParser):
         if argv:
             msg = gettext("unrecognized arguments: %s")
             self.error(msg % " ".join(map(str, argv)))
-        return cast(Union[Namespace, T], result)
+        return cast(Namespace | T, result)
 
     def _parse_optional(
         self, arg_string: str | MessageSegment
     ) -> tuple[Action | None, str, str | None] | None:
-        return (
-            super()._parse_optional(arg_string) if isinstance(arg_string, str) else None
-        )
+        return super()._parse_optional(arg_string) if isinstance(arg_string, str) else None
 
     def _print_message(self, message: str, file: IO[str] | None = None):  # type: ignore
         if (msg := parser_message.get(None)) is not None:
@@ -587,11 +600,36 @@ class ShellCommandRule:
         parser: 可选参数解析器
     """
 
-    __slots__ = ("cmds", "parser")
+    __slots__ = ("cmds", "parser", "char_trie")
 
     def __init__(self, cmds: list[tuple[str, ...]], parser: ArgumentParser | None):
+        if parser is not None and not isinstance(parser, ArgumentParser):
+            raise TypeError("`parser` must be an instance of nonebot.rule.ArgumentParser")
+
         self.cmds = tuple(cmds)
         self.parser = parser
+        self.char_trie = TrieRule()
+
+        from sekaibot.bot import Bot
+
+        Bot.bot_startup_hook(self._set_prefix)
+
+    def _set_prefix(self, bot: "Bot"):
+        command_start = bot.config.rule.command_start
+        command_sep = bot.config.rule.command_sep
+        commands: list[tuple[str, ...]] = []
+        for command in self.cmds:
+            if isinstance(command, str):
+                command = (command,)
+
+            commands.append(command)
+
+            if len(command) == 1:
+                for start in command_start:
+                    TrieRule.add_prefix(f"{start}{command[0]}", TRIE_VALUE(start, command))
+            else:
+                for start, sep in product(command_start, command_sep):
+                    TrieRule.add_prefix(f"{start}{sep.join(command)}", TRIE_VALUE(start, command))
 
     def __repr__(self) -> str:
         return f"ShellCommand(cmds={self.cmds}, parser={self.parser})"
@@ -608,19 +646,21 @@ class ShellCommandRule:
 
     async def __call__(
         self,
-        state: _NodeStateT,
-        cmd: tuple[str, ...] | None = Command(),
-        msg: Message | None = CommandArg(),
+        event: Event,
+        state: StateT,
     ) -> bool:
+        self.char_trie.get_value(event, state)
+
+        cmd = state[PREFIX_KEY][CMD_KEY]
+        msg = state[PREFIX_KEY][CMD_ARG_KEY]
+
         if cmd not in self.cmds or msg is None:
             return False
 
         try:
             state[SHELL_ARGV] = list(
                 chain.from_iterable(
-                    shlex.split(str(seg))
-                    if cast(MessageSegment, seg).is_text()
-                    else (seg,)
+                    shlex.split(str(seg)) if cast(MessageSegment, seg).is_text() else (seg,)
                     for seg in msg
                 )
             )
@@ -646,73 +686,48 @@ class ShellCommandRule:
         return True
 
 
-def shell_command(
-    *cmds: str | tuple[str, ...] | None, parser: ArgumentParser | None = None
-) -> Rule:
-    """匹配 `shell_like` 形式的消息命令。
 
-    根据配置里提供的 {ref}``command_start` <nonebot.config.Config.command_start>`,
-    {ref}``command_sep` <nonebot.config.Config.command_sep>` 判断消息是否为命令。
+"""匹配 `shell_like` 形式的消息命令。
 
-    可以通过 {ref}`nonebot.params.Command` 获取匹配成功的命令
-    （例: `("test",)`），
-    通过 {ref}`nonebot.params.RawCommand` 获取匹配成功的原始命令文本
-    （例: `"/test"`），
-    通过 {ref}`nonebot.params.ShellCommandArgv` 获取解析前的参数列表
-    （例: `["arg", "-h"]`），
-    通过 {ref}`nonebot.params.ShellCommandArgs` 获取解析后的参数字典
-    （例: `{"arg": "arg", "h": True}`）。
+根据配置里提供的 {ref}``command_start` <nonebot.config.Config.command_start>`,
+{ref}``command_sep` <nonebot.config.Config.command_sep>` 判断消息是否为命令。
 
-    :::caution 警告
-    如果参数解析失败，则通过 {ref}`nonebot.params.ShellCommandArgs`
-    获取的将是 {ref}`nonebot.exception.ParserExit` 异常。
-    :::
+可以通过 {ref}`nonebot.params.Command` 获取匹配成功的命令
+（例: `("test",)`），
+通过 {ref}`nonebot.params.RawCommand` 获取匹配成功的原始命令文本
+（例: `"/test"`），
+通过 {ref}`nonebot.params.ShellCommandArgv` 获取解析前的参数列表
+（例: `["arg", "-h"]`），
+通过 {ref}`nonebot.params.ShellCommandArgs` 获取解析后的参数字典
+（例: `{"arg": "arg", "h": True}`）。
 
-    Args:
-        cmds: 命令文本或命令元组
-        parser: {ref}`nonebot.rule.ArgumentParser` 对象
+:::caution 警告
+如果参数解析失败，则通过 {ref}`nonebot.params.ShellCommandArgs`
+获取的将是 {ref}`nonebot.exception.ParserExit` 异常。
+:::
 
-    用法:
-        使用默认 `command_start`, `command_sep` 配置，更多示例参考
-        [argparse](https://docs.python.org/3/library/argparse.html) 标准库文档。
+Args:
+    cmds: 命令文本或命令元组
+    parser: {ref}`nonebot.rule.ArgumentParser` 对象
 
-        ```python
-        from nonebot.rule import ArgumentParser
+用法:
+    使用默认 `command_start`, `command_sep` 配置，更多示例参考
+    [argparse](https://docs.python.org/3/library/argparse.html) 标准库文档。
 
-        parser = ArgumentParser()
-        parser.add_argument("-a", action="store_true")
+    ```python
+    from nonebot.rule import ArgumentParser
 
-        rule = shell_command("ls", parser=parser)
-        ```
+    parser = ArgumentParser()
+    parser.add_argument("-a", action="store_true")
 
-    :::tip 提示
-    命令内容与后续消息间无需空格!
-    :::
-    """
-    if parser is not None and not isinstance(parser, ArgumentParser):
-        raise TypeError("`parser` must be an instance of nonebot.rule.ArgumentParser")
+    rule = shell_command("ls", parser=parser)
+    ```
 
-    config = get_driver().config
-    command_start = config.command_start
-    command_sep = config.command_sep
-    commands: list[tuple[str, ...]] = []
-    for command in cmds:
-        if isinstance(command, str):
-            command = (command,)
+:::tip 提示
+命令内容与后续消息间无需空格!
+:::
+"""
 
-        commands.append(command)
-
-        if len(command) == 1:
-            for start in command_start:
-                TrieRule.add_prefix(f"{start}{command[0]}", TRIE_VALUE(start, command))
-        else:
-            for start, sep in product(command_start, command_sep):
-                TrieRule.add_prefix(
-                    f"{start}{sep.join(command)}", TRIE_VALUE(start, command)
-                )
-
-    return Rule(ShellCommandRule(commands, parser))
-'''
 
 
 class ToMeRule:
