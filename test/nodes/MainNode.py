@@ -9,7 +9,7 @@ from _sound import get_character_name_list_text, parse_character_command
 from sekaibot import Event, Node
 from sekaibot.adapters.cqhttp.event import MessageEvent
 from sekaibot.permission import SuperUser
-from sekaibot.rule import Keywords
+from sekaibot.rule import Keywords, StartsWith
 
 
 def a(event: Event):
@@ -33,18 +33,18 @@ class AutoReply(Node[MessageEvent, dict, Any]):
 
         if keyw == "/开":
             self.node_state["sound"] = True
-            await self.reply("已开启语音回复")
+            await self.reply("已开启语音回复", at_sender=True)
         elif keyw == "/关":
             self.node_state["sound"] = False
-            await self.reply("已关闭语音回复")
+            await self.reply("已关闭语音回复", at_sender=True)
         elif keyw == "/角色列表":
             await self.reply(get_character_name_list_text())
         elif keyw == "/角色":
             if _id := parse_character_command(self.event.get_plain_text()):
                 self.node_state["character"] = _id
-                await self.reply(f"已成功切换角色：{_id}")
+                await self.reply(f"已成功切换角色：{_id}", at_sender=True)
             else:
-                await self.reply("切换失败，请检查")
+                await self.reply("切换失败，请检查", at_sender=True)
         else:
             keyw = "林睿晨" if keyw == "lrc" else keyw
             text = random.choice(
@@ -83,18 +83,18 @@ class AutoReply(Node[MessageEvent, dict, Any]):
                     "{keyw}是蓝凉",
                 )
             ).format(keyw=keyw)
-            if self.node_state:
+            if self.node_state["sound"] and self.event.message_type == "group":
                 await self.call_api(
                     "send_group_ai_record",
                     character=self.node_state["character"],
-                    group_id=596488203,
+                    group_id=self.event.group_id,
                     text=text,
                 )
             else:
                 await self.reply(text)
 
 
-@Keywords("/唐")
+@StartsWith("/唐")
 @SuperUser()
 class RandomSens(Node[MessageEvent, dict, Any]):
     priority = 0

@@ -233,13 +233,13 @@ class Node(Generic[EventT, NodeStateT, ConfigT]):
     async def reply(
         self,
         message: BuildMessageType,
-        **kwargs: Any,
+        **params: Any,
     ) -> None:
         """回复消息。"""
         return await self.event.adapter.send(
             self.event,
             message=message,
-            **kwargs,
+            **params,
         )
 
     @final

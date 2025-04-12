@@ -5,16 +5,11 @@
 """
 
 from abc import ABC, abstractmethod
-from collections.abc import (
-    ItemsView,
-    Iterator,
-    KeysView,
-    Mapping,
-    ValuesView,
-)
+from collections.abc import ItemsView, Iterator, KeysView, Mapping, ValuesView
 from typing import (  # noqa: UP035
     Any,
     Generic,
+    Literal,
     Self,
     SupportsIndex,
     Type,
@@ -235,13 +230,37 @@ class Message(ABC, list[MessageSegmentT]):
         """
         return self.__class__(self)
 
+    @overload
     def startswith(
         self,
-        prefix: str | MessageSegmentT | tuple[str, ...] | tuple[MessageSegmentT, ...],
+        prefix: str | MessageSegmentT | tuple[str | MessageSegmentT, ...],
+        start: SupportsIndex | None = ...,
+        end: SupportsIndex | None = ...,
+        ignorecase: bool = ...,
+        return_key: Literal[False] = ...,
+        default: None = ...,
+    ) -> bool: ...
+
+    @overload
+    def startswith(
+        self,
+        prefix: str | MessageSegmentT | tuple[str | MessageSegmentT, ...],
+        start: SupportsIndex | None = ...,
+        end: SupportsIndex | None = ...,
+        ignorecase: bool = ...,
+        return_key: Literal[True] = ...,
+        default: str | MessageSegmentT | None = ...,
+    ) -> str | MessageSegmentT | None: ...
+
+    def startswith(
+        self,
+        prefix: str | MessageSegmentT | tuple[str | MessageSegmentT, ...],
         start: SupportsIndex | None = None,
         end: SupportsIndex | None = None,
         ignorecase: bool = False,
-    ) -> str | MessageSegmentT | None:
+        return_key: bool = False,
+        default: str | MessageSegmentT | None = None,
+    ) -> bool | str | MessageSegmentT | None:
         """实现类似字符串的 `startswith()` 方法。
 
         当 `prefix` 类型是 `str` 时，会将自身转换为 `str` 类型，再调用 `str` 类型的 `startswith()` 方法。
@@ -255,38 +274,67 @@ class Message(ABC, list[MessageSegmentT]):
 
         Returns:
             检查结果。
-        """  # noqa: D402
+        """
         if not prefix:
-            return False
+            return default if return_key else False
         if isinstance(prefix, str):
             text = str(self).casefold() if ignorecase else str(self)
             prefix = prefix.casefold() if ignorecase else prefix
-            return prefix if text.startswith(prefix, start, end) else None
+            if text.startswith(prefix, start, end):
+                return prefix if return_key else True
         elif isinstance(prefix, self.get_segment_class()):
-            if len(self) == 0:
-                return None
-            return self[0] == prefix
+            if len(self) != 0 and self[0] == prefix:
+                return prefix if return_key else True
         elif isinstance(prefix, tuple):
-            if all(isinstance(item, str) for item in prefix):
-                text = str(self).casefold() if ignorecase else str(self)
-                prefix = tuple(item.casefold() for item in prefix) if ignorecase else prefix
-                return next((item for item in prefix if text.startswith(item, start, end)), None)
-            elif all(isinstance(item, self.get_segment_class()) for item in prefix):
-                return self[0] if self[0] in prefix else None
-            else:
-                raise TypeError(f"prefix arg must be str or {self.get_segment_class()}")
+            text = str(self).casefold() if ignorecase else str(self)
+            first = self[0] if self else None
+            for item in prefix:
+                if isinstance(item, str):
+                    p = item.casefold() if ignorecase else item
+                    if text.startswith(p, start, end):
+                        return item if return_key else True
+                elif isinstance(item, self.get_segment_class()):
+                    if first == item:
+                        return item if return_key else True
+                else:
+                    raise TypeError(f"prefix arg must be str or {self.get_segment_class()}")
         else:
             raise TypeError(
                 f"prefix arg must be str or {self.get_segment_class()}, not {type(prefix)}"
             )
+        return default if return_key else False
+
+    @overload
+    def endswith(
+        self,
+        suffix: str | MessageSegmentT | tuple[str | MessageSegmentT, ...],
+        start: SupportsIndex | None = ...,
+        end: SupportsIndex | None = ...,
+        ignorecase: bool = ...,
+        return_key: Literal[False] = ...,
+        default: None = ...,
+    ) -> bool: ...
+
+    @overload
+    def endswith(
+        self,
+        suffix: str | MessageSegmentT | tuple[str | MessageSegmentT, ...],
+        start: SupportsIndex | None = ...,
+        end: SupportsIndex | None = ...,
+        ignorecase: bool = ...,
+        return_key: Literal[True] = ...,
+        default: str | MessageSegmentT | None = ...,
+    ) -> str | MessageSegmentT | None: ...
 
     def endswith(
         self,
-        suffix: str | MessageSegmentT | tuple[str, ...] | tuple[MessageSegmentT, ...],
+        suffix: str | MessageSegmentT | tuple[str | MessageSegmentT, ...],
         start: SupportsIndex | None = None,
         end: SupportsIndex | None = None,
         ignorecase: bool = False,
-    ) -> bool:
+        return_key: bool = False,
+        default: str | MessageSegmentT | None = None,
+    ) -> bool | str | MessageSegmentT | None:
         """实现类似字符串的 `endswith()` 方法。
 
         当 `suffix` 类型是 `str` 时，会将自身转换为 `str` 类型，再调用 `str` 类型的 `endswith()` 方法。
@@ -300,30 +348,35 @@ class Message(ABC, list[MessageSegmentT]):
 
         Returns:
             检查结果。
-        """  # noqa: D402
+        """
         if not suffix:
-            return False
+            return default if return_key else False
         if isinstance(suffix, str):
             text = str(self).casefold() if ignorecase else str(self)
             suffix = suffix.casefold() if ignorecase else suffix
-            return suffix if text.endswith(suffix, start, end) else None
+            if text.endswith(suffix, start, end):
+                return suffix if return_key else True
         elif isinstance(suffix, self.get_segment_class()):
-            if len(self) == 0:
-                return None
-            return self[-1] == suffix
+            if len(self) != 0 and self[-1] == suffix:
+                return suffix if return_key else True
         elif isinstance(suffix, tuple):
-            if all(isinstance(item, str) for item in suffix):
-                text = str(self).casefold() if ignorecase else str(self)
-                suffix = tuple(item.casefold() for item in suffix) if ignorecase else suffix
-                return next((item for item in suffix if text.endswith(item, start, end)), None)
-            elif all(isinstance(item, self.get_segment_class()) for item in suffix):
-                return self[-1] if self[-1] in suffix else None
-            else:
-                raise TypeError(f"prefix arg must be str or {self.get_segment_class()}")
+            text = str(self).casefold() if ignorecase else str(self)
+            last = self[-1] if self else None
+            for item in suffix:
+                if isinstance(item, str):
+                    s = item.casefold() if ignorecase else item
+                    if text.endswith(s, start, end):
+                        return item if return_key else True
+                elif isinstance(item, self.get_segment_class()):
+                    if last == item:
+                        return item if return_key else True
+                else:
+                    raise TypeError(f"suffix arg must be str or {self.get_segment_class()}")
         else:
             raise TypeError(
-                f"prefix arg must be str or {self.get_segment_class()}, not {type(suffix)}"
+                f"suffix arg must be str or {self.get_segment_class()}, not {type(suffix)}"
             )
+        return default if return_key else False
 
     @overload
     def replace(self, old: str, new: str, count: int = -1) -> Self: ...
@@ -470,6 +523,14 @@ class MessageSegment(ABC, BaseModel, Mapping[str, Any], Generic[MessageT]):
             消息字段的描述。
         """
         return f"MessageSegment<{self.type}>:{self!s}"
+
+    def __hash__(self) -> int:
+        """返回消息字段的哈希值。
+
+        Returns:
+            消息字段的哈希值。
+        """
+        return hash((self.type, tuple(sorted(self.data.items()))))
 
     def __getitem__(self, key: str) -> Any:
         """取索引。相当于对 `data` 属性进行此操作。

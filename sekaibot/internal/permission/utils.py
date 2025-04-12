@@ -109,13 +109,16 @@ class SuperUserPermission:
         except Exception:
             return False
         adapter_name = event.adapter.name.split(maxsplit=1)[0].lower()
+        superusers = bot.config.permission.superusers
         return (
-            f"{adapter_name}:{user_id}" in bot.config.bot.superusers
-            or user_id in bot.config.bot.superusers  # 兼容旧配置
+            f"{adapter_name}:{user_id}" in superusers
+            or user_id in superusers  # 兼容旧配置
             or (
                 (
-                    f"{adapter_name}:{group_id}" in bot.config.bot.superusers
-                    or group_id in bot.config.bot.superusers  # 兼容旧配置
+                    f"{adapter_name}:{group_id}" in superusers
+                    or group_id in superusers  # 兼容旧配置
+                    or f"{adapter_name}:{group_id}_{user_id}" in superusers
+                    or f"{group_id}_{user_id}" in superusers  # 兼容旧配置
                 )
                 if group_id
                 else False

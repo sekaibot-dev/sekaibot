@@ -20,15 +20,7 @@ from collections.abc import Sequence
 from contextvars import ContextVar
 from gettext import gettext
 from itertools import chain, product
-from typing import (
-    IO,
-    TYPE_CHECKING,
-    NamedTuple,
-    TypedDict,
-    TypeVar,
-    cast,
-    overload,
-)
+from typing import IO, TYPE_CHECKING, NamedTuple, TypedDict, TypeVar, cast, overload
 
 from pygtrie import CharTrie
 
@@ -83,18 +75,16 @@ parser_message: ContextVar[str] = ContextVar("parser_message")
 
 
 class StartswithRule:
-    """检查消息纯文本是否以指定字符串开头。
-        注意，此处仅匹配字符串，但是Message提供了匹配MessageSegment的方法，
-        若需要请在rule函数中调用startswith方法。
+    """检查消息富文本是否以指定字符串或 MessageSegment 开头。
 
     Args:
-        msgs: 指定消息开头字符串元组
+        msgs: 指定消息开头字符串或 MessageSegment 元组
         ignorecase: 是否忽略大小写
     """
 
     __slots__ = ("ignorecase", "msgs")
 
-    def __init__(self, *msgs: str, ignorecase: bool = False):
+    def __init__(self, msgs: tuple[str | MessageSegment, ...], ignorecase: bool = False):
         self.msgs = msgs
         self.ignorecase = ignorecase
 
@@ -116,25 +106,23 @@ class StartswithRule:
             message = event.get_message()
         except Exception:
             return False
-        if match := message.startswith(self.msgs, ignorecase=self.ignorecase):
+        if match := message.startswith(self.msgs, ignorecase=self.ignorecase, return_key=True):
             state[STARTSWITH_KEY] = match
             return True
         return False
 
 
 class EndswithRule:
-    """检查消息纯文本是否以指定字符串结尾。
-        注意，此处仅匹配字符串，但是Message提供了匹配MessageSegment的方法，
-        若需要请在rule函数中调用endswith方法。
+    """检查消息富文本是否以指定字符串或 MessageSegment 结尾。
 
     Args:
-        msgs: 指定消息结尾字符串元组
+        msgs: 指定消息开头字符串或 MessageSegment 元组
         ignorecase: 是否忽略大小写
     """
 
     __slots__ = ("ignorecase", "msgs")
 
-    def __init__(self, *msgs: str, ignorecase: bool = False):
+    def __init__(self, msgs: tuple[str | MessageSegment, ...], ignorecase: bool = False):
         self.msgs = msgs
         self.ignorecase = ignorecase
 
@@ -156,7 +144,7 @@ class EndswithRule:
             message = event.get_message()
         except Exception:
             return False
-        if match := message.endswith(self.msgs, ignorecase=self.ignorecase):
+        if match := message.endswith(self.msgs, ignorecase=self.ignorecase, return_key=True):
             state[ENDSWITH_KEY] = match
             return True
         return False
@@ -172,8 +160,15 @@ class FullmatchRule:
 
     __slots__ = ("ignorecase", "msgs")
 
-    def __init__(self, *msgs: str, ignorecase: bool = False):
-        self.msgs = tuple(map(str.casefold, msgs) if ignorecase else msgs)
+    def __init__(self, msgs: tuple[str | Message | MessageSegment, ...], ignorecase: bool = False):
+        self.msgs: tuple[str | Message, ...] = tuple(
+            msg.casefold()
+            if ignorecase and isinstance(msg, str)
+            else msg.get_message_class()(msg)
+            if isinstance(msg, MessageSegment)
+            else msg
+            for msg in msgs
+        )
         self.ignorecase = ignorecase
 
     def __repr__(self) -> str:
@@ -192,13 +187,18 @@ class FullmatchRule:
     async def __call__(self, event: Event, state: StateT) -> bool:
         try:
             text = event.get_plain_text()
+            message = event.get_message()
         except Exception:
             return False
         if not text:
             return False
         text = text.casefold() if self.ignorecase else text
+
         if text in self.msgs:
             state[FULLMATCH_KEY] = text
+            return True
+        elif message in self.msgs:
+            state[FULLMATCH_KEY] = message
             return True
         return False
 
@@ -212,8 +212,11 @@ class KeywordsRule:
 
     __slots__ = ("ignorecase", "keywords")
 
-    def __init__(self, *keywords: str, ignorecase: bool = False):
-        self.keywords = tuple(map(str.casefold, keywords) if ignorecase else keywords)
+    def __init__(self, keywords: tuple[str | MessageSegment, ...], ignorecase: bool = False):
+        self.keywords = tuple(
+            keyword.casefold() if ignorecase and isinstance(keyword, str) else keyword
+            for keyword in keywords
+        )
         self.ignorecase = ignorecase
 
     def __repr__(self) -> str:
@@ -230,12 +233,15 @@ class KeywordsRule:
     async def __call__(self, event: Event, state: StateT) -> bool:
         try:
             text = event.get_plain_text()
+            message = event.get_message()
         except Exception:
             return False
         if not text:
             return False
         text = text.casefold() if self.ignorecase else text
-        if keys := tuple(k for k in self.keywords if k in text):
+        if keys := tuple(
+            k for k in self.keywords if (isinstance(k, str) and (k in text)) or k in message
+        ):
             state[KEYWORD_KEY] = keys
             return True
         return False
@@ -493,31 +499,6 @@ class CommandRule:
         return self.force_whitespace == (cmd_whitespace is not None)
 
 
-"""匹配消息命令。
-
-根据配置里提供的 {ref}``command_start` <nonebot.config.Config.command_start>`,
-{ref}``command_sep` <nonebot.config.Config.command_sep>` 判断消息是否为命令。
-
-可以通过 {ref}`nonebot.params.Command` 获取匹配成功的命令（例: `("test",)`），
-通过 {ref}`nonebot.params.RawCommand` 获取匹配成功的原始命令文本（例: `"/test"`），
-通过 {ref}`nonebot.params.CommandArg` 获取匹配成功的命令参数。
-
-Args:
-    cmds: 命令文本或命令元组
-    force_whitespace: 是否强制命令后必须有指定空白符
-
-用法:
-    使用默认 `command_start`, `command_sep` 配置情况下：
-
-    命令 `("test",)` 可以匹配: `/test` 开头的消息
-    命令 `("test", "sub")` 可以匹配: `/test.sub` 开头的消息
-
-:::tip 提示
-命令内容与后续消息间无需空格!
-:::
-"""
-
-
 class ArgumentParser(ArgParser):
     """`shell_like` 命令参数解析器，解析出错时不会退出程序。
 
@@ -684,50 +665,6 @@ class ShellCommandRule:
             finally:
                 parser_message.reset(t)
         return True
-
-
-
-"""匹配 `shell_like` 形式的消息命令。
-
-根据配置里提供的 {ref}``command_start` <nonebot.config.Config.command_start>`,
-{ref}``command_sep` <nonebot.config.Config.command_sep>` 判断消息是否为命令。
-
-可以通过 {ref}`nonebot.params.Command` 获取匹配成功的命令
-（例: `("test",)`），
-通过 {ref}`nonebot.params.RawCommand` 获取匹配成功的原始命令文本
-（例: `"/test"`），
-通过 {ref}`nonebot.params.ShellCommandArgv` 获取解析前的参数列表
-（例: `["arg", "-h"]`），
-通过 {ref}`nonebot.params.ShellCommandArgs` 获取解析后的参数字典
-（例: `{"arg": "arg", "h": True}`）。
-
-:::caution 警告
-如果参数解析失败，则通过 {ref}`nonebot.params.ShellCommandArgs`
-获取的将是 {ref}`nonebot.exception.ParserExit` 异常。
-:::
-
-Args:
-    cmds: 命令文本或命令元组
-    parser: {ref}`nonebot.rule.ArgumentParser` 对象
-
-用法:
-    使用默认 `command_start`, `command_sep` 配置，更多示例参考
-    [argparse](https://docs.python.org/3/library/argparse.html) 标准库文档。
-
-    ```python
-    from nonebot.rule import ArgumentParser
-
-    parser = ArgumentParser()
-    parser.add_argument("-a", action="store_true")
-
-    rule = shell_command("ls", parser=parser)
-    ```
-
-:::tip 提示
-命令内容与后续消息间无需空格!
-:::
-"""
-
 
 
 class ToMeRule:

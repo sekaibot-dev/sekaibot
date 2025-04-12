@@ -1,17 +1,7 @@
-from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
 from contextlib import AsyncExitStack
 from itertools import chain
-from typing import (  # noqa: UP035
-    TYPE_CHECKING,
-    Generic,
-    NoReturn,
-    Self,
-    Type,
-    TypeVar,
-    Union,
-    final,
-)
+from typing import TYPE_CHECKING, Generic, NoReturn, Self, TypeVar, Union, final
 
 import anyio
 from exceptiongroup import BaseExceptionGroup, catch
@@ -147,7 +137,7 @@ ArgsT = TypeVar("T")
 ParamT = TypeVar("P")
 
 
-class RuleChecker(ABC, Generic[ArgsT, ParamT]):
+class RuleChecker(Generic[ArgsT]):
     """抽象基类，匹配消息规则。"""
 
     def __init__(self, rule: Rule) -> None:
@@ -191,31 +181,3 @@ class RuleChecker(ABC, Generic[ArgsT, ParamT]):
             stack,
             dependency_cache,
         )
-
-    @staticmethod
-    @abstractmethod
-    def _param() -> ParamT:
-        """获取规则参数，子类需实现。"""
-        pass
-
-    @final
-    @classmethod
-    def Param(cls) -> ParamT:
-        """在依赖注入里获取检查器的数据。"""
-        return Depends(cls._param, use_cache=False)
-
-
-class MatchRule(RuleChecker[str | bool, str]):
-    """所有匹配类 Rule 的基类。"""
-
-    checker: Type[Callable[[tuple[str, ...], bool], "Rule"]] = None  # noqa: UP006
-
-    def __init__(self, *msgs: str | tuple[str, ...], ignorecase: bool = False) -> None:
-        if self.checker is None:
-            raise NotImplementedError("Subclasses of MatchRule must provide a checker.")
-
-        super().__init__(Rule(self.checker(*msgs, ignorecase=ignorecase)))
-
-    @classmethod
-    def Checker(cls, *msgs: str | tuple[str, ...], ignorecase: bool = False):
-        return super().Checker(*msgs, ignorecase=ignorecase)

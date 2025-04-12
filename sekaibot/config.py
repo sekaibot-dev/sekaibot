@@ -3,8 +3,6 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, DirectoryPath, Field
 
-from sekaibot.internal.rule.config import RuleConfig
-
 __all__ = [
     "ConfigModel",
     "LogConfig",
@@ -183,6 +181,25 @@ class PluginConfig(ConfigModel):
     """节点配置。"""
 
 
+class RuleConfig(ConfigModel):
+    """规则配置。
+    
+    Attributes:
+        command_start: 命令的起始标记，用于判断一条消息是不是命令。
+        command_sep: 命令的分隔标记，用于将文本形式的命令切分为元组（实际的命令名）。
+    """
+    command_start: set[str] = {"/"}
+    command_sep: set[str] = {"."}
+
+class PermissionConfig(ConfigModel):
+    """权限配置。
+
+    Attributes:
+        superusers: 超级管理员列表。
+    """
+
+    superusers: set[str] = Field(default_factory=set)
+
 class MainConfig(ConfigModel):
     """SekaiBot 主体配置。"""
 
@@ -191,4 +208,5 @@ class MainConfig(ConfigModel):
     adapter: AdapterConfig = AdapterConfig()
     plugin: PluginConfig = PluginConfig()
     rule: RuleConfig = RuleConfig()
+    permission: PermissionConfig = PermissionConfig()
     # database: DatabaseConfig = DatabaseConfig()
