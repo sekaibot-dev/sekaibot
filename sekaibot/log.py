@@ -14,7 +14,10 @@ if TYPE_CHECKING:
     from structlog.typing import FilteringBoundLogger
 
 
-def configure_logging(level="INFO", verbose_exception=True):
+def configure_logging(
+    level: str = "INFO",
+    verbose_exception: bool = True,
+) -> None:
     """配置 structlog 日志系统。
 
     Args:
@@ -48,20 +51,16 @@ default_format = structlog.dev.ConsoleRenderer(colors=True)
 
 
 class StructLogHandler(logging.Handler):
-    """Python `logging` 日志 → `structlog` 适配器，将 `logging` 事件转发到 `structlog`。"""
+    """Python `logging` 日志 to `structlog` 适配器，将 `logging` 事件转发到 `structlog`。"""
 
     def emit(self, record: logging.LogRecord):
-        try:
-            level = record.levelname.casefold()
-        except ValueError:
-            level = "info"
-
         structlog.get_logger(record.name).bind(exc_info=record.exc_info).log(
-            level, record.getMessage()
+            record.levelno, record.getMessage()
         )
 
 
-"""structlog.configure(
+"""
+structlog.configure(
     processors=[
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.StackInfoRenderer(),
@@ -71,7 +70,8 @@ class StructLogHandler(logging.Handler):
     wrapper_class=structlog.make_filtering_bound_logger(0),
     context_class=dict,
     logger_factory=structlog.PrintLoggerFactory(),
-)"""
+)
+"""
 
 logger: "FilteringBoundLogger" = structlog.get_logger("nonebot")
 """NoneBot 日志记录器对象。"""

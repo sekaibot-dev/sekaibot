@@ -16,7 +16,7 @@ def a(event: Event):
     print(event.get_event_name())
 
 
-@Keywords("/开", "/关", "/角色列表", "/角色", "蒸", "松泽", "松", "lrc", "超")
+@Keywords("/开", "/关", "/角色列表", "/角色", "蒸", "松泽", "松", "lrc", "超", "xy", "香氤")
 @SuperUser()
 class AutoReply(Node[MessageEvent, dict, Any]):
     """Hello, World! 示例节点。"""
@@ -47,6 +47,7 @@ class AutoReply(Node[MessageEvent, dict, Any]):
                 await self.reply("切换失败，请检查", at_sender=True)
         else:
             keyw = "林睿晨" if keyw == "lrc" else keyw
+            keyw = "香氤" if keyw == "xy" else keyw
             text = random.choice(
                 (
                     "{keyw}鞭好粗",

@@ -96,14 +96,40 @@ class Bot:
         config_dict: dict[str, Any] | None = None,
         handle_signals: bool = True,
     ):
-        """初始化 SekaiBot，读取配置文件，创建配置。
+        """初始化 SekaiBot 核心实例，管理机器人生命周期和模块加载。
 
         Args:
-            config_file: 配置文件，如不指定则使用默认的 `config.toml`。
-                若指定为 `None`，则不加载配置文件。
-            config_dict: 配置字典，默认为 `None。`
-                若指定字典，则会忽略 `config_file` 配置，不再读取配置文件。
-            _handle_signals: 是否处理结束信号，默认为 `True`。
+            config_file: 配置文件路径，支持格式：
+                - TOML (.toml)
+                - JSON (.json)
+                - YAML (.yml/.yaml)
+                默认使用当前目录下的 config.toml
+            config_dict: 直接传递配置字典，优先级高于 config_file
+            handle_signals: 是否启用信号处理（Ctrl+C 退出等）
+
+        Attributes:
+            config (MainConfig): 合并后的配置对象
+            adapters (list[Adapter]): 已加载的协议适配器实例
+            nodes (list[Node]): 已加载的业务节点列表
+            plugins (dict[str, Plugin]): 已加载的插件字典
+
+        Examples:
+            ```python
+            # 从默认配置文件启动
+            bot = Bot()
+            
+            # 自定义配置启动
+            bot = Bot(config_file="production.toml")
+            
+            # 完全自定义配置
+            bot = Bot(config_dict={
+                "bot": {
+                    "log": {
+                        "level": "DEBUG"
+                    }
+                }
+            })
+            ```
         """
         self.config = MainConfig()
         self.manager = NodeManager(self)

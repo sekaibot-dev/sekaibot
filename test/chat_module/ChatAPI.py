@@ -41,7 +41,7 @@ class ChatAPI:
         """添加消息到会话中"""
         return {"role": role, "content": text}
 
-    def _format_message(
+    async def _format_message(
         self,
         text: str,
         name: str = None,
@@ -58,6 +58,33 @@ class ChatAPI:
                             {
                                 "type": "text",
                                 "text": f"引用消息：\n时间：{nowtime}; 用户“{reply.sender.nickname}”: \n{reply.message.get_plain_text()}",
+                            },
+                            {
+                                "type": "text",
+                                "text": f"时间：{nowtime}; 用户“{name}”: \n{text}",
+                            },
+                        ],
+                        role="user",
+                    )
+                )
+            elif (
+                reply is not None
+                and len(reply.message) == 1
+                and reply.message[0].type == "image"
+                and reply.message_type == "group"
+            ):
+                img_url = reply.message[0].data.get("url")
+                base64_image = await fetch_image_as_base64(img_url)
+                conversation.append(
+                    self._add_message(
+                        text=[
+                            {
+                                "type": "text",
+                                "text": "分享了一张表情包，你要优先根据你的外貌判断是不是你或者根据印象判断是不是你认识的人。如果认出来了就笃定地根据判断结果回答；无法认出就不用体现在对话中，转向注重表情的含义和情感。请简短回答。",
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
                             },
                             {
                                 "type": "text",
@@ -89,7 +116,7 @@ class ChatAPI:
         key = None
         if "image" in str(memory):
             key = "sk-dFzsKInVuNhZhAt8KpV4qXhyWeFbME0RYxiGJLXjDHrhirkb"
-        conversation = self._format_message(text=text, name=name, reply=reply)
+        conversation = await self._format_message(text=text, name=name, reply=reply)
         messages = character_config + memory + conversation
         try:
             response = await self._chat_api.get_answer(
@@ -100,7 +127,7 @@ class ChatAPI:
             return response
         else:
             if isinstance(response, str):
-                conversation += self._format_message(text=response, _type="assistant")
+                conversation += await self._format_message(text=response, _type="assistant")
                 await self.chat_system.add_memory(user_id=user_id, message=conversation)
                 return response
             else:
@@ -150,7 +177,7 @@ class ChatAPI:
         except TimeoutError:
             response = "可不记不起来你说什么了，请再试一次哦"
         else:
-            conversation += self._format_message(text=response, _type="assistant")
+            conversation += await self._format_message(text=response, _type="assistant")
             await self.chat_system.add_memory(user_id=user_id, message=conversation)
         return response
 

@@ -3,13 +3,12 @@ import re
 
 from chat_module.ChatAPI import ChatAPI
 
-# from chat_module.CheckString import CheckString
-from chat_module.NeteaseCloudMusic import get_music_dict
-from rapidfuzz import process
-
 from sekaibot import Bot, Depends, Event
 from sekaibot.adapters.cqhttp.event import MessageEvent
 from sekaibot.adapters.cqhttp.message import CQHTTPMessageSegment
+
+# from chat_module.CheckString import CheckString
+
 
 # from sekaibot.exceptions import GetEventTimeout
 
@@ -80,17 +79,17 @@ class ChatHandler:
         if len(self.event.get_plain_text()) > 150:
             answer = "请勿发送过长内容！！"
         else:
-            """if (
-                "image" == self.event.message_component[0]
-                and len(self.event.message_component) == 1
+            if (
+                len(self.event.message) == 1
+                and self.event.message[0].type == "image"
             ):
                 for msg in self.event.message:
                     img_url = msg.data.get("url")
                     meme = True
                     answer = await self.chat_api.get_img_ai_answer(
                         user_id=self.event.user_id, img_url=img_url, timeout=15
-                    )"""
-            if self.event.reply:
+                    )
+            elif self.event.reply:
                 answer = await self.chat_api.get_ai_answer(
                     user_id=self.event.user_id,
                     text=self.event.get_plain_text(),
@@ -110,7 +109,7 @@ class ChatHandler:
         if answer is None or answer == "":
             await self.chat_api.chat_system.clear_memory(self.event.user_id)
         if isinstance(answer, str):
-            '''if not meme:
+            """if not meme:
                 response = CQHTTPMessageSegment.reply(self.event.message_id)
                 response += (
                     CQHTTPMessageSegment.at(self.event.user_id)
@@ -124,10 +123,13 @@ class ChatHandler:
                     + CQHTTPMessageSegment.text(" " + answer)
                     if self.event.message_type == "group"
                     else CQHTTPMessageSegment.text(answer)
-                )'''
-            self.answer = answer
-            await self.event.adapter.send(self.event, answer, at_sender=True, reply_message=True)
-            '''if if_music:
+                )"""
+            #self.answer = answer
+            if meme:
+                await self.event.adapter.send(self.event, answer, at_sender=True)
+            else:
+                await self.event.adapter.send(self.event, answer, at_sender=True, reply_message=True)
+            """if if_music:
                 substring = self.extract_music_titles(answer)
                 if substring != []:
                     music_dict = get_music_dict()
@@ -138,7 +140,7 @@ class ChatHandler:
                     if point >= 70:
                         music_id = music_dict[music]
                         music_msg = CQHTTPMessageSegment.music(type_="163", id_=music_id)
-                        await self.event.adapter.send(self.event, music_msg)'''
+                        await self.event.adapter.send(self.event, music_msg)"""
         else:
             if answer.tool_calls is not None:
                 tool = answer.tool_calls[0]
