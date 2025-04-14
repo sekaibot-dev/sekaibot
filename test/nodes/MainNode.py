@@ -108,7 +108,7 @@ class RandomSens(Node[MessageEvent, dict, Any]):
 
 @Keywords("芽", "老婆", "我", "妻子")
 @User("group_788499440_413966479", strict=True)
-class YanCheng(Node[GroupMessageEvent, Any, Any]):
+class YanCheng(Node[GroupMessageEvent, dict, Any]):
     priority = 0
     block = True
 
