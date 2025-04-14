@@ -11,6 +11,7 @@ FrontMatter:
     description: nonebot.rule 模块
 """
 
+import os
 import re
 import shlex
 from argparse import Action, ArgumentError
@@ -30,7 +31,6 @@ from sekaibot.consts import (
     CMD_KEY,
     CMD_START_KEY,
     CMD_WHITESPACE_KEY,
-    COUNTER_KEY,
     COUNTER_LATEST_TIGGERS,
     COUNTER_STATE,
     COUNTER_TIME_TIGGERS,
@@ -44,10 +44,11 @@ from sekaibot.consts import (
     SHELL_ARGV,
     STARTSWITH_KEY,
 )
-from sekaibot.dependencies import Dependency, solve_dependencies_in_bot
 from sekaibot.exceptions import ParserExit
 from sekaibot.internal.event import Event
 from sekaibot.internal.message import Message, MessageSegment
+from sekaibot.internal.node import NameT
+from sekaibot.internal.rule import Rule
 from sekaibot.log import logger
 from sekaibot.typing import GlobalStateT, StateT
 from sekaibot.utils import Counter
@@ -154,14 +155,14 @@ class FullmatchRule:
     """检查消息纯文本是否与指定字符串全匹配。
 
     Args:
-        msgs: 指定消息全匹配字符串元组
+        msgs: 指定消息全匹配字符串集合
         ignorecase: 是否忽略大小写
     """
 
     __slots__ = ("ignorecase", "msgs")
 
     def __init__(self, msgs: tuple[str | Message | MessageSegment, ...], ignorecase: bool = False):
-        self.msgs: tuple[str | Message, ...] = tuple(
+        self.msgs: set[str | Message] = set(
             msg.casefold()
             if ignorecase and isinstance(msg, str)
             else msg.get_message_class()(msg)
@@ -207,24 +208,26 @@ class KeywordsRule:
     """检查消息纯文本是否包含指定关键字。
 
     Args:
-        keywords: 指定关键字元组
+        keywords: 指定关键字集合
     """
 
     __slots__ = ("ignorecase", "keywords")
 
     def __init__(self, keywords: tuple[str | MessageSegment, ...], ignorecase: bool = False):
-        self.keywords = tuple(
+        self.keywords = set(
             keyword.casefold() if ignorecase and isinstance(keyword, str) else keyword
             for keyword in keywords
         )
         self.ignorecase = ignorecase
 
     def __repr__(self) -> str:
-        return f"Keywords(keywords={self.keywords})"
+        return f"Keywords(keywords={self.keywords}, ignorecase={self.ignorecase})"
 
     def __eq__(self, other: object) -> bool:
-        return isinstance(other, KeywordsRule) and frozenset(self.keywords) == frozenset(
-            other.keywords
+        return (
+            isinstance(other, KeywordsRule)
+            and frozenset(self.keywords) == frozenset(other.keywords)
+            and self.ignorecase == other.ignorecase
         )
 
     def __hash__(self) -> int:
@@ -245,6 +248,138 @@ class KeywordsRule:
             state[KEYWORD_KEY] = keys
             return True
         return False
+
+
+class WordFilterRule:
+    """检查消息纯文本是否包含指定关键字，用于敏感词过滤。
+
+    Args:
+        words: 指定关键字集合
+        word_file: 可选的词库文件路径（每行一个词）
+        ignorecase: 是否忽略大小写
+        pinyin: 是否启用拼音匹配，使用 pypinyin 库
+        use_aho: 是否启用 Aho-Corasick 算法（当词数较大时自动激活）
+    """
+
+    __slots__ = ("ignorecase", "words", "pinyin", "use_aho", "_automaton")
+
+    def __init__(
+        self,
+        words: tuple[str, ...] = (),
+        word_file: str | None = None,
+        ignorecase: bool = False,
+        pinyin: bool = False,
+        use_aho: bool = False,
+    ):
+        self.ignorecase = ignorecase
+        self.words: set[str] = set()
+        self.use_aho = use_aho
+        self._automaton = None
+
+        if word_file:
+            self._load_word_set(word_file)
+
+        self.words.update(
+            word.casefold() if ignorecase and isinstance(word, str) else word
+            for word in words
+        )
+
+        self.pinyin = pinyin
+
+        if pinyin:
+            try:
+                from pypinyin import Style, lazy_pinyin
+            except ImportError:
+                raise ImportError("pypinyin is not installed, please install it first.") from None
+
+            self.words = set(
+                word.casefold() if ignorecase else word
+                for word in lazy_pinyin(words, style=Style.FIRST_LETTER)
+            )
+
+        if self.use_aho and len(self.words) > 2000:
+            try:
+                import ahocorasick
+                self._automaton = ahocorasick.Automaton()
+                for idx, word in enumerate(self.words):
+                    self._automaton.add_word(word, (idx, word))
+                self._automaton.make_automaton()
+            except ImportError:
+                raise ImportError("pyahocorasick is not installed, please install it first.") from None
+
+    def __repr__(self) -> str:
+        return (
+            f"WordFilter(words={self.words}, ignorecase={self.ignorecase}, "
+            f"pinyin={self.pinyin}, use_aho={self.use_aho})"
+        )
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            isinstance(other, WordFilterRule)
+            and frozenset(self.words) == frozenset(other.words)
+            and self.ignorecase == other.ignorecase
+            and self.pinyin == other.pinyin
+            and self.use_aho == other.use_aho
+        )
+
+    def __hash__(self) -> int:
+        return hash((frozenset(self.words), self.ignorecase, self.pinyin, self.use_aho))
+
+    def __call__(self, event: "Event") -> bool:
+        """执行敏感词检测。
+
+        Return:
+            bool: 如果消息合法（不包含敏感词）返回 True，否则 False
+        """
+        try:
+            text = event.get_plain_text()
+        except Exception:
+            return True  # 获取失败，默认放行
+
+        if not text:
+            return True
+
+        text = text.casefold() if self.ignorecase else text
+
+        # 如果启用拼音，附加拼音字符串
+        if self.pinyin:
+            try:
+                from pypinyin import Style, lazy_pinyin
+            except ImportError:
+                raise ImportError("pypinyin is not installed, please install it first.") from None
+
+            text += "".join(lazy_pinyin(text, style=Style.FIRST_LETTER))
+
+        # 使用 Aho-Corasick 匹配
+        if self._automaton:
+            return not any(True for _, (_, word) in self._automaton.iter(text))
+
+        # 普通匹配
+        return not any(word in text for word in self.words)
+
+    def _load_word_set(self, file_path: str) -> None:
+        """从 txt 文件加载敏感词，每行一个词。
+
+        Args:
+            file_path (str): txt文件路径
+        """
+        if not os.path.isfile(file_path):
+            raise FileNotFoundError(f"File {file_path} not found.")
+
+        word_set: list[str] = []
+        try:
+            with open(file_path, encoding="utf-8") as file:
+                for _, line in enumerate(file, start=1):
+                    word = line.strip()
+                    if word:
+                        word_set.append(word)
+        except (OSError, UnicodeDecodeError) as e:
+            raise RuntimeError("Read file error") from e
+
+        self.words.update(
+            word.casefold() if self.ignorecase and isinstance(word, str) else word
+            for word in word_set
+        )
 
 
 class RegexRule:
@@ -285,54 +420,61 @@ class RegexRule:
 
 
 class CountTriggerRule:
-    __slots__ = ("name", "func", "min_trigger", "time_window", "count_window", "max_size")
+    __slots__ = ("rule", "min_trigger", "time_window", "count_window", "max_size")
 
     def __init__(
         self,
-        name: str,
-        func: Dependency[bool] | None = None,
-        min_trigger: int = 10,
         time_window: int = 60,
         count_window: int = 30,
+        min_trigger: int = 10,
         max_size: int | None = 100,
+        rule: Rule | None = None,
     ):
-        self.func = func
-        self.name = name
+        self.rule = rule
         self.min_trigger = min_trigger
         self.time_window = time_window
         self.count_window = count_window
         self.max_size = max_size
 
     def __repr__(self) -> str:
-        return f"Counter(session_id={self.name}, time_window={self.time_window}, count_window={self.count_window})"
+        return (
+            f"Counter(time_window={self.time_window}, count_window={self.count_window}, "
+            f"min_trigger={self.min_trigger}, max_size={self.max_size}, rule={self.rule!r})"
+        )
 
     def __eq__(self, other: object) -> bool:
         return (
             isinstance(other, CountTriggerRule)
-            and self.name == other.name
             and self.time_window == other.time_window
             and self.count_window == other.count_window
+            and self.min_trigger == other.min_trigger
+            and self.max_size == other.max_size
+            and self.rule == other.rule
         )
 
     def __hash__(self) -> int:
-        return hash((self.name, self.time_window, self.count_window))
+        return hash((self.time_window, self.count_window, self.min_trigger, self.max_size))
 
     async def __call__(
-        self, bot: "Bot", event: Event, state: StateT, global_state: GlobalStateT
+        self,
+        name: NameT,
+        bot: "Bot",
+        event: Event,
+        state: StateT,
+        global_state: GlobalStateT,
     ) -> bool:
         if isinstance(global_state[BOT_GLOBAL_KEY][COUNTER_STATE], dict):
             counter: Counter[Event] = global_state[BOT_GLOBAL_KEY][COUNTER_STATE].setdefault(
-                self.name, Counter[Event](self.max_size)
+                name, Counter[Event](self.max_size)
             )
         else:
             counter = Counter[Event](self.max_size)
-            global_state[BOT_GLOBAL_KEY][COUNTER_STATE] = {self.name: counter}
+            global_state[BOT_GLOBAL_KEY][COUNTER_STATE] = {name: counter}
 
-        if self.func:
+        if self.rule:
             counter.record(
                 event,
-                await solve_dependencies_in_bot(
-                    self.func,
+                await self.rule(
                     bot=bot,
                     event=event,
                     state=state,
@@ -343,29 +485,26 @@ class CountTriggerRule:
         else:
             counter.record(event, True, getattr(event, "time", None))
 
-        trigger_state = {}
+        trigger = False
         if (
             self.time_window
             and len(
                 time_trigger := tuple(
-                    counter.iter_in_time(self.time_window), getattr(event, "time", None)
+                    counter.iter_in_time(self.time_window, getattr(event, "time", None))
                 )
             )
             >= self.min_trigger
         ):
-            trigger_state[COUNTER_TIME_TIGGERS] = time_trigger
+            state[COUNTER_TIME_TIGGERS] = time_trigger
+            trigger = True
         if (
             self.count_window
             and len(count_trigger := tuple(counter.iter_in_latest(self.count_window)))
             >= self.min_trigger
         ):
-            trigger_state[COUNTER_LATEST_TIGGERS] = count_trigger
-
-        if trigger_state:
-            state[COUNTER_KEY] = trigger_state
-            return True
-
-        return False
+            state[COUNTER_LATEST_TIGGERS] = count_trigger
+            trigger = True
+        return trigger
 
 
 class TrieRule:

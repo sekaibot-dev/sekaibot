@@ -1,12 +1,13 @@
 import re
-from typing import Any, Callable, Generic, Literal, overload, override  # noqa: UP035
+from typing import Any, Callable, Literal, overload, override  # noqa: UP035
 
 from sekaibot.consts import (
     CMD_ARG_KEY,
     CMD_KEY,
     CMD_START_KEY,
     CMD_WHITESPACE_KEY,
-    COUNTER_KEY,
+    COUNTER_LATEST_TIGGERS,
+    COUNTER_TIME_TIGGERS,
     ENDSWITH_KEY,
     FULLMATCH_KEY,
     KEYWORD_KEY,
@@ -20,7 +21,7 @@ from sekaibot.consts import (
 from sekaibot.dependencies import Dependency, Depends
 from sekaibot.internal.event import Event
 from sekaibot.internal.message import Message, MessageSegment
-from sekaibot.internal.rule import ArgsT, Rule, RuleChecker
+from sekaibot.internal.rule import Rule, RuleChecker
 from sekaibot.internal.rule.utils import (
     ArgumentParser,
     CommandRule,
@@ -32,6 +33,7 @@ from sekaibot.internal.rule.utils import (
     ShellCommandRule,
     StartswithRule,
     ToMeRule,
+    WordFilterRule,
 )
 from sekaibot.typing import StateT
 
@@ -179,6 +181,50 @@ class Keywords(RuleChecker[tuple[tuple[str | MessageSegment, ...], bool]]):
     def Param(cls) -> tuple[str | MessageSegment, ...]:
         """在依赖注入里获取检查器的数据。"""
         return Depends(cls._param, use_cache=False)
+
+
+class WordFilter(RuleChecker[tuple[tuple[str, ...], str, bool, bool]]):
+    """检查消息纯文本是不包含指定关键字，用于敏感词过滤。"""
+
+    def __init__(
+        self,
+        *words: str,
+        word_file: str | None = None,
+        ignorecase: bool = False,
+        pinyin: bool = False,
+    ) -> None:
+        """匹配消息富文本关键词。
+
+        Args:
+            words: 指定关键字元组
+            word_file: 关键字文件路径，会与 `words` 合并
+            ignorecase: 是否忽略大小写
+            pinyin: 是否启用拼音匹配
+        """
+        super().__init__(
+            WordFilterRule(
+                word_file=word_file, words=words, ignorecase=ignorecase, check_pinyin=pinyin
+            )
+        )
+
+    @override
+    @classmethod
+    def Checker(
+        cls,
+        *words: str,
+        word_file: str | None = None,
+        ignorecase: bool = False,
+        pinyin: bool = False,
+    ):
+        """匹配消息富文本关键词。
+
+        Args:
+            keywords: 指定关键字元组
+            ignorecase: 是否忽略大小写
+        """
+        return super().Checker(
+            word_file=word_file, words=words, ignorecase=ignorecase, pinyin=pinyin
+        )
 
 
 class Regex(RuleChecker[tuple[str, re.RegexFlag]]):
@@ -334,63 +380,24 @@ class CountTrigger(RuleChecker[tuple[str, Dependency[bool], int, int, int, int]]
         return super().Checker(name, name, func, min_trigger, time_window, count_window, max_size)
 
     @staticmethod
-    def _param(state: StateT) -> dict:
-        return state[COUNTER_KEY]
+    def _time_trigger(state: StateT) -> tuple[Event, ...]:
+        return state[COUNTER_TIME_TIGGERS]
 
     @classmethod
-    def Param(cls) -> dict:
+    def TimeTrigger(cls):
         """在依赖注入里获取检查器的数据。"""
-        return Depends(cls._param, use_cache=False)
+        return Depends(cls._time_trigger, use_cache=False)
 
-
-class _CommandChecker(RuleChecker[ArgsT], Generic[ArgsT]):
-    @staticmethod
-    def _command(state: StateT) -> Message:
-        return state[PREFIX_KEY][CMD_KEY]
+    def _latest_trigger(state: StateT) -> tuple[Event, ...]:
+        return state[COUNTER_LATEST_TIGGERS]
 
     @classmethod
-    def Command(cls) -> tuple[str, ...]:
-        """消息命令元组"""
-        return Depends(cls._command, use_cache=False)
-
-    @staticmethod
-    def _raw_command(state: StateT) -> Message:
-        return state[PREFIX_KEY][RAW_CMD_KEY]
-
-    @classmethod
-    def RawCommand(cls) -> str:
-        """消息命令文本"""
-        return Depends(cls._raw_command, use_cache=False)
-
-    @staticmethod
-    def _command_arg(state: StateT) -> Message:
-        return state[PREFIX_KEY][CMD_ARG_KEY]
-
-    @classmethod
-    def CommandArg(cls) -> Any:
-        """消息命令参数"""
-        return Depends(cls._command_arg, use_cache=False)
-
-    @staticmethod
-    def _command_start(state: StateT) -> str:
-        return state[PREFIX_KEY][CMD_START_KEY]
-
-    @classmethod
-    def CommandStart(cls) -> str:
-        """消息命令开头"""
-        return Depends(cls._command_start, use_cache=False)
-
-    @staticmethod
-    def _command_whitespace(state: StateT) -> str:
-        return state[PREFIX_KEY][CMD_WHITESPACE_KEY]
-
-    @classmethod
-    def CommandWhitespace(cls) -> str:
-        """消息命令与参数之间的空白"""
-        return Depends(cls._command_whitespace, use_cache=False)
+    def LatestTrigger(cls):
+        """在依赖注入里获取检查器的数据。"""
+        return Depends(cls._latest_trigger, use_cache=False)
 
 
-class Command(_CommandChecker[tuple[tuple[str, ...], str | bool | None]]):
+class Command(RuleChecker[tuple[tuple[str, ...], str | bool | None]]):
     """匹配消息命令。
 
     Config:
@@ -409,7 +416,7 @@ class Command(_CommandChecker[tuple[tuple[str, ...], str | bool | None]]):
         使用默认配置 `command_start`, `command_sep` 时:
 
         - 命令 `("test",)` 可以匹配以 `/test` 开头的消息
-        - 命令 `("test", "sub")` 可以匹配以 `/test.sub` 开头的消息        
+        - 命令 `("test", "sub")` 可以匹配以 `/test.sub` 开头的消息
     """
 
     def __init__(self, *cmds: tuple[str, ...], force_whitespace: str | bool | None = None) -> None:
@@ -432,8 +439,53 @@ class Command(_CommandChecker[tuple[tuple[str, ...], str | bool | None]]):
         """
         return super().Checker(*cmds, force_whitespace=force_whitespace)
 
+    @staticmethod
+    def _command(state: StateT) -> tuple[str, ...]:
+        return state[PREFIX_KEY][CMD_KEY]
 
-class ShellCommand(_CommandChecker[tuple[tuple[str, ...], ArgumentParser | None]]):
+    @classmethod
+    def Command(cls):
+        """消息命令元组"""
+        return Depends(cls._command, use_cache=False)
+
+    @staticmethod
+    def _raw_command(state: StateT) -> str:
+        return state[PREFIX_KEY][RAW_CMD_KEY]
+
+    @classmethod
+    def RawCommand(cls):
+        """消息命令文本"""
+        return Depends(cls._raw_command, use_cache=False)
+
+    @staticmethod
+    def _command_arg(state: StateT) -> Any:
+        return state[PREFIX_KEY][CMD_ARG_KEY]
+
+    @classmethod
+    def CommandArg(cls):
+        """消息命令参数"""
+        return Depends(cls._command_arg, use_cache=False)
+
+    @staticmethod
+    def _command_start(state: StateT) -> str:
+        return state[PREFIX_KEY][CMD_START_KEY]
+
+    @classmethod
+    def CommandStart(cls):
+        """消息命令开头"""
+        return Depends(cls._command_start, use_cache=False)
+
+    @staticmethod
+    def _command_whitespace(state: StateT) -> str:
+        return state[PREFIX_KEY][CMD_WHITESPACE_KEY]
+
+    @classmethod
+    def CommandWhitespace(cls):
+        """消息命令与参数之间的空白"""
+        return Depends(cls._command_whitespace, use_cache=False)
+
+
+class ShellCommand(Command, RuleChecker[tuple[tuple[str, ...], ArgumentParser | None]]):
     """匹配 `shell_like` 形式的消息命令。
 
     Config:
