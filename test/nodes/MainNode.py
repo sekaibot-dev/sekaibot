@@ -7,7 +7,7 @@ from _randsent import generate_sentence
 from _sound import get_character_name_list_text, parse_character_command
 
 from sekaibot import Event, Node
-from sekaibot.adapters.cqhttp.event import MessageEvent
+from sekaibot.adapters.cqhttp.event import GroupMessageEvent, MessageEvent
 from sekaibot.permission import SuperUser
 from sekaibot.rule import Keywords, StartsWith
 
@@ -18,11 +18,12 @@ def a(event: Event):
 
 @Keywords("/开", "/关", "/角色列表", "/角色", "蒸", "松泽", "松", "lrc", "超", "xy", "香氤")
 @SuperUser()
-class AutoReply(Node[MessageEvent, dict, Any]):
+class AutoReply(Node[GroupMessageEvent, dict, Any]):
     """Hello, World! 示例节点。"""
 
     priority = 1
     zb = Keywords.Param()
+    block = True
 
     async def handle(self):
         keyw = self.zb[0] if self.zb else "蒸"

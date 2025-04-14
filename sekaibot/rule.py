@@ -191,19 +191,25 @@ class WordFilter(RuleChecker[tuple[tuple[str, ...], str, bool, bool]]):
         *words: str,
         word_file: str | None = None,
         ignorecase: bool = False,
-        pinyin: bool = False,
+        use_pinyin: bool = False,
+        use_aho: bool = False,
     ) -> None:
         """匹配消息富文本关键词。
 
         Args:
-            words: 指定关键字元组
-            word_file: 关键字文件路径，会与 `words` 合并
+            words: 指定关键字集合
+            word_file: 可选的词库文件路径（每行一个词）
             ignorecase: 是否忽略大小写
-            pinyin: 是否启用拼音匹配
+            use_pinyin: 是否启用拼音匹配，使用 `pypinyin` 库
+            use_aho: 是否启用 Aho-Corasick 算法（当词数较大时自动激活），使用 `pyahocorasick` 库
         """
         super().__init__(
             WordFilterRule(
-                word_file=word_file, words=words, ignorecase=ignorecase, check_pinyin=pinyin
+                word_file=word_file,
+                words=words,
+                ignorecase=ignorecase,
+                use_pinyin=use_pinyin,
+                use_aho=use_aho,
             )
         )
 
@@ -214,16 +220,20 @@ class WordFilter(RuleChecker[tuple[tuple[str, ...], str, bool, bool]]):
         *words: str,
         word_file: str | None = None,
         ignorecase: bool = False,
-        pinyin: bool = False,
+        use_pinyin: bool = False,
+        use_aho: bool = False,
     ):
         """匹配消息富文本关键词。
 
         Args:
-            keywords: 指定关键字元组
+            words: 指定关键字集合
+            word_file: 可选的词库文件路径（每行一个词）
             ignorecase: 是否忽略大小写
+            use_pinyin: 是否启用拼音匹配，使用 `pypinyin` 库
+            use_aho: 是否启用 Aho-Corasick 算法（当词数较大时自动激活），使用 `pyahocorasick` 库
         """
         return super().Checker(
-            word_file=word_file, words=words, ignorecase=ignorecase, pinyin=pinyin
+            word_file=word_file, words=words, ignorecase=ignorecase, use_pinyin=use_pinyin, use_aho=use_aho
         )
 
 

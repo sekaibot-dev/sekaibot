@@ -6,6 +6,7 @@
 import inspect
 from contextlib import AsyncExitStack
 from enum import Enum
+from types import UnionType
 from typing import (
     TYPE_CHECKING,
     Annotated,
@@ -13,7 +14,6 @@ from typing import (
     ClassVar,  # type: ignore
     Generic,
     NoReturn,
-    TypeVar,
     cast,
     final,
     get_args,
@@ -39,15 +39,21 @@ from sekaibot.internal.message import BuildMessageType
 from sekaibot.log import logger
 from sekaibot.permission import Permission
 from sekaibot.rule import Rule
-from sekaibot.typing import ConfigT, DependencyCacheT, EventT, GlobalStateT, NodeStateT, StateT
+from sekaibot.typing import (
+    ConfigT,
+    DependencyCacheT,
+    EventT,
+    GlobalStateT,
+    NameT,
+    NodeStateT,
+    StateT,
+)
 from sekaibot.utils import flatten_exception_group, handle_exception, is_config_class
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
 
 __all__ = ["Node", "NodeLoadType"]
-
-NameT = TypeVar("NameT", bound="str")
 
 
 class NodeLoadType(Enum):
@@ -89,7 +95,7 @@ class Node(Generic[EventT, NodeStateT, ConfigT]):
     __node_file_path__: ClassVar[str | None]
 
     # 不能使用 ClassVar 因为 PEP 526 不允许这样做
-    EventType: str | type[Event] | tuple[type[Event]]
+    EventType: str | type[Event]
     Config: type[ConfigT]
 
     if TYPE_CHECKING:
@@ -133,30 +139,19 @@ class Node(Generic[EventT, NodeStateT, ConfigT]):
                 )
             except ValueError:  # pragma: no cover
                 continue
-            if event_type is None:
-                if inspect.isclass(event_t) and issubclass(event_t, Event):
-                    event_type = event_t
-                elif event_t:
-                    _event_t = tuple(
-                        filter(
-                            lambda e: inspect.isclass(e) and issubclass(e, Event),
-                            get_args(event_t),
-                        )
-                    )
-                    event_type = (
-                        _event_t[0]
-                        if len(_event_t) == 1
-                        else _event_t
-                        if len(_event_t) > 0
-                        else None
-                    )
+            if event_type is None and (
+                inspect.isclass(event_t)
+                and issubclass(event_t, Event)
+                or isinstance(event_t, UnionType)
+            ):
+                event_type = event_t
             if config is None and inspect.isclass(config_t) and issubclass(config_t, ConfigModel):
-                config = config_t  # pyright: ignore
+                config = config_t
             if init_state is None:
                 if get_origin(state_t) is Annotated and hasattr(state_t, "__metadata__"):
                     init_state = state_t.__metadata__[0]  # pyright: ignore
-                elif inspect.isclass(state_t):
-                    init_state = state_t()  # pyright: ignore
+                elif inspect.isclass(state_t) and not inspect.isabstract(state_t):
+                    init_state = state_t()
         if not hasattr(cls, "EventType") and event_type is not None:
             cls.EventType = event_type
         if not hasattr(cls, "Config") and config is not None:
@@ -377,10 +372,9 @@ class Node(Generic[EventT, NodeStateT, ConfigT]):
             )
             or (
                 (
-                    isinstance(cls.EventType, type)
+                    inspect.isclass(cls.EventType)
                     and issubclass(cls.EventType, Event)
-                    or isinstance(cls.EventType, tuple)
-                    and all(issubclass(i, Event) for i in cls.EventType)
+                    or isinstance(cls.EventType, UnionType)
                 )
                 and isinstance(event, cls.EventType)
             )

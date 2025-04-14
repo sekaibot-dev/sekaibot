@@ -30,6 +30,7 @@ StateT = TypeVar("StateT", bound="dict[str, dict[str, Any] | Any]")
 NodeStateT = TypeVar("NodeStateT")
 GlobalStateT = TypeVar("GlobalStateT", bound="dict[str, dict[str, Any]]")
 DependencyCacheT = TypeVar("DependencyCacheT", bound="dict")
+NameT = TypeVar("NameT", bound="str")
 
 RuleCheckerT = Callable[..., bool | Awaitable[bool]]
 PermissionCheckerT = Callable[..., bool | Awaitable[bool]]

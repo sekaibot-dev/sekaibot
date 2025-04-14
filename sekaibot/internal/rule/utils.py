@@ -47,10 +47,9 @@ from sekaibot.consts import (
 from sekaibot.exceptions import ParserExit
 from sekaibot.internal.event import Event
 from sekaibot.internal.message import Message, MessageSegment
-from sekaibot.internal.node import NameT
 from sekaibot.internal.rule import Rule
 from sekaibot.log import logger
-from sekaibot.typing import GlobalStateT, StateT
+from sekaibot.typing import GlobalStateT, NameT, StateT
 from sekaibot.utils import Counter
 
 if TYPE_CHECKING:
@@ -257,18 +256,18 @@ class WordFilterRule:
         words: 指定关键字集合
         word_file: 可选的词库文件路径（每行一个词）
         ignorecase: 是否忽略大小写
-        pinyin: 是否启用拼音匹配，使用 pypinyin 库
-        use_aho: 是否启用 Aho-Corasick 算法（当词数较大时自动激活）
+        use_pinyin: 是否启用拼音匹配，使用 `pypinyin` 库
+        use_aho: 是否启用 Aho-Corasick 算法（当词数较大时自动激活），使用 `pyahocorasick` 库
     """
 
-    __slots__ = ("ignorecase", "words", "pinyin", "use_aho", "_automaton")
+    __slots__ = ("ignorecase", "words", "use_pinyin", "use_aho", "_automaton")
 
     def __init__(
         self,
         words: tuple[str, ...] = (),
         word_file: str | None = None,
         ignorecase: bool = False,
-        pinyin: bool = False,
+        use_pinyin: bool = False,
         use_aho: bool = False,
     ):
         self.ignorecase = ignorecase
@@ -280,37 +279,40 @@ class WordFilterRule:
             self._load_word_set(word_file)
 
         self.words.update(
-            word.casefold() if ignorecase and isinstance(word, str) else word
-            for word in words
+            word.casefold() if ignorecase and isinstance(word, str) else word for word in words
         )
 
-        self.pinyin = pinyin
+        self.use_pinyin = use_pinyin
 
-        if pinyin:
+        if self.use_pinyin:
             try:
                 from pypinyin import Style, lazy_pinyin
             except ImportError:
                 raise ImportError("pypinyin is not installed, please install it first.") from None
 
             self.words = set(
-                word.casefold() if ignorecase else word
-                for word in lazy_pinyin(words, style=Style.FIRST_LETTER)
+                "".join(lazy_pinyin(word, style=Style.FIRST_LETTER)).casefold() if ignorecase else
+                "".join(lazy_pinyin(word, style=Style.FIRST_LETTER))
+                for word in self.words
             )
 
         if self.use_aho and len(self.words) > 2000:
             try:
-                import ahocorasick
-                self._automaton = ahocorasick.Automaton()
+                from ahocorasick import Automaton
+
+                self._automaton = Automaton()
                 for idx, word in enumerate(self.words):
                     self._automaton.add_word(word, (idx, word))
                 self._automaton.make_automaton()
             except ImportError:
-                raise ImportError("pyahocorasick is not installed, please install it first.") from None
+                raise ImportError(
+                    "pyahocorasick is not installed, please install it first."
+                ) from None
 
     def __repr__(self) -> str:
         return (
             f"WordFilter(words={self.words}, ignorecase={self.ignorecase}, "
-            f"pinyin={self.pinyin}, use_aho={self.use_aho})"
+            f"pinyin={self.use_pinyin}, use_aho={self.use_aho})"
         )
 
     def __eq__(self, other: object) -> bool:
@@ -318,14 +320,14 @@ class WordFilterRule:
             isinstance(other, WordFilterRule)
             and frozenset(self.words) == frozenset(other.words)
             and self.ignorecase == other.ignorecase
-            and self.pinyin == other.pinyin
+            and self.use_pinyin == other.use_pinyin
             and self.use_aho == other.use_aho
         )
 
     def __hash__(self) -> int:
-        return hash((frozenset(self.words), self.ignorecase, self.pinyin, self.use_aho))
+        return hash((frozenset(self.words), self.ignorecase, self.use_pinyin, self.use_aho))
 
-    def __call__(self, event: "Event") -> bool:
+    async def __call__(self, event: Event) -> bool:
         """执行敏感词检测。
 
         Return:
@@ -334,15 +336,13 @@ class WordFilterRule:
         try:
             text = event.get_plain_text()
         except Exception:
-            return True  # 获取失败，默认放行
-
+            return True
         if not text:
             return True
 
         text = text.casefold() if self.ignorecase else text
 
-        # 如果启用拼音，附加拼音字符串
-        if self.pinyin:
+        if self.use_pinyin:
             try:
                 from pypinyin import Style, lazy_pinyin
             except ImportError:
@@ -350,11 +350,9 @@ class WordFilterRule:
 
             text += "".join(lazy_pinyin(text, style=Style.FIRST_LETTER))
 
-        # 使用 Aho-Corasick 匹配
         if self._automaton:
             return not any(True for _, (_, word) in self._automaton.iter(text))
 
-        # 普通匹配
         return not any(word in text for word in self.words)
 
     def _load_word_set(self, file_path: str) -> None:

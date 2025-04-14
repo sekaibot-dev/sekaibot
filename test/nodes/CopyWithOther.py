@@ -3,8 +3,10 @@ from typing import Any
 from sekaibot import Node
 from sekaibot.adapters.cqhttp.event import GroupMessageEvent
 from sekaibot.adapters.cqhttp.message import CQHTTPMessage, CQHTTPMessageSegment
+from sekaibot.rule import WordFilter
 
 
+@WordFilter(word_file="./test/nodes/sensitive_words_lines.txt", use_aho=True)
 class CopyWith(Node[GroupMessageEvent, dict, Any]):
     priority: int = 2
 
@@ -16,21 +18,36 @@ class CopyWith(Node[GroupMessageEvent, dict, Any]):
             return msg
 
         message = repr(CQHTTPMessage(list(map(del_file_id, self.event.message))))
-        if self.event.group_id in self.node_state:
-            if message in self.node_state[self.event.group_id]:
-                self.node_state[self.event.group_id][message] += 1
-                if self.node_state[self.event.group_id][message] >= 3:
-                    self.node_state[self.event.group_id] = {}
-                    await self.call_api(
-                        "forward_group_single_msg",
-                        message_id=self.event.message_id,
-                        group_id=self.event.group_id,
-                    )
-                    self.stop()
-            else:
-                self.node_state[self.event.group_id] = {message: 1}
+        group_id = self.event.group_id
+
+        if group_id not in self.node_state:
+            self.node_state[group_id] = {
+                "last_message": message,
+                "count": 1,
+                "repeated": False,
+            }
+            return
+
+        state = self.node_state[group_id]
+
+        if message == state["last_message"]:
+            if state["repeated"]:
+                return
+            state["count"] += 1
+            if state["count"] >= 3:
+                await self.call_api(
+                    "forward_group_single_msg",
+                    message_id=self.event.message_id,
+                    group_id=group_id,
+                )
+                state["repeated"] = True
+                self.stop()
         else:
-            self.node_state[self.event.group_id] = {message: 1}
+            self.node_state[group_id] = {
+                "last_message": message,
+                "count": 1,
+                "repeated": False,
+            }
 
     async def rule(self) -> bool:
         return (not self.event.is_tome()) and self.event.user_id != 2854196310
