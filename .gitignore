@@ -170,3 +170,4 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 test/.run.bat
+run.bat
