@@ -8,7 +8,7 @@ from _sound import get_character_name_list_text, parse_character_command
 
 from sekaibot import Event, Node
 from sekaibot.adapters.cqhttp.event import GroupMessageEvent, MessageEvent
-from sekaibot.permission import SuperUser
+from sekaibot.permission import SuperUser, User
 from sekaibot.rule import Keywords, StartsWith
 
 
@@ -104,6 +104,19 @@ class RandomSens(Node[MessageEvent, dict, Any]):
 
     async def handle(self):
         await self.reply(generate_sentence())
+
+
+@Keywords("芽", "老婆", "我", "妻子")
+@User("group_788499440_413966479", strict=True)
+class YanCheng(Node[GroupMessageEvent, Any, Any]):
+    priority = 0
+    block = True
+
+    keyw = Keywords.Param()
+
+    async def handle(self):
+        if len(self.keyw) > 1:
+            await self.reply("理芽不是言承的……！", at_sender=True)
 
 
 '''class HelloWorldNode1(Node):
