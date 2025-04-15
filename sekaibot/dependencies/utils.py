@@ -208,6 +208,9 @@ async def solve_dependencies(
             raise TypeError("stack cannot be None when entering a generator context")
         cm = sync_ctx_manager_wrapper(contextmanager(dependent)())
         depend = cast(_T, await stack.enter_async_context(cm))
+    elif inspect.ismethod(dependent):
+        # type of dependent is a bound method (instance method)
+        depend = await _execute_callable(dependent.__func__, stack, dependency_cache)
     elif isinstance(dependent, object) and callable(dependent):
         # type of dependent is an instance with __call__ method (Callable class instance)
         call_method = dependent.__call__

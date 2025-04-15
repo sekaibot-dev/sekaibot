@@ -29,35 +29,26 @@ class UserPermission:
                - 用户 ID 为纯字符串，例如 `"123456"`
                - 群聊 ID 需添加前缀，例如 `"group_654321"`
                - 精准会话 ID 格式为：`"group_<群聊ID>_<用户ID>"`
-        strict: 是否严格匹配会话 ID。
-                - 若为 `True`，则只匹配完全一致的会话 ID（如某群的某个用户）
-                - 若为 `False`，则允许包含匹配：
-                  用户 ID 可匹配私聊和群聊
-                  群聊 ID（以 `"group_"` 开头）仅匹配群聊
         perm: 要求用户需同时满足的权限
     """
 
-    __slots__ = ("perm", "users", "strict")
+    __slots__ = ("perm", "users")
 
-    def __init__(self, *users: str, strict: bool = False, perm: Permission | None = None) -> None:
+    def __init__(self, users: tuple[str, ...], perm: Permission | None = None) -> None:
         self.users = users
         self.perm = perm
-        self.strict = strict
 
     def __repr__(self) -> str:
         return (
             f"User(users={self.users}" + (f", permission={self.perm})" if self.perm else "") + ")"
         )
 
-    async def __call__(self, bot: "Bot", event: Event, global_state: GlobalStateT) -> bool:
+    async def __call__(self, event: Event) -> bool:
         try:
             session = event.get_session_id()
         except Exception:
             return False
-        return bool(
-            (session in self.users if self.strict else filter(lambda x: x in session, self.users))
-            and (self.perm is None or await self.perm(bot, event, global_state))
-        )
+        return any(user in session for user in self.users)
 
     @classmethod
     def _clean_permission(cls, perm: Permission) -> Permission | None:
@@ -66,7 +57,7 @@ class UserPermission:
         return perm
 
     @classmethod
-    def from_event(cls, event: Event, strict: bool = False, perm: Permission | None = None) -> Self:
+    def from_event(cls, event: Event, perm: Permission | None = None) -> Self:
         """从事件中获取会话 ID。
 
         如果 `perm` 中仅有 `User` 类型的权限检查函数，则会去除原有的会话 ID 限制。
@@ -76,12 +67,12 @@ class UserPermission:
             perm: 需同时满足的权限
         """
         return cls(
-            (event.get_session_id(),), strict=strict, perm=perm and cls._clean_permission(perm)
+            (event.get_session_id(),), perm=perm and cls._clean_permission(perm)
         )
 
     @classmethod
     def from_permission(
-        cls, *users: str, strict: bool = False, perm: Permission | None = None
+        cls, users: tuple[str, ...], perm: Permission | None = None
     ) -> Self:
         """指定会话与权限。
 
@@ -91,7 +82,7 @@ class UserPermission:
             users: 会话白名单
             perm: 需同时满足的权限
         """
-        return cls(users, strict=strict, perm=perm and cls._clean_permission(perm))
+        return cls(users, perm=perm and cls._clean_permission(perm))
 
 
 class SuperUserPermission:

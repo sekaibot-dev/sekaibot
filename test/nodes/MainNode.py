@@ -16,7 +16,7 @@ def a(event: Event):
     print(event.get_event_name())
 
 
-@Keywords("/开", "/关", "/角色列表", "/角色", "蒸", "松泽", "松", "lrc", "超", "xy", "香氤")
+@Keywords("/开", "/关", "/角色列表", "/角色", "蒸", "松泽", "sz", "lrc", "超", "xy", "香氤")
 @SuperUser()
 class AutoReply(Node[GroupMessageEvent, dict, Any]):
     """Hello, World! 示例节点。"""
@@ -49,6 +49,7 @@ class AutoReply(Node[GroupMessageEvent, dict, Any]):
         else:
             keyw = "林睿晨" if keyw == "lrc" else keyw
             keyw = "香氤" if keyw == "xy" else keyw
+            keyw = "松泽" if keyw == "sz" else keyw
             text = random.choice(
                 (
                     "{keyw}鞭好粗",
@@ -107,7 +108,7 @@ class RandomSens(Node[MessageEvent, dict, Any]):
 
 
 @Keywords("芽", "老婆", "我", "妻子")
-@User("group_788499440_413966479", strict=True)
+@User("413966479")
 class YanCheng(Node[GroupMessageEvent, dict, Any]):
     priority = 0
     block = True
@@ -115,7 +116,7 @@ class YanCheng(Node[GroupMessageEvent, dict, Any]):
     keyw = Keywords.Param()
 
     async def handle(self):
-        if len(self.keyw) > 1:
+        if len(self.keyw) > 1 and "芽" in self.keyw:
             await self.reply("理芽不是言承的……！", at_sender=True)
 
 

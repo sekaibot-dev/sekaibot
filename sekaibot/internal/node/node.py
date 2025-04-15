@@ -14,6 +14,7 @@ from typing import (
     ClassVar,  # type: ignore
     Generic,
     NoReturn,
+    TypeVar,
     cast,
     final,
     get_args,
@@ -150,8 +151,15 @@ class Node(Generic[EventT, NodeStateT, ConfigT]):
             if init_state is None:
                 if get_origin(state_t) is Annotated and hasattr(state_t, "__metadata__"):
                     init_state = state_t.__metadata__[0]  # pyright: ignore
-                elif inspect.isclass(state_t) and not inspect.isabstract(state_t):
-                    init_state = state_t()
+                elif (
+                    inspect.isclass(state_t)
+                    and not inspect.isabstract(state_t)
+                    and not isinstance(cls, TypeVar)
+                ):
+                    try:
+                        init_state = state_t()
+                    except Exception:
+                        pass
         if not hasattr(cls, "EventType") and event_type is not None:
             cls.EventType = event_type
         if not hasattr(cls, "Config") and config is not None:
@@ -215,13 +223,13 @@ class Node(Generic[EventT, NodeStateT, ConfigT]):
 
     async def rule(self) -> bool:
         """匹配事件的方法。事件处理时，会按照节点的优先级依次调用此方法，当此方法返回 `True` 时将事件交由此节点处理。每个节点不一定要实现此方法。
-        注意：不建议直接在此方法内实现对事件的处理，事件的具体处理请交由 node 方法。
+        注意：不建议直接在此方法内实现对事件的处理，事件的具体处理请交由 handle 方法。
         """
         return True
 
-    async def fallback(self) -> None:
+    async def fallback(cls) -> None:
         """事件不通过时执行的善后方法。当 `rule()` 方法返回 `False` 时 SekaiBot 会调用此方法。每个节点不一定要实现此方法。
-        注意：此方法最好用于执行拒绝（`reject()`）等方法，不建议直接在此方法内实现对事件的处理，事件的具体处理请交由 node 方法。
+        注意：不建议直接在此方法内实现对事件的处理，事件的具体处理请交由 handle 方法。
         """
 
     @final

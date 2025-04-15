@@ -2,6 +2,7 @@ import time
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
 from contextlib import AsyncExitStack
+from functools import partial
 from typing import TYPE_CHECKING, Any, overload
 
 import anyio
@@ -352,27 +353,31 @@ class NodeManager:
             bool: 是否符合运行条件
         """
 
-        try:
+        passed = True
+
+        def handle_check_exception(msg: str, exc_group: BaseExceptionGroup[Exception]) -> None:
+            nonlocal passed
+            handle_exception(msg, node=node_class.__name__)(exc_group)
+            passed = False
+
+        with catch({Exception: partial(handle_check_exception, "permission check failed")}):
             if not await node_class._check_perm(
                 self.bot, current_event, self.bot.global_state, stack, dependency_cache
             ):
                 logger.debug("permission conditions not met", node=node_class.__name__)
                 return False
-        except Exception:
-            logger.exception("permission check failed", node=node_class.__name__)
+
+        if not passed:
             return False
 
-        try:
+        with catch({Exception: partial(handle_check_exception, "rule check failed")}):
             if not await node_class._check_rule(
                 self.bot, current_event, state, self.bot.global_state, stack, dependency_cache
             ):
                 logger.debug("rule conditions not met", node=node_class.__name__)
                 return False
-        except Exception:
-            logger.exception("rule check failed", node=node_class.__name__)
-            return False
 
-        return True
+        return passed
 
     async def _run_node(
         self,
@@ -428,7 +433,7 @@ class NodeManager:
         dependency_cache: DependencyCacheT | None = None,
     ) -> tuple[PruningException | JumpToException | None, StateT | None]:
         if not await self._check_node(node_class, current_event, state, stack, dependency_cache):
-            return PruningException(), None
+            return StopException() if node_class.block else PruningException(), None
 
         return await self._run_node(node_class, current_event, state, stack, dependency_cache)
 
