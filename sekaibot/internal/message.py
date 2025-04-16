@@ -188,14 +188,6 @@ class Message(ABC, list[MessageSegmentT]):
         """是否是纯文本消息。"""
         return all(x.is_text() for x in self)
 
-    def get_message_component(self) -> list:
-        """获取消息中的type部分组成的列表。
-
-        Returns:
-            消息中的type部分组成的列表。
-        """
-        return [msg.type for msg in self]
-
     def get_plain_text(self) -> str:
         """获取消息中的纯文本部分。
 
