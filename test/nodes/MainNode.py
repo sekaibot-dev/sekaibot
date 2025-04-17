@@ -7,7 +7,7 @@ from _randsent import generate_sentence
 from _sound import get_character_name_list_text, parse_character_command
 
 from sekaibot import Event, Node
-from sekaibot.adapters.cqhttp.event import GroupMessageEvent, MessageEvent
+from sekaibot.adapter.cqhttp.event import GroupMessageEvent, MessageEvent
 from sekaibot.permission import SuperUser, User
 from sekaibot.rule import Keywords, StartsWith
 
@@ -16,7 +16,9 @@ def a(event: Event):
     print(event.get_event_name())
 
 
-@Keywords("/开", "/关", "/角色列表", "/角色", "蒸", "松泽", "sz", "lrc", "超", "xy", "香氤")
+@Keywords(
+    "/开", "/关", "/角色列表", "/角色", "蒸", "松泽", "sz", "lrc", "思灿", "sc", "超", "xy", "香氤"
+)
 @SuperUser()
 class AutoReply(Node[GroupMessageEvent, dict, Any]):
     """Hello, World! 示例节点。"""
@@ -50,6 +52,7 @@ class AutoReply(Node[GroupMessageEvent, dict, Any]):
             keyw = "林睿晨" if keyw == "lrc" else keyw
             keyw = "香氤" if keyw == "xy" else keyw
             keyw = "松泽" if keyw == "sz" else keyw
+            keyw = "思灿" if keyw == "sc" else keyw
             text = random.choice(
                 (
                     "{keyw}鞭好粗",

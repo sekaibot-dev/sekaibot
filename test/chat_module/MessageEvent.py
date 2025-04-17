@@ -4,8 +4,8 @@ import re
 from chat_module.ChatAPI import ChatAPI
 
 from sekaibot import Bot, Depends, Event
-from sekaibot.adapters.cqhttp.event import MessageEvent
-from sekaibot.adapters.cqhttp.message import CQHTTPMessageSegment
+from sekaibot.adapter.cqhttp.event import MessageEvent
+from sekaibot.adapter.cqhttp.message import CQHTTPMessageSegment
 
 # from chat_module.CheckString import CheckString
 
@@ -79,10 +79,7 @@ class ChatHandler:
         if len(self.event.get_plain_text()) > 150:
             answer = "请勿发送过长内容！！"
         else:
-            if (
-                len(self.event.message) == 1
-                and self.event.message[0].type == "image"
-            ):
+            if len(self.event.message) == 1 and self.event.message[0].type == "image":
                 for msg in self.event.message:
                     img_url = msg.data.get("url")
                     meme = True
@@ -124,11 +121,13 @@ class ChatHandler:
                     if self.event.message_type == "group"
                     else CQHTTPMessageSegment.text(answer)
                 )"""
-            #self.answer = answer
+            # self.answer = answer
             if meme:
                 await self.event.adapter.send(self.event, answer, at_sender=True)
             else:
-                await self.event.adapter.send(self.event, answer, at_sender=True, reply_message=True)
+                await self.event.adapter.send(
+                    self.event, answer, at_sender=True, reply_message=True
+                )
             """if if_music:
                 substring = self.extract_music_titles(answer)
                 if substring != []:

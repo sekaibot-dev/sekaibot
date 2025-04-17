@@ -1,7 +1,7 @@
 from typing import Any
 
 from sekaibot import Node
-from sekaibot.adapters.cqhttp.event import PokeNotifyEvent
+from sekaibot.adapter.cqhttp.event import PokeNotifyEvent
 
 
 class PokeNotice(Node[PokeNotifyEvent, Any, Any]):

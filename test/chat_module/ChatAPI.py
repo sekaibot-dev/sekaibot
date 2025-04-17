@@ -7,7 +7,7 @@ from chat_module.ChatMemory import ChatMemoryDB
 from chat_module.config import CharacterConfig
 from chat_module.image import fetch_image_as_base64
 
-from sekaibot.adapters.cqhttp.event import Reply
+from sekaibot.adapter.cqhttp.event import Reply
 
 # from sekaibot.info import ReplyMessage
 

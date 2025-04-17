@@ -2,8 +2,8 @@ import random
 from typing import Any
 
 from sekaibot import Node
-from sekaibot.adapters.cqhttp.event import MessageEvent
-from sekaibot.adapters.cqhttp.message import CQHTTPMessageSegment
+from sekaibot.adapter.cqhttp.event import MessageEvent
+from sekaibot.adapter.cqhttp.message import CQHTTPMessageSegment
 from sekaibot.permission import SuperUser
 from sekaibot.rule import Keywords
 

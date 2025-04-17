@@ -1,8 +1,8 @@
 from typing import Any
 
 from sekaibot import Node
-from sekaibot.adapters.cqhttp.event import GroupMessageEvent
-from sekaibot.adapters.cqhttp.message import CQHTTPMessage, CQHTTPMessageSegment
+from sekaibot.adapter.cqhttp.event import GroupMessageEvent
+from sekaibot.adapter.cqhttp.message import CQHTTPMessage, CQHTTPMessageSegment
 from sekaibot.rule import WordFilter
 
 

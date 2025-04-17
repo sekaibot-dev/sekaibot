@@ -1,16 +1,18 @@
 {
-    "editor.formatOnSave": true,
-    "editor.defaultFormatter": "charliermarsh.ruff",
-    "editor.codeActionsOnSave": {
-      "source.organizeImports": "explicit",
-      "source.fixAll": "explicit"
-    },
-    "python.linting.enabled": true,
-    "python.linting.flake8Enabled": false,
-    "python.linting.pylintEnabled": false,
-    "python.linting.mypyEnabled": false,
-    "[jsonc]": {
-      "editor.defaultFormatter": "vscode.json-language-features"
-    }
-  }
-  
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "charliermarsh.ruff",
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": "explicit",
+    "source.fixAll": "explicit"
+  },
+  "python.linting.enabled": true,
+  "python.linting.flake8Enabled": false,
+  "python.linting.pylintEnabled": false,
+  "python.linting.mypyEnabled": false,
+  "[jsonc]": {
+    "editor.defaultFormatter": "vscode.json-language-features"
+  },
+  "python.analysis.extraPaths": [
+    "./packages/sekaibot-adapter-onebot-v11"
+  ]
+}

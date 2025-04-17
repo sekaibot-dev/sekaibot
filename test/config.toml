@@ -3,7 +3,7 @@
 event_queue_size=100
 nodes = []
 node_dirs = ["./test/nodes"]
-adapters = ["sekaibot.adapters.cqhttp"]
+adapters = ["sekaibot.adapter.cqhttp"]
 
 
 [bot.log]

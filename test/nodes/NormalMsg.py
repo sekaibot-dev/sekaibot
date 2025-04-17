@@ -3,7 +3,7 @@ from typing import Any
 from chat_module.MessageEvent import ChatHandler
 
 from sekaibot import Node
-from sekaibot.adapters.cqhttp.event import MessageEvent
+from sekaibot.adapter.cqhttp.event import MessageEvent
 from sekaibot.dependencies import Depends
 
 # from sekaibot.permission import SuperUser

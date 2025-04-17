@@ -1,11 +1,18 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Iterator, MutableSequence
 from copy import deepcopy
 from typing import Any, Literal, Self, TypeVar
 
-from pydantic import BaseModel, ConfigDict, ValidationInfo, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    GetCoreSchemaHandler,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
+from pydantic_core import core_schema
 
 HistoryInput = TypeVar("HistoryInput", str, list["MessageSegment"], "MessageSegment", "History")
 
@@ -14,20 +21,19 @@ ContentType = str | list[dict]
 
 
 class MessageSegment(BaseModel):
-    """
-    A single message used in the OpenAI Chat Completions API.
+    """A single message used in the OpenAI Chat Completions API.
 
     This class encapsulates all fields required for a valid message, including:
-    - tool call responses (tool_call_id)
-    - function invocation requests (tool_calls)
-    - multimodal messages
+    - tool call responses (`tool_call_id`)
+    - tool/function invocation requests (`tool_calls`)
+    - multimodal image messages
 
     Attributes:
-        role (str): One of 'system', 'user', 'assistant', 'tool'.
-        content (str | list[dict] | None): Message content or multimodal payload.
-        name (str | None): Optional name (used for functions or tools).
-        tool_call_id (str | None): Required if role is 'tool'.
-        tool_calls (list[dict] | None): Required if role is 'assistant' with function calls.
+        role: One of 'system', 'user', 'assistant', 'tool'.
+        content: Text or multimodal content (or None for tool_calls).
+        name: Optional name used for function/tool definitions.
+        tool_call_id: Required if role is 'tool'.
+        tool_calls: Required if role is 'assistant' making tool calls.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -38,32 +44,80 @@ class MessageSegment(BaseModel):
     tool_call_id: str | None = None
     tool_calls: list[dict] | None = None
 
-    # --- 构造方法 ---
+    def __str__(self) -> str:
+        """Human-readable string representation of the message segment.
+
+        Returns:
+            A string showing the role and either content or tool_calls.
+        """
+        if self.role == "assistant" and self.tool_calls:
+            return f"<assistant>: tool_calls={self.tool_calls}"
+        return f"<{self.role}>: {self.content}"
+
+    def __repr__(self) -> str:
+        return (
+            f"MessageSegment(role={self.role!r}, content={self.content!r}, "
+            f"name={self.name!r}, tool_call_id={self.tool_call_id!r}, tool_calls={self.tool_calls!r})"
+        )
+
     @classmethod
     def system(cls, content: ContentType) -> Self:
+        """Create a system message.
+
+        Args:
+            content: Instructional content.
+
+        Returns:
+            MessageSegment
+        """
         return cls(role="system", content=content)
 
     @classmethod
     def user(cls, content: ContentType) -> Self:
+        """Create a user message.
+
+        Args:
+            content: User's input or query.
+
+        Returns:
+            MessageSegment
+        """
         return cls(role="user", content=content)
 
     @classmethod
     def assistant(
         cls, content: ContentType | None = None, tool_calls: list[dict] | None = None
     ) -> Self:
+        """Create an assistant message.
+
+        Args:
+            content: Assistant's textual response.
+            tool_calls: List of tool call requests.
+
+        Returns:
+            MessageSegment
+        """
         return cls(role="assistant", content=content, tool_calls=tool_calls)
 
     @classmethod
     def tool(cls, tool_call_id: str, content: str) -> Self:
+        """Create a tool message in response to a specific tool call.
+
+        Args:
+            tool_call_id: ID of the tool call being responded to.
+            content: The tool's response content.
+
+        Returns:
+            MessageSegment
+        """
         return cls(role="tool", tool_call_id=tool_call_id, content=content)
 
     @classmethod
     def assistant_tool_call(cls, *, calls: list[dict]) -> Self:
-        """
-        Create an assistant message that triggers tool/function calls.
+        """Create an assistant message that issues tool/function calls.
 
         Args:
-            calls: A list of tool_calls. Each must include 'id', 'type', and 'function'.
+            calls: A list of tool call objects. Each must include 'id', 'type', and 'function'.
 
         Returns:
             MessageSegment
@@ -74,16 +128,18 @@ class MessageSegment(BaseModel):
     def image(
         cls, *, url: str | None = None, base64_data: str | None = None, detail: str = "auto"
     ) -> Self:
-        """
-        Create a user multimodal message with an image.
+        """Create a multimodal user message with an image.
 
         Args:
-            url: The image URL.
-            base64_data: Base64 string for inline image.
-            detail: Level of detail for image input ("auto", "low", "high").
+            url: Public or signed image URL.
+            base64_data: Base64-encoded inline image.
+            detail: Detail level ("auto", "low", "high").
 
         Returns:
             MessageSegment
+
+        Raises:
+            ValueError: If neither or both url and base64_data are provided.
         """
         if url and base64_data:
             raise ValueError("Provide either url or base64_data, not both.")
@@ -96,39 +152,53 @@ class MessageSegment(BaseModel):
             content=[{"type": "image_url", "image_url": {"url": image_url, "detail": detail}}],
         )
 
-    @field_validator("role")
-    @classmethod
-    def validate_role_constraints(cls, role_value: str, info: ValidationInfo) -> str:
-        """
-        Ensure required fields are present depending on the role type.
+    @model_validator(mode="after")
+    def validate_role_and_fields(self) -> Self:
+        """Validate required fields based on role after full model construction.
 
         - tool -> must have tool_call_id
         - assistant -> must have content or tool_calls
+
+        Returns:
+            Self
+
+        Raises:
+            ValueError: If required fields are missing based on role.
         """
-        role: str = role_value
-        data: dict[str, Any] = info.data
-
-        if role == "tool":
-            if not data.get("tool_call_id"):
+        if self.role == "tool":
+            if not self.tool_call_id:
                 raise ValueError("tool role requires tool_call_id")
-            if data.get("content") is None:
+            if self.content is None:
                 raise ValueError("tool role requires content")
-        elif role == "assistant":
-            if not data.get("content") and not data.get("tool_calls"):
-                raise ValueError("assistant must provide content or tool_calls")
-        elif role in {"system", "user"}:
-            if data.get("content") is None:
-                raise ValueError(f"{role} role requires non-empty content")
 
-        return role
+        elif self.role == "assistant":
+            if self.content is None and not self.tool_calls:
+                raise ValueError("assistant must provide either content or tool_calls")
+
+        elif self.role in {"system", "user"}:
+            if self.content is None:
+                raise ValueError(f"{self.role} role requires non-empty content")
+            if isinstance(self.content, str) and not self.content.strip():
+                raise ValueError("Content cannot be empty string")
+
+        return self
 
     @field_validator("tool_calls")
     @classmethod
     def validate_tool_calls(
         cls, tool_calls: list[dict] | None, info: ValidationInfo
     ) -> list[dict] | None:
-        """
-        Validate that tool_calls only appear when role is 'assistant'.
+        """Validate that tool_calls only appear when role is 'assistant'.
+
+        Args:
+            tool_calls: Value of the field.
+            info: Validation context.
+
+        Returns:
+            The validated tool_calls list or None.
+
+        Raises:
+            ValueError: If role is not assistant.
         """
         role: str | None = info.data.get("role")
         if tool_calls is not None and role != "assistant":
@@ -138,8 +208,17 @@ class MessageSegment(BaseModel):
     @field_validator("tool_call_id")
     @classmethod
     def validate_tool_call_id(cls, tool_call_id: str | None, info: ValidationInfo) -> str | None:
-        """
-        Validate that tool_call_id only appears when role is 'tool'.
+        """Validate that tool_call_id only appears when role is 'tool'.
+
+        Args:
+            tool_call_id: ID value.
+            info: Validation context.
+
+        Returns:
+            The validated tool_call_id or None.
+
+        Raises:
+            ValueError: If role is not 'tool'.
         """
         role: str | None = info.data.get("role")
         if tool_call_id is not None and role != "tool":
@@ -149,11 +228,17 @@ class MessageSegment(BaseModel):
     @field_validator("content")
     @classmethod
     def validate_content(cls, content: Any, info: ValidationInfo) -> Any:
-        """
-        Ensure that content is not missing where required.
+        """Validate content field presence and type.
 
-        Assistant can omit content only if tool_calls are provided.
-        All other roles must have non-empty content.
+        Args:
+            content: Message content.
+            info: Validation context.
+
+        Returns:
+            The validated content.
+
+        Raises:
+            ValueError: If content is missing or empty where required.
         """
         role: str | None = info.data.get("role")
 
@@ -169,6 +254,7 @@ class MessageSegment(BaseModel):
         return content
 
     def __add__(self, other: Self) -> Self | History:
+        """Support addition for merging or history composition."""
         if not isinstance(other, MessageSegment):
             return NotImplemented
         if (
@@ -182,11 +268,13 @@ class MessageSegment(BaseModel):
             return History(self, other)
 
     def _merge_content_with(self, other: Self) -> Self:
+        """Internal method to merge message contents."""
         new_content = self._combine_content(self.content, other.content)
-        return self.copy(update={"content": new_content})
+        return self.model_copy(update={"content": new_content})
 
     @staticmethod
     def _combine_content(c1: ContentType | None, c2: ContentType | None) -> ContentType:
+        """Combine two message content blocks."""
         if c1 is None or c2 is None:
             raise TypeError("Cannot merge messages with None content")
         if isinstance(c1, str) and isinstance(c2, str):
@@ -197,18 +285,15 @@ class MessageSegment(BaseModel):
             raise TypeError(f"Cannot merge content of different types: {type(c1)} vs {type(c2)}")
 
     def dict_for_openai(self) -> dict:
-        """
-        Convert the message to OpenAI SDK-compliant dictionary.
+        """Convert message to OpenAI API-compliant dict.
 
         Returns:
-            dict
+            A JSON-serializable message dict.
         """
         return self.model_dump(exclude_none=True)
 
     def __eq__(self, other: object) -> bool:
-        if not isinstance(other, MessageSegment):
-            return False
-        return self.model_dump() == other.model_dump()
+        return isinstance(other, MessageSegment) and self.model_dump() == other.model_dump()
 
     def __ne__(self, other: object) -> bool:
         return not self.__eq__(other)
@@ -224,36 +309,27 @@ class MessageSegment(BaseModel):
             )
         )
 
-    def __str__(self) -> str:
-        return f"<{self.role}>: {self.content}"
 
-    def __repr__(self) -> str:
-        return (
-            f"MessageSegment(role={self.role!r}, content={self.content!r}, "
-            f"name={self.name!r}, tool_call_id={self.tool_call_id!r}, tool_calls={self.tool_calls!r})"
-        )
+class History(list[MessageSegment]):
+    """A sequence of MessageSegment objects representing a chat history.
 
+    This class behaves like a standard list of MessageSegment while providing
+    additional convenience methods to work with OpenAI Chat Completions API.
 
-class History(MutableSequence[MessageSegment]):
-    """
-    A sequence of MessageSegment objects representing a chat history.
+    Examples:
+        >>> History("Hi", MessageSegment.assistant("Hello"))
+        >>> History.from_list(openai_messages)
 
-    Supports merging with strings (as user), MessageSegment, or another History.
+    Args:
+        *messages: One or more message inputs:
+            - str: converted to MessageSegment.user(...)
+            - MessageSegment
+            - list[MessageSegment]
+            - History
     """
 
     def __init__(self, *messages: str | list[MessageSegment] | MessageSegment | History):
-        """
-        Initialize History with flexible input types.
-
-        Args:
-            *messages: Any combination of:
-                - str: converted to user message
-                - MessageSegment: appended directly
-                - list[MessageSegment]: extended
-                - History: merged from existing history
-        """
-        self._messages: list[MessageSegment] = []
-
+        super().__init__()
         for message in messages:
             if isinstance(message, str):
                 self.append(MessageSegment.user(message))
@@ -262,108 +338,158 @@ class History(MutableSequence[MessageSegment]):
             elif isinstance(message, list) and all(isinstance(m, MessageSegment) for m in message):
                 self.extend(message)
             elif isinstance(message, History):
-                self.extend(message._messages)
+                self.extend(message)
             else:
                 raise TypeError(f"Unsupported type for message: {type(message)}")
 
-    def __getitem__(self, index: int) -> MessageSegment:
-        return self._messages[index]
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls, _source: type[Any], handler: GetCoreSchemaHandler
+    ) -> core_schema.CoreSchema:
+        """Custom schema definition to support both History and list[MessageSegment]."""
+        return core_schema.union_schema(
+            [
+                core_schema.is_instance_schema(cls),
+                core_schema.no_info_after_validator_function(
+                    # cls,
+                    # handler.generate_schema(list[MessageSegment]),
+                    function=cls.from_list,
+                    schema=handler.generate_schema(list[dict]),
+                ),
+            ]
+        )
 
-    def __setitem__(self, index: int, value: MessageSegment) -> None:
-        self._messages[index] = value
-
-    def __delitem__(self, index: int) -> None:
-        del self._messages[index]
-
-    def __len__(self) -> int:
-        return len(self._messages)
-
-    def insert(self, index: int, value: MessageSegment) -> None:
-        self._messages.insert(index, value)
-
-    def __iter__(self) -> Iterator[MessageSegment]:
-        return iter(self._messages)
-
-    def __add__(self, other: HistoryInput) -> History:
-        """
-        Add a MessageSegment, string (as user), or another History to this history.
-
-        Args:
-            other: str | MessageSegment | History
+    def __str__(self) -> str:
+        """Return a human-readable string of the history.
 
         Returns:
-            New History
+            A newline-joined string of message summaries.
         """
-        new_history = self.copy()
-        new_history += other
-        return new_history
+        return "\n".join(str(msg) for msg in self)
 
-    def __iadd__(self, other: HistoryInput) -> Self:
-        """
-        In-place addition of message, string, or another history.
-
-        Args:
-            other: str | MessageSegment | History
+    def __repr__(self) -> str:
+        """Return debug representation.
 
         Returns:
-            Self
+            Summary of History object.
+        """
+        return f"History({len(self)} messages)"
+
+    def __add__(self, other: str | MessageSegment | History) -> History:
+        """Return a new History with the other item(s) added.
+
+        Args:
+            other: The message(s) to add.
+
+        Returns:
+            A new History instance.
+        """
+        return History(*self).__iadd__(other)
+
+    def __iadd__(self, other: str | MessageSegment | History) -> Self:
+        """In-place addition of new message(s).
+
+        Args:
+            other: The message(s) to add.
+
+        Returns:
+            The updated History instance.
         """
         if isinstance(other, str):
             self.append(MessageSegment.user(other))
         elif isinstance(other, MessageSegment):
             self.append(other)
         elif isinstance(other, History):
-            self._messages.extend(other._messages)
+            self.extend(other)
         else:
             raise TypeError(f"Unsupported type for addition: {type(other)}")
         return self
 
-    def __radd__(self, other: HistoryInput) -> History:
-        """
-        Support reversed addition (e.g., str + History).
+    def __radd__(self, other: str | MessageSegment | History) -> History:
+        """Support reversed addition (e.g., str + History).
 
         Args:
-            other: str | MessageSegment | History
+            other: The message(s) to add before this history.
 
         Returns:
-            New History
+            A new History instance.
         """
         if isinstance(other, str):
-            return History([MessageSegment.user(other)]) + self
+            return History(MessageSegment.user(other), *self)
         elif isinstance(other, MessageSegment):
-            return History([other]) + self
+            return History(other, *self)
         elif isinstance(other, History):
-            return other + self
+            return History(*other, *self)
         else:
             raise TypeError(f"Unsupported type for addition: {type(other)}")
 
     def to_list(self) -> list[dict]:
-        """Convert to OpenAI-compatible list of dicts."""
-        return [msg.dict_for_openai() for msg in self._messages]
+        """Convert to OpenAI-compatible list of message dictionaries.
+
+        Returns:
+            A list of OpenAI-ready dict messages.
+        """
+        return [msg.dict_for_openai() for msg in self]
 
     @classmethod
     def from_list(cls, messages: list[dict]) -> Self:
-        """Construct History from a list of OpenAI-compatible dicts."""
-        return cls([MessageSegment(**m) for m in messages])
+        """Create a History instance from OpenAI-format message dicts.
+
+        Args:
+            messages: List of message dictionaries.
+
+        Returns:
+            A History instance.
+        """
+        return cls(*[MessageSegment(**m) for m in messages])
 
     def copy(self) -> History:
-        """Return a deep copy of the history."""
-        return History(deepcopy(self._messages))
+        """Return a deep copy of the History.
 
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, History):
-            return False
-        return self.to_list() == other.to_list()
+        Returns:
+            A cloned History instance.
+        """
+        return History(*deepcopy(self))
 
-    def __ne__(self, other: object) -> bool:
-        return not self == other
+    def last(self, n: int) -> History:
+        """Return the last `n` messages as a new History.
 
-    def __hash__(self) -> int:
-        return hash(tuple(msg.__hash__() for msg in self._messages))
+        Args:
+            n: Number of most recent messages to return.
 
-    def __str__(self) -> str:
-        """Human-readable string representation."""
-        return "\n".join(str(msg) for msg in self._messages)
+        Returns:
+            A new History containing the last `n` items.
+        """
+        return History(*self[-n:])
 
-    def __repr__(self) -> str:
-        return f"History({len(self._messages)} messages)"
+    def filter(self, *, role: Role) -> History:
+        """Return a new History with messages matching the given role.
+
+        Args:
+            role: One of 'user', 'assistant', 'system', 'tool'.
+
+        Returns:
+            A filtered History.
+        """
+        return History(*[msg for msg in self if msg.role == role])
+
+
+if __name__ == "__main__":
+    # Example usage
+    class Example(BaseModel):
+        messages: History
+
+    e = Example(
+        messages=[
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi! How can I help you?"},
+            {
+                "role": "assistant",
+                "tool_calls": [{"id": "abc123", "type": "function", "function": {}}],
+            },
+            {"role": "tool", "tool_call_id": "abc123", "content": "22°C in Paris"},
+        ]
+    )
+
+    print(e.messages)
+    print(e.messages.to_list())

@@ -22,10 +22,9 @@ if TYPE_CHECKING:
 
 __all__ = ["Adapter"]
 
-if os.getenv("ALICEBOT_DEV") == "1":  # pragma: no cover
+if os.getenv("SEKAIBOT_DEV") == "1":  # pragma: no cover
     # 当处于开发环境时，使用 pkg_resources 风格的命名空间包
     __import__("pkg_resources").declare_namespace(__name__)
-
 
 class Adapter(ABC, Generic[MessageSegmentT, ConfigT]):
     """协议适配器基类。
