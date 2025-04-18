@@ -43,6 +43,7 @@ class BotConfig(ConfigModel):
     nodes: set[str] = Field(default_factory=set)
     node_dirs: set[DirectoryPath] = Field(default_factory=set)
     adapters: set[str] = Field(default_factory=set)
+    adapter_max_retries: int = Field(default=0, ge=0)
     superusers: set[str] = Field(default_factory=set)
     log: LogConfig = LogConfig()
 

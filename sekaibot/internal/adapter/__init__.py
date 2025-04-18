@@ -67,11 +67,14 @@ class Adapter(ABC, Generic[MessageSegmentT, ConfigT]):
 
     @final
     async def safe_run(self) -> None:
-        """附带有异常处理地安全运行适配器。"""
-        try:
-            await self.run()
-        except Exception:
-            logger.exception("Run adapter failed", adapter_name=self.__class__.__name__)
+        """附带有异常处理和重试机制的安全运行适配器。"""
+        for retries in range(self.bot.config.bot.adapter_max_retries + 1):
+            with catch(
+                {Exception: handle_exception("Run adapter failed", adapter_name=self.__class__.__name__)}
+            ):
+                await self.run()
+            logger.info("Retry running the adapter...", adapter_name=self.__class__.__name__, retries=retries)
+        logger.warning("Adapter run failed after retries", adapter_name=self.__class__.__name__)
 
     @abstractmethod
     async def run(self) -> None:

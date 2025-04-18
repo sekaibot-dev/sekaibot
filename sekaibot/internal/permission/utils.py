@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING, Self
 
 from sekaibot.internal.event import Event
 from sekaibot.internal.permission import Permission as Permission
-from sekaibot.typing import GlobalStateT
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot

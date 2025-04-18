@@ -4,6 +4,7 @@ event_queue_size=100
 nodes = []
 node_dirs = ["./test/nodes"]
 adapters = ["sekaibot.adapter.cqhttp"]
+adapter_max_retries = 3
 
 
 [bot.log]
