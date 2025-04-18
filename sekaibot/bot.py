@@ -4,12 +4,12 @@ import pkgutil
 import signal
 import sys
 import threading
-import tomllib
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, ClassVar, overload
 
 import anyio
+import tomllib
 import yaml
 from exceptiongroup import catch
 from pydantic import ValidationError, create_model  # pyright: ignore[reportUnknownVariableType]
@@ -117,18 +117,12 @@ class Bot:
             ```python
             # 从默认配置文件启动
             bot = Bot()
-            
+
             # 自定义配置启动
             bot = Bot(config_file="production.toml")
-            
+
             # 完全自定义配置
-            bot = Bot(config_dict={
-                "bot": {
-                    "log": {
-                        "level": "DEBUG"
-                    }
-                }
-            })
+            bot = Bot(config_dict={"bot": {"log": {"level": "DEBUG"}}})
             ```
         """
         self.config = MainConfig()

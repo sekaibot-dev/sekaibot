@@ -1,13 +1,30 @@
 from typing import Any
 
+from chat_module.ChatAPI import ChatAPI
+from chat_module.LoadConfig import BaseConfig
 from chat_module.MessageEvent import ChatHandler
 
-from sekaibot import Node
+from sekaibot import Bot, Node
 from sekaibot.adapter.cqhttp.event import MessageEvent
 from sekaibot.dependencies import Depends
 
 # from sekaibot.permission import SuperUser
 from sekaibot.rule import ToMe
+
+
+@Bot.bot_run_hook
+async def hook_func(_bot: Bot):
+    with BaseConfig(_bot) as config:
+        _bot.global_state["chat_system"] = ChatAPI(
+            character_config=config._character_config,
+            mysql_config=config._mysql_config,
+            redis_config=config._redis_config,
+        )
+
+
+@Bot.bot_exit_hook
+async def exit_hook(_bot: Bot):
+    await _bot.global_state["chat_system"].close()
 
 
 # @SuperUser()

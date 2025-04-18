@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from copy import deepcopy
 from typing import Any, Literal, Self, TypeVar
 
@@ -146,7 +147,7 @@ class MessageSegment(BaseModel):
         if not url and not base64_data:
             raise ValueError("You must provide either url or base64_data.")
 
-        image_url = url or f"data:image/png;base64,{base64_data}"
+        image_url = url or f"data:image/jpeg;base64,{base64_data}"
         return cls(
             role="user",
             content=[{"type": "image_url", "image_url": {"url": image_url, "detail": detail}}],
@@ -244,28 +245,38 @@ class MessageSegment(BaseModel):
 
         if role == "assistant" and content is None and info.data.get("tool_calls") is None:
             raise ValueError("Assistant must provide either content or tool_calls")
-
         if role != "assistant" and content is None:
             raise ValueError(f"Content cannot be None for role '{role}'")
-
+        if content is not None and not isinstance(content, str | list):
+            raise ValueError("Content must be a string or a list of dictionaries")
         if isinstance(content, str) and not content.strip():
             raise ValueError("Content cannot be empty string")
 
         return content
 
-    def __add__(self, other: Self) -> Self | History:
+    def __add__(self, other: Self | History) -> Self | History:
         """Support addition for merging or history composition."""
-        if not isinstance(other, MessageSegment):
-            return NotImplemented
-        if (
-            self.role == other.role
-            and self.name == other.name
-            and self.tool_call_id == other.tool_call_id
-            and self.tool_calls == other.tool_calls
-        ):
-            return self._merge_content_with(other)
-        else:
+        if isinstance(other, MessageSegment):
+            if (
+                self.role == other.role
+                and self.name == other.name
+                and self.tool_call_id == other.tool_call_id
+                and self.tool_calls == other.tool_calls
+            ):
+                return self._merge_content_with(other)
+            else:
+                return History(self, other)
+        elif isinstance(other, History):
             return History(self, other)
+        
+    def __radd__(self, other: Self | History) -> Self | History:
+        """Support reversed addition."""
+        if isinstance(other, MessageSegment):
+            return other.__add__(self)
+        elif isinstance(other, History):
+            return History(other).__add__(self)
+        else:
+            raise TypeError(f"Unsupported type for addition: {type(other)}")
 
     def _merge_content_with(self, other: Self) -> Self:
         """Internal method to merge message contents."""
@@ -275,14 +286,13 @@ class MessageSegment(BaseModel):
     @staticmethod
     def _combine_content(c1: ContentType | None, c2: ContentType | None) -> ContentType:
         """Combine two message content blocks."""
-        if c1 is None or c2 is None:
-            raise TypeError("Cannot merge messages with None content")
-        if isinstance(c1, str) and isinstance(c2, str):
-            return c1 + "\n" + c2
-        elif isinstance(c1, list) and isinstance(c2, list):
-            return c1 + c2
-        else:
-            raise TypeError(f"Cannot merge content of different types: {type(c1)} vs {type(c2)}")
+
+        def format_content(c: str):
+            return [{"type": "text", "text": c}]
+
+        c1 = format_content(c1) if isinstance(c1, str) else c1 if c1 else []
+        c2 = format_content(c2) if isinstance(c2, str) else c2 if c2 else []
+        return c1 + c2
 
     def dict_for_openai(self) -> dict:
         """Convert message to OpenAI API-compliant dict.
@@ -375,6 +385,56 @@ class History(list[MessageSegment]):
         """
         return f"History({len(self)} messages)"
 
+    def reduce(self) -> History:
+        """Reduce the history by merging consecutive compatible messages.
+
+        If adjacent messages can be merged (same role, same metadata), they will
+        be combined using MessageSegment.__add__.
+
+        Returns:
+            A new History instance with reduced (merged) messages.
+        """
+        if not self:
+            return History()
+
+        reduced: list[MessageSegment] = [self[0]]
+
+        for msg in self[1:]:
+            last = reduced[-1]
+            merged = last + msg
+
+            if isinstance(merged, MessageSegment):
+                reduced[-1] = merged
+            else:
+                reduced.append(msg)
+
+        return History(*reduced)
+
+    def _append(self, message: MessageSegment) -> None:
+        """Append a message with intelligent merging if compatible.
+
+        Args:
+            message: A MessageSegment to add.
+        """
+        if not isinstance(message, MessageSegment):
+            raise TypeError(f"Expected MessageSegment, got {type(message)}")
+
+        if self and isinstance(self[-1], MessageSegment):
+            merged = self[-1] + message
+            if isinstance(merged, MessageSegment):
+                self[-1] = merged
+                return
+        self.append(message)
+
+    def _extend(self, values: Iterable[MessageSegment]) -> None:
+        """Extend history with iterable of messages using merge-aware append.
+
+        Args:
+            values: Iterable of MessageSegment objects.
+        """
+        for message in values:
+            self._append(message)
+
     def __add__(self, other: str | MessageSegment | History) -> History:
         """Return a new History with the other item(s) added.
 
@@ -396,11 +456,11 @@ class History(list[MessageSegment]):
             The updated History instance.
         """
         if isinstance(other, str):
-            self.append(MessageSegment.user(other))
+            self._append(MessageSegment.user(other))
         elif isinstance(other, MessageSegment):
-            self.append(other)
+            self._append(other)
         elif isinstance(other, History):
-            self.extend(other)
+            self._extend(other)
         else:
             raise TypeError(f"Unsupported type for addition: {type(other)}")
         return self
@@ -415,11 +475,11 @@ class History(list[MessageSegment]):
             A new History instance.
         """
         if isinstance(other, str):
-            return History(MessageSegment.user(other), *self)
+            return History(MessageSegment.user(other))._extend(self)
         elif isinstance(other, MessageSegment):
-            return History(other, *self)
+            return History(other)._extend(self)
         elif isinstance(other, History):
-            return History(*other, *self)
+            return other._extend(self)
         else:
             raise TypeError(f"Unsupported type for addition: {type(other)}")
 
@@ -476,6 +536,17 @@ class History(list[MessageSegment]):
 
 if __name__ == "__main__":
     # Example usage
+
+    msg = (
+        MessageSegment.user("Hello, how are you?")
+        + MessageSegment.assistant("I'm good, thank you!")
+        + MessageSegment.image(url="http://example.com/image.png", detail="high")
+        + MessageSegment.user("What do you think?")
+        + MessageSegment.assistant("I'm good, thank you!")
+        + MessageSegment.assistant("I think it's a nice image.")
+    )
+    print(msg, "\n")
+
     class Example(BaseModel):
         messages: History
 

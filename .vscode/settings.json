@@ -13,6 +13,8 @@
     "editor.defaultFormatter": "vscode.json-language-features"
   },
   "python.analysis.extraPaths": [
-    "./packages/sekaibot-adapter-onebot-v11"
+    "./packages/sekaibot-adapter-onebot-v11",
+    "./packages/sekaibot-adapter-onebot-v12",
+    "./packages/sekaibot-plugin-scheduler",
   ]
 }
