@@ -17,7 +17,20 @@ def a(event: Event):
 
 
 @Keywords(
-    "/开", "/关", "/角色列表", "/角色", "蒸", "松泽", "sz", "lrc", "思灿", "sc", "超", "xy", "香氤"
+    "/开",
+    "/关",
+    "/角色列表",
+    "/角色",
+    "蒸",
+    "松泽",
+    "sz",
+    "lrc",
+    "思灿",
+    "sc",
+    "yl",
+    "超",
+    "xy",
+    "香氤",
 )
 @SuperUser()
 class AutoReply(Node[GroupMessageEvent, dict, Any]):
@@ -53,6 +66,7 @@ class AutoReply(Node[GroupMessageEvent, dict, Any]):
             keyw = "香氤" if keyw == "xy" else keyw
             keyw = "松泽" if keyw == "sz" else keyw
             keyw = "思灿" if keyw == "sc" else keyw
+            keyw = "Kotodama" if keyw == "yl" else keyw
             text = random.choice(
                 (
                     "{keyw}鞭好粗",
