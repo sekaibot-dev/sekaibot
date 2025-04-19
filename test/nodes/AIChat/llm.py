@@ -1,25 +1,17 @@
+from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
-from langchain import hub
+from image import fetch_image_as_base64
 from langchain.agents import AgentExecutor, create_openai_tools_agent
-from langchain.prompts import (
-    ChatPromptTemplate,
-    HumanMessagePromptTemplate,
-    MessagesPlaceholder,
-    SystemMessagePromptTemplate,
-)
+from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder, SystemMessagePromptTemplate
 from langchain.tools import tool
-from langchain_core.messages import (
-    AIMessage,
-    BaseMessage,
-    HumanMessage,
-    SystemMessage,
-)
 
 # === 1. 导入内置消息历史和 LCEL 记忆包装器 ===
 from langchain_community.chat_message_histories import FileChatMessageHistory
-from langchain_core.chat_history import InMemoryChatMessageHistory
+from langchain_core.messages import BaseMessage, HumanMessage
+
+# from langchain_core.chat_history import InMemoryChatMessageHistory
 from langchain_core.runnables.history import (
     RunnableWithMessageHistory,  # 管理记忆的核心组件 :contentReference[oaicite:0]{index=0}&#8203;:contentReference[oaicite:1]{index=1}
 )
@@ -118,10 +110,10 @@ agent_executor = AgentExecutor.from_agent_and_tools(
     agent=agent,
     tools=tools,
     verbose=True,
-    
 )
 
-h = InMemoryChatMessageHistory()
+# h = InMemoryChatMessageHistory()
+histories = {}
 
 
 # === 5. 定义“会话历史工厂” ===
@@ -134,7 +126,11 @@ def get_session_history(session_id: str):
     # return InMemoryChatMessageHistory()
 
     # 持久化文件版（每个 session 存到不同文件）
-    return h  # FileChatMessageHistory(file_path=Path(f"./history_{session_id}.json"))
+    if session_id not in histories:
+        histories[session_id] = FileChatMessageHistory(
+            file_path=Path(f"./test/history/history_{session_id}.json")
+        )
+    return histories[session_id]
 
 
 # === 6. 用 RunnableWithMessageHistory 包装 AgentExecutor ===
@@ -144,16 +140,36 @@ agent_with_history = RunnableWithMessageHistory(
     input_messages_key="messages",  # 输入字典里存用户最新一条消息的 key
 )
 
-# === 7. 调用示例 ===
-if __name__ == "__main__":
-    while True:
-        user_input = HumanMessage(input(">> "))
-        if user_input.content.lower() == "exit":
-            break
 
-        # 第一次调用：创建新的会话历史
-        res1 = agent_with_history.invoke(
-            {"messages": [user_input]},
-            config={"configurable": {"session_id": "user_001"}},
-        )
-        print("History>>", res1)
+message_dict: dict[str, list] = defaultdict(list)
+
+
+async def get_answer(session_id: str, name: str, input: str, is_url: bool = False) -> str | None:
+    if is_url:
+        base64_image = await fetch_image_as_base64(input)
+        content = [
+            {"type": "text", "text": f"{name}发送了图片或表情包"},
+            {
+                "type": "image_url",
+                "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
+            },
+        ]
+    else:
+        content = f"{name}: {input}"
+    message_dict[session_id].append(HumanMessage(content))
+    if not (len(message_dict[session_id]) < 5 or is_url):
+        res = await use_llm(session_id, message_dict[session_id])
+        answer: str = res.get("output", "ignore")
+        if "ignore" not in answer:
+            return answer
+    return None
+
+
+# === 7. 调用示例 ===
+async def use_llm(session_id: str, input: list[BaseMessage]) -> dict:
+    # 第一次调用：创建新的会话历史
+    res = agent_with_history.invoke(
+        {"messages": [input]},
+        config={"configurable": {"session_id": session_id}},
+    )
+    return res
