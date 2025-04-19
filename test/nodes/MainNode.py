@@ -36,7 +36,7 @@ def a(event: Event):
 class AutoReply(Node[GroupMessageEvent, dict, Any]):
     """Hello, World! 示例节点。"""
 
-    priority = 1
+    priority = 0
     zb = Keywords.Param()
     block = True
 
