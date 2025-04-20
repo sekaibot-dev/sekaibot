@@ -1,5 +1,5 @@
 # 设置 PYTHONPATH 环境变量（用于模块导入路径）
-$env:PYTHONPATH = "d:\QQBot\chatbot;d:\QQBot\chatbot\packages\sekaibot-adapter-onebot-v11"
+$env:PYTHONPATH = "d:\QQBot\chatbot;d:\QQBot\chatbot\packages\sekaibot-adapter-cqhttp"
 
 # 设置开发模式标志
 $env:SEKAIBOT_DEV = "1"

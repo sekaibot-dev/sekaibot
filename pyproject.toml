@@ -67,6 +67,7 @@ sekaibot-plugin-apscheduler = { workspace = true }
 
 [tool.uv.workspace]
 members = ["packages/*"]
+
 [tool.ruff]
 line-length = 88
 target-version = "py311"
@@ -112,11 +113,10 @@ convention = "google"
 [tool.ruff.lint.pyflakes]
 extend-generics = [
     "sekaibot.plugin.Plugin",
-    "sekaibot.adapter.Adapter",
-    "sekaibot.event.Event",
-    "sekaibot.event.MessageEvent",
-    "sekaibot.message.Message",
-    "sekaibot.message.MessageSegment",
+    "sekaibot.internal.adapter.Adapter",
+    "sekaibot.internal.event.Event",
+    "sekaibot.internal.message.Message",
+    "sekaibot.internal.message.MessageSegment",
 ]
 
 [tool.ruff.lint.pyupgrade]
@@ -129,8 +129,7 @@ keep-runtime-typing = true
 "tests/*.py" = ["D", "PLR2004"]
 
 [tool.pyright]
-ignore = ["examples/plugins"]
-extraPaths = ["tests", "tests/test_utils"]
+ignore = ["example/nodes"]
 pythonVersion = "3.11"
 pythonPlatform = "All"
 typeCheckingMode = "strict"
@@ -141,6 +140,12 @@ reportPropertyTypeMismatch = true
 reportInvalidTypeVarUse = false
 reportShadowedImports = true
 reportUninitializedInstanceVariable = false
+extraPaths = [
+    "test", "test/test_utils",
+    "packages/sekaibot-adapter-cqhttp",
+    "packages/sekaibot-adapter-onebot",
+    "packages/sekaibot-plugin-apscheduler",
+]
 
 [tool.mypy]
 python_version = "3.11"
