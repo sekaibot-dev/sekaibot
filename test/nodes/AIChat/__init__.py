@@ -3,10 +3,12 @@ from typing import Any
 from sekaibot import Node
 from sekaibot.adapter.cqhttp.event import GroupMessageEvent
 from sekaibot.permission import SuperUser, User
+from sekaibot.rule import WordFilter
 
 from .llm import clear, get_answer
 
 
+@WordFilter(word_file="./test/nodes/sensitive_words_lines.txt", use_aho=True)
 @SuperUser()
 @User("group_834922207", "group_788499440")
 class AIChat(Node[GroupMessageEvent, dict, Any]):
@@ -22,7 +24,6 @@ class AIChat(Node[GroupMessageEvent, dict, Any]):
             if msg.type == "image":
                 img_url = msg.data.get("url")
                 break
-        print(img_url)
         if img_url:
             if answer := await get_answer(
                 str(self.event.group_id), self.event.sender.nickname, img_url, True
