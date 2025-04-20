@@ -20,8 +20,8 @@ _-跨平台的 Python 异步渐进式机器人开发框架-_
   <a href="https://pypi.python.org/pypi/alicebot">
     <img src="https://img.shields.io/pypi/v/alicebot" alt="pypi">
   </a>
-  <a href="https://github.com/AliceBotProject/alicebot/">
-    <img src="https://img.shields.io/github/stars/AliceBotProject/alicebot?style=social" alt="github">
+  <a href="https://github.com/sekaibot-dev/sekaibot/">
+    <img src="https://img.shields.io/github/stars/sekaibot-dev/sekaibot?style=social" alt="github">
   </a>
   <br />
   <a href="https://github.com/psf/black">
