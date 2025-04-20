@@ -134,7 +134,6 @@ class Adapter(ABC, Generic[MessageSegmentT, ConfigT]):
             await bot.send_msg(message="hello world")
             ```
         """
-
         result: Any = None
         skip_calling_api: bool = False
         exception: Exception | None = None

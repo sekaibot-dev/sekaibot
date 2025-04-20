@@ -20,12 +20,4 @@ from sekaibot.internal.event import Event
 from sekaibot.internal.node import Node
 from sekaibot.plugin import Plugin
 
-__all__ = [
-    "Bot",
-    "ConfigModel",
-    "Depends",
-    "Event",
-    "Node",
-    "Plugin",
-    "Adapter"
-]
+__all__ = ["Adapter", "Bot", "ConfigModel", "Depends", "Event", "Node", "Plugin"]

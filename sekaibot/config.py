@@ -1,14 +1,16 @@
-# config.py
-from typing import Annotated, Any, Literal
+"""SekaiBot 配置。
+
+SekaiBot 使用 [pydantic](https://pydantic-docs.helpmanual.io/) 来读取配置。
+"""
 
 from pydantic import BaseModel, ConfigDict, DirectoryPath, Field
 
 __all__ = [
+    "BotConfig",
     "ConfigModel",
     "LogConfig",
-    "BotConfig",
-    "NodeConfig",
     "MainConfig",
+    "NodeConfig",
 ]
 
 
@@ -48,6 +50,7 @@ class BotConfig(ConfigModel):
     log: LogConfig = LogConfig()
 
 
+'''
 class LLMConfig(ConfigModel):
     """LLM 配置。
 
@@ -167,7 +170,7 @@ class DatabaseConfig(ConfigModel):
         config: SQLConfig | RedisConfig | MongoDBConfig
     """
 
-    config: DatabaseConfigType
+    config: DatabaseConfigType'''
 
 
 class AdapterConfig(ConfigModel):
@@ -184,13 +187,15 @@ class PluginConfig(ConfigModel):
 
 class RuleConfig(ConfigModel):
     """规则配置。
-    
+
     Attributes:
         command_start: 命令的起始标记，用于判断一条消息是不是命令。
-        command_sep: 命令的分隔标记，用于将文本形式的命令切分为元组（实际的命令名）。
+        command_sep: 命令的分隔标记，用于将文本形式的命令切分为元组 (实际的命令名) 。
     """
+
     command_start: set[str] = {"/"}
     command_sep: set[str] = {"."}
+
 
 class PermissionConfig(ConfigModel):
     """权限配置。
@@ -201,6 +206,7 @@ class PermissionConfig(ConfigModel):
 
     superusers: set[str] = Field(default_factory=set)
 
+
 class MainConfig(ConfigModel):
     """SekaiBot 主体配置。"""
 
@@ -210,4 +216,4 @@ class MainConfig(ConfigModel):
     plugin: PluginConfig = PluginConfig()
     rule: RuleConfig = RuleConfig()
     permission: PermissionConfig = PermissionConfig()
-    # database: DatabaseConfig = DatabaseConfig()
+

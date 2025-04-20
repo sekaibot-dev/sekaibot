@@ -5,24 +5,22 @@
 
 import inspect
 from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
-from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
-from typing import (  # noqa: UP035
-    Any,
-    AsyncContextManager,
-    ContextManager,
-    TypeVar,
-    Union,
-    cast,
-    get_type_hints,
+from contextlib import (
+    AbstractAsyncContextManager,
+    AbstractContextManager,
+    AsyncExitStack,
+    asynccontextmanager,
+    contextmanager,
 )
+from typing import Any, TypeVar, Union, cast, get_type_hints
+from typing_extensions import override
 
 from sekaibot.utils import get_annotations, sync_ctx_manager_wrapper
 
 _T = TypeVar("_T")
-
 Dependency = Union[  # noqa: UP007
     # Class-based dependencies
-    type[_T | AsyncContextManager[_T] | ContextManager[_T]],
+    type[_T | AbstractAsyncContextManager[_T] | AbstractContextManager[_T]],
     # Generator-based dependencies
     Callable[[], AsyncGenerator[_T, None]],
     Callable[[], Generator[_T, None, None]],
@@ -42,16 +40,16 @@ class InnerDepends:
         use_cache: 是否使用缓存。默认为 `True`。
     """
 
-    dependency: Dependency | None
+    dependency: Dependency[Any] | None
     use_cache: bool
 
-    def __init__(self, dependency: Dependency | None = None, *, use_cache: bool = True) -> None:
-        if isinstance(dependency, InnerDepends):
-            self.dependency = dependency.dependency
-            self.use_cache = dependency.use_cache
+    def __init__(
+        self, dependency: Dependency[Any] | None = None, *, use_cache: bool = True
+    ) -> None:
         self.dependency = dependency
         self.use_cache = use_cache
 
+    @override
     def __repr__(self) -> str:
         attr = getattr(self.dependency, "__name__", type(self.dependency).__name__)
         cache = "" if self.use_cache else ", use_cache=False"
@@ -60,24 +58,25 @@ class InnerDepends:
 
 def get_dependency_name(dependency: Dependency[Any]) -> str:
     """获取 Dependency[Any] 的名称，正确区分类、函数、实例等"""
-
     if isinstance(dependency, str):
         return dependency
     if isinstance(dependency, type):
         return dependency.__name__
     if callable(dependency):
         if hasattr(dependency, "__name__"):
-            return dependency.__name__ if dependency.__name__ != "<lambda>" else "lambda"
+            return (
+                dependency.__name__ if dependency.__name__ != "<lambda>" else "lambda"
+            )
         return dependency.__class__.__name__
     return dependency.__class__.__name__
 
 
 async def _execute_callable(
     dependent: Callable[..., Any],
-    stack: AsyncExitStack,
-    dependency_cache: dict,
+    stack: AsyncExitStack | None,
+    dependency_cache: dict[Any, Any],
 ) -> Any:
-    """执行可调用对象（函数或 __call__ 方法），并注入参数。"""
+    """执行可调用对象(函数或 __call__ 方法)，并注入参数。"""
     func_params = inspect.signature(dependent).parameters
     func_args = {}
 
@@ -86,7 +85,7 @@ async def _execute_callable(
             param_type = get_type_hints(dependent).get(param_name)
         except NameError:
             param_type = param.annotation
-        if isinstance(param.default, InnerDepends):
+        if isinstance(param.default, InnerDepends) and param.default.dependency:
             func_args[param_name] = await solve_dependencies(
                 param.default.dependency,
                 use_cache=param.default.use_cache,
@@ -100,7 +99,9 @@ async def _execute_callable(
         elif param_name in dependency_cache:
             func_args[param_name] = dependency_cache[param_name]
         else:
-            name_cache = {get_dependency_name(_cache): _cache for _cache in dependency_cache.keys()}
+            name_cache = {
+                get_dependency_name(_cache): _cache for _cache in dependency_cache
+            }
             if isinstance(param_type, str) and param_type in name_cache:
                 func_args[param_name] = dependency_cache[name_cache[param_type]]
             elif param_name in name_cache:
@@ -116,42 +117,48 @@ async def _execute_callable(
 
 
 async def _execute_class(
-    dependent: Callable[..., Any],
-    stack: AsyncExitStack,
-    dependency_cache: dict,
+    dependent: type[_T],
+    stack: AsyncExitStack | None,
+    dependency_cache: dict[Any, Any],
 ) -> Any:
     values: dict[str, Any] = {}
     ann = get_annotations(dependent)
-    for name, sub_dependent in inspect.getmembers(dependent, lambda x: isinstance(x, InnerDepends)):
+    for name, sub_dependent in inspect.getmembers(
+        dependent, lambda x: isinstance(x, InnerDepends)
+    ):
         assert isinstance(sub_dependent, InnerDepends)
         if sub_dependent.dependency is None:
             dependent_ann = ann.get(name)
             if dependent_ann is None:
-                raise TypeError(f"can not resolve dependency for attribute '{name}' in {dependent}")
+                raise TypeError(
+                    f"can not resolve dependency for attribute '{name}' in {dependent}"
+                )
             sub_dependent.dependency = dependent_ann
         values[name] = await solve_dependencies(
-            sub_dependent.dependency,
+            cast("Dependency[_T]", sub_dependent.dependency),
             use_cache=sub_dependent.use_cache,
             stack=stack,
             dependency_cache=dependency_cache,
         )
     depend_obj = cast(
-        _T | AsyncContextManager[_T] | ContextManager[_T],
-        dependent.__new__(dependent),  # pyright: ignore
+        "_T | AbstractAsyncContextManager[_T] | AbstractContextManager[_T]",
+        dependent.__new__(dependent),  # type: ignore
     )
     for key, value in values.items():
         setattr(depend_obj, key, value)
     depend_obj.__init__()
 
-    if isinstance(depend_obj, AsyncContextManager):
+    if isinstance(depend_obj, AbstractAsyncContextManager):
         if stack is None:
             raise TypeError("stack cannot be None when entering an async context")
-        depend = await stack.enter_async_context(depend_obj)  # pyright: ignore
-    elif isinstance(depend_obj, ContextManager):
+        depend = await stack.enter_async_context(
+            cast("AbstractAsyncContextManager[_T]", depend_obj)
+        )
+    elif isinstance(depend_obj, AbstractContextManager):
         if stack is None:
             raise TypeError("stack cannot be None when entering a sync context")
-        depend = await stack.enter_async_context(  # pyright: ignore
-            sync_ctx_manager_wrapper(depend_obj)
+        depend = await stack.enter_async_context(
+            sync_ctx_manager_wrapper(cast("AbstractContextManager[_T]", depend_obj))
         )
     else:
         depend = depend_obj
@@ -164,7 +171,7 @@ async def solve_dependencies(
     *,
     use_cache: bool = True,
     stack: AsyncExitStack | None = None,
-    dependency_cache: dict,
+    dependency_cache: dict[Any, Any],
 ) -> _T:
     """解析子依赖，包括 `__call__` 方法的可调用类实例。
 
@@ -182,9 +189,11 @@ async def solve_dependencies(
     """
     if isinstance(dependent, InnerDepends):
         use_cache = dependent.use_cache
+        if not dependent.dependency:
+            raise TypeError("dependent cannot be None")
         dependent = dependent.dependency
 
-    if dependent is None:
+    if not dependent:
         raise TypeError("dependent cannot be None")
 
     if use_cache and dependent in dependency_cache:
@@ -196,15 +205,17 @@ async def solve_dependencies(
     elif inspect.isasyncgenfunction(dependent):
         # type of dependent is Callable[[], AsyncGenerator[T, None]]
         if stack is None:
-            raise TypeError("stack cannot be None when entering an async generator context")
+            raise TypeError(
+                "stack cannot be None when entering an async generator context"
+            )
         cm = asynccontextmanager(dependent)()
-        depend = cast(_T, await stack.enter_async_context(cm))
+        depend = cast("_T", await stack.enter_async_context(cm))
     elif inspect.isgeneratorfunction(dependent):
         # type of dependent is Callable[[], Generator[T, None, None]]
         if stack is None:
             raise TypeError("stack cannot be None when entering a generator context")
         cm = sync_ctx_manager_wrapper(contextmanager(dependent)())
-        depend = cast(_T, await stack.enter_async_context(cm))
+        depend = cast("_T", await stack.enter_async_context(cm))
     elif inspect.iscoroutinefunction(dependent) or inspect.isfunction(dependent):
         # type of dependent is Callable[..., T] | Callable[..., Awaitable[T]]
         depend = await _execute_callable(dependent, stack, dependency_cache)
@@ -213,7 +224,7 @@ async def solve_dependencies(
         depend = await _execute_callable(dependent.__func__, stack, dependency_cache)
     elif isinstance(dependent, object) and callable(dependent):
         # type of dependent is an instance with __call__ method (Callable class instance)
-        call_method = dependent.__call__
+        call_method = dependent.__call__  # type: ignore
         if inspect.iscoroutinefunction(call_method) or inspect.isfunction(call_method):
             depend = await _execute_callable(call_method, stack, dependency_cache)
         else:
@@ -221,7 +232,9 @@ async def solve_dependencies(
                 f"__call__ method in {dependent.__class__.__name__} is not a valid function"
             )
     elif isinstance(dependent, str):
-        name_cache = {get_dependency_name(_cache): _cache for _cache in dependency_cache.keys()}
+        name_cache = {
+            get_dependency_name(_cache): _cache for _cache in dependency_cache
+        }
         if dependent in name_cache:
             depend = dependency_cache[name_cache[dependent]]
     else:

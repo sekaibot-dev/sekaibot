@@ -3,7 +3,7 @@ from pydantic import Field
 from sekaibot.config import ConfigModel
 
 
-class SchedulerConfig(ConfigModel):
+class APSchedulerConfig(ConfigModel):
     """Scheduler 配置模型。
     Attributes:
         __config_name__: 配置名称。

@@ -1,11 +1,15 @@
-from abc import ABC
+"""SekaiBot 权限基类
+
+所有权限类必须继承 Permission
+"""
+
 from collections.abc import Awaitable, Callable
 from contextlib import AsyncExitStack
-from itertools import chain
-from typing import TYPE_CHECKING, Generic, NoReturn, Self, TypeVar, Union, final
+from typing import TYPE_CHECKING, Any, NoReturn, Self, cast, final
+from typing_extensions import override
 
 import anyio
-from exceptiongroup import BaseExceptionGroup, catch
+from exceptiongroup import BaseExceptionGroup, catch  # noqa: A004
 
 from sekaibot.dependencies import Dependency, Depends, solve_dependencies_in_bot
 from sekaibot.exceptions import SkipException
@@ -34,24 +38,18 @@ class Permission:
 
     __slots__ = ("checkers",)
 
-    def __init__(
-        self, *checkers: Union["Permission", PermissionCheckerT, Dependency[bool]]
-    ) -> None:
-        self.checkers: set[Dependency[bool]] = set(
-            chain.from_iterable(
-                checker.checkers if isinstance(checker, Permission) else {checker}
-                for checker in checkers
-            )
-        )
+    def __init__(self, *checkers: PermissionCheckerT) -> None:
+        self.checkers: set[PermissionCheckerT] = set(checkers)
         """存储 `PermissionChecker`"""
 
+    @override
     def __repr__(self) -> str:
         return f"Permission({', '.join(repr(checker) for checker in self.checkers)})"
 
     async def __call__(
         self,
         bot: "Bot",
-        event: Event,
+        event: Event,  # type: ignore
         global_state: GlobalStateT | None = None,
         stack: AsyncExitStack | None = None,
         dependency_cache: DependencyCacheT | None = None,
@@ -61,6 +59,7 @@ class Permission:
         Args:
             bot: Bot 对象
             event: Event 对象
+            global_state: 公共状态
             stack: 异步上下文栈
             dependency_cache: 依赖缓存
         """
@@ -70,7 +69,7 @@ class Permission:
         result = False
 
         def _handle_skipped_exception(
-            exc_group: BaseExceptionGroup[SkipException],
+            _: BaseExceptionGroup[SkipException],
         ) -> None:
             nonlocal result
             result = False
@@ -80,7 +79,7 @@ class Permission:
             is_passed = await solve_dependencies_in_bot(
                 checker,
                 bot=bot,
-                event=event,
+                event=cast("Event[Any]", event),
                 global_state=global_state,
                 use_cache=False,
                 stack=stack,
@@ -93,48 +92,49 @@ class Permission:
         with catch({SkipException: _handle_skipped_exception}):
             async with anyio.create_task_group() as tg:
                 for checker in self.checkers:
-                    tg.start_soon(_run_checker, checker)
+                    tg.start_soon(_run_checker, cast("Dependency[bool]", checker))
 
         return result
 
     def __and__(self, other: object) -> NoReturn:
+        """禁止 and"""
         raise RuntimeError("And operation between Permissions is not allowed.")
 
-    def __or__(self, other: Self | PermissionCheckerT | None) -> Self:
+    def __or__(self, other: Self | PermissionCheckerT | None) -> "Permission":
+        """or方法"""
         if other is None:
             return self
-        elif isinstance(other, Permission):
+        if isinstance(other, Permission):
             return Permission(*self.checkers, *other.checkers)
-        else:
-            return Permission(*self.checkers, other)
+        return Permission(*self.checkers, other)
 
-    def __ror__(self, other: Self | PermissionCheckerT | None) -> Self:
+    def __ror__(self, other: Self | PermissionCheckerT | None) -> "Permission":
+        """ror方法"""
         if other is None:
             return self
-        elif isinstance(other, Permission):
+        if isinstance(other, Permission):
             return Permission(*other.checkers, *self.checkers)
-        else:
-            return Permission(other, *self.checkers)
+        return Permission(other, *self.checkers)
 
-    def __add__(self, other: Self | PermissionCheckerT) -> Self:
+    def __add__(self, other: Self | PermissionCheckerT | None) -> "Permission":
+        """add方法"""
         if other is None:
             return self
-        elif isinstance(other, Permission):
+        if isinstance(other, Permission):
             return Permission(*self.checkers, *other.checkers)
-        else:
-            return Permission(other, *self.checkers)
+        return Permission(other, *self.checkers)
 
     def __iadd__(self, other: Self | PermissionCheckerT) -> Self:
-        return self.__add__(other)
+        """iadd方法"""
+        self.checkers = self.__add__(other).checkers
+        return self
 
     def __sub__(self, other: Self | PermissionCheckerT) -> NoReturn:
+        """紧张 sub"""
         raise RuntimeError("Subtraction operation between permissions is not allowed.")
 
 
-ArgsT = TypeVar("T")
-
-
-class PermissionChecker(ABC, Generic[ArgsT]):
+class PermissionChecker:
     """抽象基类，匹配消息规则。"""
 
     __perm__: Permission
@@ -152,12 +152,12 @@ class PermissionChecker(ABC, Generic[ArgsT]):
         return cls
 
     @classmethod
-    def _rule_check(cls, *args: ArgsT, **kwargs) -> Callable[..., Awaitable[bool]]:
+    def _rule_check(cls, *args: Any, **kwargs: Any) -> Callable[..., Awaitable[bool]]:
         """默认实现检查方法，子类可覆盖。"""
-        return cls(*args, **kwargs)._check
+        return cls(*args, **kwargs)._check # type: ignore  # noqa: SLF001
 
     @classmethod
-    def Checker(cls, *args: ArgsT, **kwargs) -> bool:
+    def checker(cls, *args: Any, **kwargs: Any) -> bool:
         """默认实现检查方法的依赖注入方法，子类可覆盖。"""
         return Depends(cls._rule_check(*args, **kwargs), use_cache=False)
 
@@ -165,7 +165,7 @@ class PermissionChecker(ABC, Generic[ArgsT]):
     async def _check(
         self,
         bot: "Bot",
-        event: Event,
+        event: Event,  # type: ignore
         global_state: GlobalStateT,
         stack: AsyncExitStack | None = None,
         dependency_cache: DependencyCacheT | None = None,

@@ -8,7 +8,14 @@ import os
 import os.path
 import traceback
 from abc import ABC
-from collections.abc import AsyncGenerator, Awaitable, Callable, Coroutine, Generator, Sequence
+from collections.abc import (
+    AsyncGenerator,
+    Awaitable,
+    Callable,
+    Coroutine,
+    Generator,
+    Sequence,
+)
 from contextlib import AbstractContextManager as ContextManager
 from contextlib import asynccontextmanager
 from functools import partial
@@ -16,12 +23,22 @@ from importlib.abc import MetaPathFinder
 from importlib.machinery import ModuleSpec, PathFinder
 from inspect import get_annotations
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, TypeGuard, TypeVar, Union, cast, overload
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Literal,
+    TypeGuard,
+    TypeVar,
+    Union,
+    cast,
+    overload,
+)
+from typing_extensions import ParamSpec, override
 
 import anyio
-from exceptiongroup import BaseExceptionGroup, catch
+from exceptiongroup import BaseExceptionGroup, catch  # noqa: A004
 from pydantic import BaseModel
-from typing_extensions import ParamSpec
 
 from sekaibot.config import ConfigModel
 from sekaibot.log import logger
@@ -34,32 +51,32 @@ if TYPE_CHECKING:
 __all__ = [
     "ModulePathFinder",
     "ModuleType",
+    "PydanticEncoder",
     "TreeType",
-    "is_config_class",
-    "remove_none_attributes",
+    "cancel_on_exit",
+    "flatten_exception_group",
+    "flatten_tree_with_jumps",
+    "get_annotations",
     "get_classes_from_module",
     "get_classes_from_module_name",
-    "flatten_tree_with_jumps",
-    "flatten_exception_group",
     "handle_exception",
+    "is_config_class",
+    "remove_none_attributes",
     "run_coro_with_catch",
-    "PydanticEncoder",
     "samefile",
-    "sync_func_wrapper",
     "sync_ctx_manager_wrapper",
+    "sync_func_wrapper",
     "wrap_get_func",
-    "cancel_on_exit",
-    "get_annotations",
 ]
 
 _T = TypeVar("_T")
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
-_E = TypeVar("E", bound=BaseException)
+_E = TypeVar("_E", bound=BaseException)
 _TypeT = TypeVar("_TypeT", bound=type[Any])
 _BaseModelT = TypeVar("_BaseModelT", bound=BaseModel)
 
-StrOrBytesPath = Union[str, bytes, os.PathLike]  # type alias  # noqa: UP007
+StrOrBytesPath = Union[str, bytes, os.PathLike[Any]]  # type alias  # noqa: UP007
 TreeType = dict[_T, Union[Any, "TreeType"]]
 
 
@@ -68,6 +85,7 @@ class ModulePathFinder(MetaPathFinder):
 
     path: ClassVar[list[str]] = []
 
+    @override
     def find_spec(
         self,
         fullname: str,
@@ -98,7 +116,9 @@ def is_config_class(config_class: Any) -> TypeGuard[type[ConfigModel]]:
     )
 
 
-def remove_none_attributes(model: _BaseModelT, exclude: set[str] | None = None) -> _BaseModelT:
+def remove_none_attributes(
+    model: _BaseModelT, exclude: set[str] | None = None
+) -> _BaseModelT:
     """去除类中值为None的属性
 
     Args:
@@ -111,7 +131,9 @@ def remove_none_attributes(model: _BaseModelT, exclude: set[str] | None = None) 
     if exclude is None:
         exclude = set()
     cleaned_data = {
-        key: value for key, value in model.__dict__.items() if key in exclude or value is not None
+        key: value
+        for key, value in model.__dict__.items()
+        if key in exclude or value is not None
     }
     for key in list(model.__dict__.keys()):
         delattr(model, key)
@@ -138,7 +160,7 @@ def get_classes_from_module(module: ModuleType, super_class: _TypeT) -> list[_Ty
             and ABC not in module_attr.__bases__
             and not inspect.isabstract(module_attr)
         ):
-            classes.append(cast(_TypeT, module_attr))
+            classes.append(cast("_TypeT", module_attr))
     return classes
 
 
@@ -179,10 +201,10 @@ def flatten_tree_with_jumps(tree: TreeType[_T]) -> list[tuple[_T, int]]:
     同时，为每个节点计算在剪枝后应跳转的索引，以便提高运行性能。
 
     适用于运行树，其中每个节点可能执行剪枝操作，剪枝后跳转到最近的兄弟节点，
-    如果没有兄弟节点，则跳转到父节点的下一个兄弟节点。若无可跳转位置，则跳转至 -1（表示终止）。
+    如果没有兄弟节点，则跳转到父节点的下一个兄弟节点。若无可跳转位置，则跳转至 -1 (表示终止) 。
 
     Args:
-        tree: 一个字典形式的树，键代表节点，值可以是子树（字典）或叶子节点。
+        tree: 一个字典形式的树，键代表节点，值可以是子树 (字典) 或叶子节点。
 
     Returns:
         一个列表，每个元素是一个元组 (节点, 剪枝后跳转索引)
@@ -196,16 +218,16 @@ def flatten_tree_with_jumps(tree: TreeType[_T]) -> list[tuple[_T, int]]:
         """深度优先遍历树，构建 parent_map 和 children_map"""
         for key, value in node_dict.items():
             ordered_nodes.append(key)
-            parent_map[key] = parent  # 记录父节点
-            children_map.setdefault(parent, []).append(key)  # 记录子节点
-            if isinstance(value, dict):  # 递归遍历子节点
-                dfs(value, key)
+            parent_map[key] = parent
+            children_map.setdefault(parent, []).append(key)
+            if isinstance(value, dict):
+                dfs(cast("TreeType[_T]", value), key)
 
     dfs(tree)
 
     def build_jump_map() -> dict[_T, int]:
         """构建剪枝跳转映射，计算每个节点剪枝后的跳转索引"""
-        jump_map: dict[_T, int] = {node: -1 for node in ordered_nodes}  # 默认剪枝后都终止
+        jump_map: dict[_T, int] = dict.fromkeys(ordered_nodes, -1)  # 默认剪枝后都终止
 
         for i in range(len(ordered_nodes) - 1, -1, -1):
             node: _T = ordered_nodes[i]
@@ -219,11 +241,15 @@ def flatten_tree_with_jumps(tree: TreeType[_T]) -> list[tuple[_T, int]]:
             else:
                 temp_parent: _T | None = parent
                 while temp_parent is not None:
-                    parent_siblings: list[_T] = children_map.get(parent_map.get(temp_parent), [])
+                    parent_siblings: list[_T] = children_map.get(
+                        parent_map.get(temp_parent), []
+                    )
                     if temp_parent in parent_siblings:
                         temp_pos: int = parent_siblings.index(temp_parent)
                         if temp_pos + 1 < len(parent_siblings):
-                            jump_map[node] = ordered_nodes.index(parent_siblings[temp_pos + 1])
+                            jump_map[node] = ordered_nodes.index(
+                                parent_siblings[temp_pos + 1]
+                            )
                             break
                     temp_parent = parent_map.get(temp_parent)
 
@@ -237,16 +263,20 @@ def flatten_tree_with_jumps(tree: TreeType[_T]) -> list[tuple[_T, int]]:
 def flatten_exception_group(
     exc_group: BaseExceptionGroup[_E],
 ) -> Generator[_E, None, None]:
+    """递归遍历 BaseExceptionGroup ，并返回一个生成器"""
     for exc in exc_group.exceptions:
         if isinstance(exc, BaseExceptionGroup):
-            yield from flatten_exception_group(exc)
+            yield from flatten_exception_group(cast("BaseExceptionGroup[_E]", exc))
         else:
             yield exc
 
 
 def handle_exception(
-    msg: str, level: Literal["debug", "info", "warning", "error", "critical"] = "error", **kwargs
-) -> Callable[[BaseExceptionGroup], None]:
+    msg: str,
+    level: Literal["debug", "info", "warning", "error", "critical"] = "error",
+    **kwargs: Any,
+) -> Callable[[BaseExceptionGroup[Exception]], None]:
+    """递归遍历 BaseExceptionGroup ，并输出日志"""
     def _handle(exc_group: BaseExceptionGroup[Exception]) -> None:
         for exc in flatten_exception_group(exc_group):
             if level in ("error", "critical"):
@@ -288,8 +318,7 @@ async def run_coro_with_catch(
     返回:
         协程的返回值或发生异常时的指定值
     """
-
-    with catch({exc: lambda exc_group: None}):
+    with catch({exc: lambda _: None}):
         return await coro
 
     return return_on_err
@@ -298,6 +327,7 @@ async def run_coro_with_catch(
 class PydanticEncoder(json.JSONEncoder):
     """用于解析 `pydantic.BaseModel` 的 `JSONEncoder` 类。"""
 
+    @override
     def default(self, o: Any) -> Any:
         """返回 `o` 的可序列化对象。"""
         if isinstance(o, BaseModel):
@@ -391,7 +421,7 @@ def wrap_get_func(
     if func is None:
         func = sync_func_wrapper(lambda _: True)
     elif not inspect.iscoroutinefunction(func):
-        func = sync_func_wrapper(cast(Callable[[EventT], bool], func))
+        func = sync_func_wrapper(cast("Callable[[EventT], bool]", func))
 
     async def _func(event: EventT) -> bool:
         return (

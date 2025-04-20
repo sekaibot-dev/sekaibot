@@ -7,6 +7,7 @@
 
 import logging
 from typing import TYPE_CHECKING
+from typing_extensions import override
 
 import structlog
 
@@ -15,7 +16,7 @@ if TYPE_CHECKING:
 
 
 def configure_logging(
-    level: str = "INFO",
+    level: str | int = "INFO",
     verbose_exception: bool = True,
 ) -> None:
     """配置 structlog 日志系统。
@@ -53,7 +54,8 @@ default_format = structlog.dev.ConsoleRenderer(colors=True)
 class StructLogHandler(logging.Handler):
     """Python `logging` 日志 to `structlog` 适配器，将 `logging` 事件转发到 `structlog`。"""
 
-    def emit(self, record: logging.LogRecord):
+    @override
+    def emit(self, record: logging.LogRecord) -> None:
         structlog.get_logger(record.name).bind(exc_info=record.exc_info).log(
             record.levelno, record.getMessage()
         )

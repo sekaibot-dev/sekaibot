@@ -1,3 +1,7 @@
+"""SekaiBot 机器人对象。
+
+SekaiBot 的基础模块，每一个 SekaiBot 机器人即是一个 `Bot` 实例。
+"""
 import inspect
 import json
 import pkgutil
@@ -14,7 +18,13 @@ import yaml
 from exceptiongroup import catch
 from pydantic import ValidationError, create_model
 
-from sekaibot.config import AdapterConfig, ConfigModel, MainConfig, NodeConfig, PluginConfig
+from sekaibot.config import (
+    AdapterConfig,
+    ConfigModel,
+    MainConfig,
+    NodeConfig,
+    PluginConfig,
+)
 from sekaibot.dependencies import solve_dependencies
 from sekaibot.exceptions import LoadModuleError, SkipException
 from sekaibot.internal.adapter import Adapter
@@ -46,6 +56,18 @@ __all__ = [
 
 
 class Bot:
+    """SekaiBot 机器人对象，定义了机器人的基本方法。
+
+    读取并储存配置 `Config`，加载适配器 `Adapter` 、节点 `Node` 和插件 `Plugin`，并进行事件分发。
+
+    Attributes:
+        config: 机器人配置。
+        adapters: 当前已经加载的适配器的列表。
+        nodes_list: 节点运行顺序表。
+        node_state: 节点状态。
+        plugin_dict: 插件存储字典。
+        global_state: 全局状态。
+    """
     config: MainConfig
     manager: NodeManager
 
@@ -95,7 +117,7 @@ class Bot:
         config_file: str | None = "config.toml",
         config_dict: dict[str, Any] | None = None,
         handle_signals: bool = True,
-    ):
+    ) -> None:
         """初始化 SekaiBot 核心实例，管理机器人生命周期和模块加载。
 
         Args:
@@ -105,7 +127,7 @@ class Bot:
                 - YAML (.yml/.yaml)
                 默认使用当前目录下的 config.toml
             config_dict: 直接传递配置字典，优先级高于 config_file
-            handle_signals: 是否启用信号处理（Ctrl+C 退出等）
+            handle_signals: 是否启用信号处理 (Ctrl+C 退出等)
 
         Attributes:
             config (MainConfig): 合并后的配置对象
@@ -131,7 +153,7 @@ class Bot:
         self.nodes_list = []
         self.node_state = defaultdict(lambda: None)
         self.adapters = []
-        self.plugin_dict = defaultdict(lambda: None)
+        self.plugin_dict = {}
         self.global_state = defaultdict(dict)
 
         self._restart_flag = False
@@ -147,7 +169,7 @@ class Bot:
 
         sys.meta_path.insert(0, self._module_path_finder)
 
-    async def _run_bot_hooks(self, hooks: list[BotHook], name: str):
+    async def _run_bot_hooks(self, hooks: set[BotHook], name: str) -> None:
         if not hooks:
             return
 
@@ -157,7 +179,7 @@ class Bot:
             async with anyio.create_task_group() as tg:
                 for hook_func in hooks:
                     tg.start_soon(
-                        run_coro_with_catch,
+                        run_coro_with_catch, # type: ignore
                         solve_dependencies(
                             hook_func,
                             dependency_cache={
@@ -169,10 +191,10 @@ class Bot:
 
     async def _run_adapter_hooks(
         self,
-        hooks: list[AdapterHook],
+        hooks: set[AdapterHook],
         adapter: Adapter[Any, Any],
         name: str,
-    ):
+    ) -> None:
         if not hooks:
             return
 
@@ -182,7 +204,7 @@ class Bot:
             async with anyio.create_task_group() as tg:
                 for hook_func in hooks:
                     tg.start_soon(
-                        run_coro_with_catch,
+                        run_coro_with_catch, # type: ignore
                         solve_dependencies(
                             hook_func,
                             dependency_cache={
@@ -231,7 +253,6 @@ class Bot:
 
     async def startup(self) -> None:
         """加载或重加载 SekaiBot 的所有加载项"""
-
         self.nodes_tree.clear()
         self.nodes_list.clear()
 
@@ -307,7 +328,7 @@ class Bot:
             for sig in HANDLED_SIGNALS:
                 signal.signal(sig, self.shutdown)
 
-    def shutdown(self, *_args: Any):
+    def shutdown(self, *_args: Any) -> None:
         """当机器人收到退出信号时，根据情况进行处理。"""
         logger.info("Stopping SekaiBot...")
         if self._should_exit.is_set():
@@ -320,7 +341,7 @@ class Bot:
         """更新 config，合并入来自 Node 和 Adapter 的 Config。"""
 
         def update_config(
-            source: list[type[Node[Any, Any, Any]]],
+            source: list[type[Node[Any, Any, Any]]] | list[Plugin[Any]] | list[Adapter[Any, Any]],
             name: str,
             base: type[ConfigModel],
         ) -> tuple[type[ConfigModel], ConfigModel]:
@@ -418,7 +439,7 @@ class Bot:
         roots.sort(key=lambda _node: getattr(_node, "priority", 0))
 
         #  递归建树
-        def build_tree(node_class: type[Node[Any, Any, Any]]) -> dict[str, Any]:
+        def build_tree(node_class: type[Node[Any, Any, Any]]) -> dict[type[Node[Any, Any, Any]], Any]:
             return {
                 child: build_tree(child)
                 for child in sorted(
@@ -444,7 +465,7 @@ class Bot:
         reload: bool = False,
     ) -> None:
         """从模块名称中节点模块。"""
-        node_classes: list[tuple[type[Node], ModuleType]] = []
+        node_classes: list[tuple[type[Node[Any, Any, Any]], ModuleType]] = []
         for name in module_name:
             try:
                 classes = get_classes_from_module_name(name, Node, reload=reload)
@@ -509,7 +530,7 @@ class Bot:
                         except OSError:
                             continue
                     if node_module_name is None:
-                        rel_path = node_.resolve().relative_to(Path().resolve())
+                        rel_path = node_.resolve().relative_to(Path().cwd())
                         if rel_path.stem == "__init__":
                             node_module_name = ".".join(rel_path.parts[:-1])
                         else:
@@ -523,12 +544,12 @@ class Bot:
 
         # 如果有节点类，则调用新的 _load_node_class 批量加载
         if node_classes:
-            nodes = [
+            _nodes: list[tuple[type[Node[Any, Any, Any]], NodeLoadType, str | None]] = [
                 (node_class, node_load_type or NodeLoadType.CLASS, None)
                 for node_class in node_classes
                 if node_class.load
             ]
-            self._load_node_classes(*nodes)
+            self._load_node_classes(*_nodes)
 
         # 如果有模块名称，则调用新的 _load_nodes_from_module_name 批量加载
         if module_names:
@@ -596,7 +617,7 @@ class Bot:
                 return _plugin
         raise LookupError(f'Can not find node named "{name}"')
 
-    def load_plugins(self):
+    def load_plugins(self) -> None:
         """加载插件。"""
         for plugin_class, _reload in self._extend_plugins:
             try:
@@ -609,9 +630,9 @@ class Bot:
                         plugin=_plugin,
                     )
             except Exception:
-                logger.exception("Load plugin failed:", plugin=_plugin)
+                logger.exception("Load plugin failed:", plugin_class=plugin_class)
 
-    def get_plugin(self, name: str):
+    def get_plugin(self, name: str) -> Plugin[Any]:
         """按照名称获取已经加载的插件类。
 
         Args:
@@ -649,11 +670,11 @@ class Bot:
                 elif isinstance(adapter_, str):
                     adapter_classes = get_classes_from_module_name(adapter_, Adapter)
                     if not adapter_classes:
-                        raise LoadModuleError(  # noqa: TRY301
+                        raise LoadModuleError(
                             f"Can not find Adapter class in the {adapter_} module"
                         )
                     if len(adapter_classes) > 1:
-                        raise LoadModuleError(  # noqa: TRY301
+                        raise LoadModuleError(
                             f"More then one Adapter class in the {adapter_} module"
                         )
                     adapter_object = adapter_classes[0][0](self)  # type: ignore
@@ -663,7 +684,7 @@ class Bot:
                         module_name=adapter_,
                     )
                 else:
-                    raise TypeError(  # noqa: TRY301
+                    raise TypeError(
                         f"{adapter_} can not be loaded as adapter"
                     )
             except Exception:
@@ -710,11 +731,12 @@ class Bot:
         raise LookupError(f'Can not find adapter named "{adapter}"')
 
     @classmethod
-    def require_plugin(cls, plugin_class: type[Plugin], *, reload: bool = False):
+    def require_plugin(cls, plugin_class: type[Plugin[Any]], *, reload: bool = False) -> None:
         """声明依赖插件。
 
         Args:
-            name: 插件模块名或插件标识符，仅在已声明插件的情况下可使用标识符。
+            plugin_class: 插件类。
+            reload: 是否重加载。
 
         异常:
             RuntimeError: 插件无法加载

@@ -25,7 +25,12 @@ from sekaibot.internal.event import Event, EventHandleOption
 from sekaibot.internal.node import Node
 from sekaibot.log import logger
 from sekaibot.typing import ConfigT, DependencyCacheT, EventT, NameT, StateT
-from sekaibot.utils import cancel_on_exit, handle_exception, run_coro_with_catch, wrap_get_func
+from sekaibot.utils import (
+    cancel_on_exit,
+    handle_exception,
+    run_coro_with_catch,
+    wrap_get_func,
+)
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
@@ -47,8 +52,10 @@ class NodeManager:
     async def startup(self) -> None:
         self._condition = anyio.Condition()
         self._cancel_event = anyio.Event()
-        self._event_send_stream, self._event_receive_stream = anyio.create_memory_object_stream(
-            max_buffer_size=self.bot.config.bot.event_queue_size
+        self._event_send_stream, self._event_receive_stream = (
+            anyio.create_memory_object_stream(
+                max_buffer_size=self.bot.config.bot.event_queue_size
+            )
         )
 
     async def run(self) -> None:
@@ -82,7 +89,9 @@ class NodeManager:
         with catch(
             {
                 IgnoreException: handle_exception(
-                    "Event is ignored", level="info", name=current_event.get_event_name()
+                    "Event is ignored",
+                    level="info",
+                    name=current_event.get_event_name(),
                 ),
                 Exception: handle_exception(
                     "Error when running EventPreProcessors. Event ignored!"
@@ -128,7 +137,9 @@ class NodeManager:
 
         logger.debug("Running EventPostProcessors...")
 
-        with catch({Exception: handle_exception("Error when running EventPostProcessors")}):
+        with catch(
+            {Exception: handle_exception("Error when running EventPostProcessors")}
+        ):
             async with anyio.create_task_group() as tg:
                 for hook_func in self.bot._event_postprocessor_hooks:
                     tg.start_soon(
@@ -220,7 +231,9 @@ class NodeManager:
             return
 
         with (
-            catch({Exception: handle_exception("Error when running RunPostProcessors. ")}),
+            catch(
+                {Exception: handle_exception("Error when running RunPostProcessors. ")}
+            ),
         ):
             async with anyio.create_task_group() as tg:
                 for hook_func in self.bot._node_postprocessor_hooks:
@@ -232,7 +245,8 @@ class NodeManager:
                             event=current_event,
                             state=node.state,
                             stack=stack,
-                            dependency_cache=dependency_cache | {Node: node, Exception: exception},
+                            dependency_cache=dependency_cache
+                            | {Node: node, Exception: exception},
                         ),
                         (SkipException,),
                     )
@@ -287,13 +301,13 @@ class NodeManager:
             current_event = self._current_event
         await self._handle_event(current_event)
 
-    async def _add_temporary_task(
+    async def add_temporary_task(
         self,
         node_class: type[Node],
         current_event: Event[Any],
         state: StateT,
         max_try_times: int | None = None,
-        timeout: int | float = MAX_TIMEOUT,
+        timeout: float = MAX_TIMEOUT,
     ):
         """添加一个临时节点任务，在调用 reject 时运行。
 
@@ -303,7 +317,9 @@ class NodeManager:
             timeout: 超时时间。
         """
 
-        async def temporary_task(func: Callable[[Event], bool | Awaitable[bool]] | None = None):
+        async def temporary_task(
+            func: Callable[[Event], bool | Awaitable[bool]] | None = None,
+        ):
             async def check(event: Event[Any]) -> bool:
                 if event.get_session_id() != current_event.get_session_id():
                     return False
@@ -348,15 +364,18 @@ class NodeManager:
         返回:
             bool: 是否符合运行条件
         """
-
         passed = True
 
-        def handle_check_exception(msg: str, exc_group: BaseExceptionGroup[Exception]) -> None:
+        def handle_check_exception(
+            msg: str, exc_group: BaseExceptionGroup[Exception]
+        ) -> None:
             nonlocal passed
             handle_exception(msg, node=node_class.__name__)(exc_group)
             passed = False
 
-        with catch({Exception: partial(handle_check_exception, "permission check failed")}):
+        with catch(
+            {Exception: partial(handle_check_exception, "permission check failed")}
+        ):
             if not await node_class._check_perm(
                 self.bot, current_event, self.bot.global_state, stack, dependency_cache
             ):
@@ -368,7 +387,12 @@ class NodeManager:
 
         with catch({Exception: partial(handle_check_exception, "rule check failed")}):
             if not await node_class._check_rule(
-                self.bot, current_event, state, self.bot.global_state, stack, dependency_cache
+                self.bot,
+                current_event,
+                state,
+                self.bot.global_state,
+                stack,
+                dependency_cache,
             ):
                 logger.debug("rule conditions not met", node=node_class.__name__)
                 return False
@@ -427,10 +451,14 @@ class NodeManager:
         stack: AsyncExitStack | None,
         dependency_cache: DependencyCacheT | None = None,
     ) -> tuple[PruningException | JumpToException | None, StateT | None]:
-        if not await self._check_node(node_class, current_event, state, stack, dependency_cache):
+        if not await self._check_node(
+            node_class, current_event, state, stack, dependency_cache
+        ):
             return StopException() if node_class.block else PruningException(), None
 
-        return await self._run_node(node_class, current_event, state, stack, dependency_cache)
+        return await self._run_node(
+            node_class, current_event, state, stack, dependency_cache
+        )
 
     async def _handle_event(
         self,
@@ -462,7 +490,9 @@ class NodeManager:
 
             nodes_list = self.bot.nodes_list.copy()
             state = state or defaultdict(lambda: None)
-            jump_to_index_map = {node.__name__: i for i, (node, _) in enumerate(nodes_list)}
+            jump_to_index_map = {
+                node.__name__: i for i, (node, _) in enumerate(nodes_list)
+            }
             index = jump_to_index_map.get(start_class.__name__, 0) if start_class else 0
             interrupted = False
 
@@ -481,7 +511,9 @@ class NodeManager:
                 with catch(
                     {
                         StopException: _handle_stop_propagation,
-                        Exception: handle_exception("Error when running Node.", node=node_class),
+                        Exception: handle_exception(
+                            "Error when running Node.", node=node_class
+                        ),
                     }
                 ):
                     exc, _state = await self._check_and_run_node(
@@ -550,7 +582,7 @@ class NodeManager:
         event_type: None = None,
         adapter_type: None = None,
         max_try_times: int | None = None,
-        timeout: int | float | None = None,
+        timeout: float | None = None,
     ) -> Event[Any]: ...
 
     @overload
@@ -561,7 +593,7 @@ class NodeManager:
         event_type: None = None,
         adapter_type: type[Adapter[EventT, Any]],
         max_try_times: int | None = None,
-        timeout: int | float | None = None,
+        timeout: float | None = None,
     ) -> EventT: ...
 
     @overload
@@ -572,7 +604,7 @@ class NodeManager:
         event_type: type[EventT],
         adapter_type: type[Adapter[Any, Any]] | None = None,
         max_try_times: int | None = None,
-        timeout: int | float | None = None,
+        timeout: float | None = None,
     ) -> EventT: ...
 
     async def get(
@@ -582,7 +614,7 @@ class NodeManager:
         event_type: type[Event] | None = None,
         adapter_type: type[Adapter[Any, Any]] | None = None,
         max_try_times: int | None = None,
-        timeout: int | float = MAX_TIMEOUT,
+        timeout: float = MAX_TIMEOUT,
     ) -> Event[Any]:
         """获取满足指定条件的的事件，协程会等待直到适配器接收到满足条件的事件、超过最大事件数或超时。
 

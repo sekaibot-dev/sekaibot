@@ -7,28 +7,28 @@ from sekaibot.dependencies import Depends
 from sekaibot.log import StructLogHandler, logger
 from sekaibot.plugin import Plugin
 
-from .config import SchedulerConfig
+from .config import APSchedulerConfig
 
-__all__ = ["SchedulerArg"]
+__all__ = ["APSchedulerArg"]
 
 
-def SchedulerArg():
+def APSchedulerArg():
     async def wrapper(
         bot: Bot = Depends(Bot),  # noqa: B008
     ) -> AsyncIOScheduler:
-        if isinstance(bot_scheduler := bot.get_plugin(Scheduler.name), Scheduler):
+        if isinstance(bot_scheduler := bot.get_plugin(APScheduler.name), APScheduler):
             return bot_scheduler.scheduler
         raise RuntimeError("Scheduler not found.")
 
     return Depends(wrapper)
 
 
-class Scheduler(Plugin[SchedulerConfig]):
+class APScheduler(Plugin[APSchedulerConfig]):
     """Scheduler 组件，使用 APScheduler 实现定时任务调度器。"""
 
-    name: str = "Scheduler"
+    name: str = "APScheduler"
     bot: "Bot"
-    Config: type[SchedulerConfig] = SchedulerConfig
+    Config: type[APSchedulerConfig] = APSchedulerConfig
 
     scheduler: AsyncIOScheduler
 
@@ -47,13 +47,13 @@ class Scheduler(Plugin[SchedulerConfig]):
         if self.config.apscheduler_autostart:
             if not self.scheduler.running:
                 self.scheduler.start()
-                logger.info("Running Scheduler...")
+                logger.info("Running APScheduler...")
             Bot.bot_exit_hook(self.shutdown)
 
     async def shutdown(self):
         if self.scheduler.running:
             self.scheduler.shutdown()
-            logger.info("Stopping Scheduler...")
+            logger.info("Stopping APScheduler...")
 
 
-Bot.require_plugin(Scheduler)
+Bot.require_plugin(APScheduler)

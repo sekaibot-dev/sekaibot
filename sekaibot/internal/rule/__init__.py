@@ -147,8 +147,6 @@ class RuleChecker(Generic[ArgsT]):
         """将检查器添加到 Node 类中。"""
         if not isinstance(cls, type):
             raise TypeError(f"class should be NodeT, not `{type(cls)}`.")
-        if not hasattr(cls, "__node_rule__"):
-            cls.__node_rule__ = Rule()
         cls.__node_rule__ += self.__rule__
         return cls
 

@@ -18,8 +18,8 @@ _T = TypeVar("_T")
 
 
 __all__ = [
-    "Depends",
     "Dependency",
+    "Depends",
     "InnerDepends",
     "solve_dependencies",
     "solve_dependencies_in_bot",
@@ -51,8 +51,7 @@ async def solve_dependencies_in_bot(
     global_state: GlobalStateT | None = None,
     use_cache: bool = True,
     stack: AsyncExitStack | None = None,
-    dependency_cache: DependencyCacheT | None = None,
-    **kwargs: Any,
+    dependency_cache: dict[Any, Any] | None = None,
 ) -> _T:
     """解析子依赖。
 
@@ -74,7 +73,7 @@ async def solve_dependencies_in_bot(
     """
     from sekaibot.bot import Bot
 
-    if dependency_cache is None:
+    if not dependency_cache:
         dependency_cache = {}
     dependency_cache.update(
         {
@@ -90,11 +89,7 @@ async def solve_dependencies_in_bot(
             "node_state": node_state,
         }
     )
-    if dependency_cache is not None:
-        dependency_cache.update({DependencyCacheT: dependency_cache})
-    for key, value in kwargs.items():
-        dependency_cache[key] = value
-        dependency_cache[type(value)] = value
+    dependency_cache.update({DependencyCacheT: dependency_cache})
     return await solve_dependencies(
         dependent, use_cache=use_cache, stack=stack, dependency_cache=dependency_cache
     )

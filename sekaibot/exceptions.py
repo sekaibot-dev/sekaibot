@@ -5,17 +5,18 @@
 """
 
 from typing import Any
+from typing_extensions import override
 
 __all__ = [
+    "AdapterException",
     "EventException",
+    "GetEventTimeout",
+    "LoadModuleError",
     "ParserExit",
-    "SkipException",
-    "StopException",
     "RejectException",
     "SekaiBotException",
-    "GetEventTimeout",
-    "AdapterException",
-    "LoadModuleError",
+    "SkipException",
+    "StopException",
 ]
 
 
@@ -26,6 +27,7 @@ class ParserExit(BaseException):
         self.status = status
         self.message = message
 
+    @override
     def __repr__(self) -> str:
         return (
             f"ParserExit(status={self.status}"
@@ -44,15 +46,17 @@ class IgnoreException(EventException):
 
 class MockApiException(EventException):
     """指示 NoneBot 阻止本次 API 调用或修改本次调用返回值，并返回自定义内容。
+
     可由 api hook 抛出。
 
     Args:
         result: 返回的内容
     """
 
-    def __init__(self, result: Any):
+    def __init__(self, result: Any) -> None:
         self.result = result
 
+    @override
     def __repr__(self) -> str:
         return f"MockApiException(result={self.result!r})"
 

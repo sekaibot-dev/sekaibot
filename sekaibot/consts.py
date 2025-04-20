@@ -1,3 +1,5 @@
+"""SekaiBot 使用的常量"""
+
 import os
 import sys
 from typing import Literal

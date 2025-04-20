@@ -1,3 +1,8 @@
+"""SekaiBot 插件。
+
+所有 SekaiBot 插件的基类。所有用户编写的插件必须继承自 `Plugin` 类。
+"""
+
 from typing import TYPE_CHECKING, Any, Generic, final
 
 from sekaibot.typing import ConfigT
