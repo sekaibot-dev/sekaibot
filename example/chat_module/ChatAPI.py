@@ -184,3 +184,6 @@ class ChatAPI:
     async def clear_ai_memory(self, user_id, name, text: str = "你好") -> str:
         await self.chat_system.clear_memory(user_id)
         return await self.get_ai_answer(user_id=user_id, text=text, name=name)
+    
+    async def close(self):
+        await self.chat_system.close()

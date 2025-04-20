@@ -24,9 +24,9 @@ system = """
 这很重要，设定中有关语言风格的内容仅做参考，请勿完全按照这些内容回答！！
 这很重要，回答时，必须使用较为简短的语句，这非常重要！这很重要，每句话之前我会向你提供对方的名字，但是你的回答不要有这些内容，这很重要！！
 
-重点中的重点——
-在群聊角色扮演中，你只对下列情境作出回应，其余一律返回 `##ignore`（不加任何语气词或表情）：
-对方**直接提到你“可不”或“KAFU”**的名字或身份，或疑似对话的对象是你，而不是别人；
+**重点中的重点**
+在群聊角色扮演中，你只对下列情境作出回应，其余一律返回 `##ignore`（不加任何语气词或表情），如果你不知道在聊什么，你没有回复的把握，请返回 `##ignore`，千万不要胡言乱语，这非常重要！！：
+对方**直接提到你“可不”或“KAFU”**的名字或身份；
 内容涉及**你的团体成员、朋友（星界、里命、狐子、羽累、花谱、情绪等）**或你对他们的看法、关系；
 有关你生活环境“神椿市”、你所属的团体“VIP”或“VWP”及相关音乐活动；
 话题与你的设定兴趣爱好（如咖喱乌冬、唱歌、音乐、神椿人）有直接关联；
@@ -135,7 +135,7 @@ def get_current_time() -> str:
 # === 4. 初始化 LLM 与 AgentExecutor（不传 prompt，使用默认 ReAct 模板） ===
 llm = ChatOpenAI(
     model="gpt-4.1-mini",
-    temperature=0.7,
+    temperature=1.3,
     openai_api_key="sk-dFzsKInVuNhZhAt8KpV4qXhyWeFbME0RYxiGJLXjDHrhirkb",  # 替换为你的 OpenAI API 密钥
     base_url="https://api.chatanywhere.tech/v1",
 )
@@ -216,14 +216,14 @@ async def get_answer(session_id: str, name: str, input: str, is_url: bool = Fals
     if (
         any(keyw in input for keyw in keyws)
         or message_dict[session_id] == []
-        or len(message_dict[session_id]) > 5
+        or len(message_dict[session_id]) > 6
     ):
         if "可不" in input:
-            trigger += 0.15
+            trigger += 0.2
         trigger += 0.3
 
     message_dict[session_id].append(HumanMessage(content))
-    if not is_url and trigger >= 0.6:
+    if not is_url and trigger >= 0.8:
         res = await use_llm(session_id, message_dict[session_id])
         message_dict[session_id] = []
         answer: str = res.get("output", "ignore")

@@ -26,6 +26,7 @@ if os.getenv("SEKAIBOT_DEV") == "1":  # pragma: no cover
     # 当处于开发环境时，使用 pkg_resources 风格的命名空间包
     __import__("pkg_resources").declare_namespace(__name__)
 
+
 class Adapter(ABC, Generic[MessageSegmentT, ConfigT]):
     """协议适配器基类。
 
@@ -68,13 +69,30 @@ class Adapter(ABC, Generic[MessageSegmentT, ConfigT]):
     @final
     async def safe_run(self) -> None:
         """附带有异常处理和重试机制的安全运行适配器。"""
-        for retries in range(self.bot.config.bot.adapter_max_retries + 1):
-            with catch(
-                {Exception: handle_exception("Run adapter failed", adapter_name=self.__class__.__name__)}
-            ):
-                await self.run()
-            logger.info("Retry running the adapter...", adapter_name=self.__class__.__name__, retries=retries)
-        logger.warning("Adapter run failed after retries", adapter_name=self.__class__.__name__)
+        retries = 0
+        while not self.bot._should_exit.is_set():
+            if retries <= self.bot.config.bot.adapter_max_retries:
+                with catch(
+                    {
+                        Exception: handle_exception(
+                            "Run adapter failed", adapter_name=self.__class__.__name__
+                        )
+                    }
+                ):
+                    await self.run()
+                if self.bot._should_exit.is_set():
+                    break
+                logger.info(
+                    "Retry running the adapter...",
+                    adapter_name=self.__class__.__name__,
+                    retries=retries,
+                )
+                retries += 1
+            else:
+                logger.warning(
+                    "Adapter run failed after retries", adapter_name=self.__class__.__name__
+                )
+                break
 
     @abstractmethod
     async def run(self) -> None:

@@ -193,9 +193,6 @@ async def solve_dependencies(
     if isinstance(dependent, type):
         # type of dependent is Type[T] (Class, not instance)
         depend = await _execute_class(dependent, stack, dependency_cache)
-    elif inspect.iscoroutinefunction(dependent) or inspect.isfunction(dependent):
-        # type of dependent is Callable[..., T] | Callable[..., Awaitable[T]]
-        depend = await _execute_callable(dependent, stack, dependency_cache)
     elif inspect.isasyncgenfunction(dependent):
         # type of dependent is Callable[[], AsyncGenerator[T, None]]
         if stack is None:
@@ -208,6 +205,9 @@ async def solve_dependencies(
             raise TypeError("stack cannot be None when entering a generator context")
         cm = sync_ctx_manager_wrapper(contextmanager(dependent)())
         depend = cast(_T, await stack.enter_async_context(cm))
+    elif inspect.iscoroutinefunction(dependent) or inspect.isfunction(dependent):
+        # type of dependent is Callable[..., T] | Callable[..., Awaitable[T]]
+        depend = await _execute_callable(dependent, stack, dependency_cache)
     elif inspect.ismethod(dependent):
         # type of dependent is a bound method (instance method)
         depend = await _execute_callable(dependent.__func__, stack, dependency_cache)

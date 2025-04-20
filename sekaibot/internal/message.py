@@ -196,12 +196,6 @@ class Message(ABC, list[MessageSegmentT]):
         """
         return "".join(map(str, filter(lambda x: x.is_text(), self)))
 
-    def get_message_text(self) -> str:
-        """获取消息中可解析为文本的部分。可根据需要覆写。
-
-        Returns:
-            消息中可解析为文本的部分。
-        """
 
     def get_message(self, include: set | None = None, exclude: set | None = None) -> Self:
         """获取消息中某一类型的部分。
@@ -267,8 +261,6 @@ class Message(ABC, list[MessageSegmentT]):
         Returns:
             检查结果。
         """
-        if not prefix:
-            return default if return_key else False
         if isinstance(prefix, str):
             text = str(self).casefold() if ignorecase else str(self)
             prefix = prefix.casefold() if ignorecase else prefix
@@ -341,8 +333,6 @@ class Message(ABC, list[MessageSegmentT]):
         Returns:
             检查结果。
         """
-        if not suffix:
-            return default if return_key else False
         if isinstance(suffix, str):
             text = str(self).casefold() if ignorecase else str(self)
             suffix = suffix.casefold() if ignorecase else suffix

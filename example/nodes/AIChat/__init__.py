@@ -8,7 +8,7 @@ from sekaibot.rule import WordFilter
 from .llm import clear, get_answer
 
 
-@WordFilter(word_file="./test/nodes/sensitive_words_lines.txt", use_aho=True)
+@WordFilter(word_file="./example/nodes/sensitive_words_lines.txt", use_aho=True)
 @SuperUser()
 @User("group_834922207", "group_788499440")
 class AIChat(Node[GroupMessageEvent, dict, Any]):

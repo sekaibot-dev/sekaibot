@@ -77,7 +77,7 @@ class NodeManager:
         if not self.bot._event_preprocessor_hooks:
             return True
 
-        logger.debug("Running PreProcessors...")
+        logger.debug("Running EventPreProcessors...")
 
         with catch(
             {
@@ -126,7 +126,7 @@ class NodeManager:
         if not self.bot._event_postprocessor_hooks:
             return
 
-        logger.debug("Running PostProcessors...")
+        logger.debug("Running EventPostProcessors...")
 
         with catch({Exception: handle_exception("Error when running EventPostProcessors")}):
             async with anyio.create_task_group() as tg:
@@ -147,7 +147,6 @@ class NodeManager:
     async def _run_node_preprocessors(
         self,
         current_event: Event[Any],
-        state: StateT,
         node: Node,
         stack: AsyncExitStack | None = None,
         dependency_cache: DependencyCacheT | None = None,
@@ -186,12 +185,11 @@ class NodeManager:
                         run_coro_with_catch,
                         solve_dependencies_in_bot(
                             hook_func,
-                            node=node,
                             bot=self.bot,
                             event=current_event,
-                            state=state,
+                            state=node.state,
                             stack=stack,
-                            dependency_cache=dependency_cache,
+                            dependency_cache=dependency_cache | {Node: node},
                         ),
                         (SkipException,),
                     )
@@ -230,13 +228,11 @@ class NodeManager:
                         run_coro_with_catch,
                         solve_dependencies_in_bot(
                             hook_func,
-                            node=node,
-                            exception=exception,
                             bot=self.bot,
                             event=current_event,
                             state=node.state,
                             stack=stack,
-                            dependency_cache=dependency_cache,
+                            dependency_cache=dependency_cache | {Node: node, Exception: exception},
                         ),
                         (SkipException,),
                     )
@@ -406,7 +402,6 @@ class NodeManager:
 
         if not await self._run_node_preprocessors(
             current_event=current_event,
-            state=state,
             node=_node,
             stack=stack,
             dependency_cache=dependency_cache,

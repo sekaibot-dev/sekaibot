@@ -162,7 +162,6 @@ class Bot:
                             hook_func,
                             dependency_cache={
                                 Bot: self,
-                                "bot": self,
                             },
                         ),
                         (SkipException,),
@@ -179,7 +178,7 @@ class Bot:
 
         logger.debug(f"Running {name}...", adapter=adapter)
 
-        with catch({Exception: handle_exception(f"Error when running {name}")}, adapter=adapter):
+        with catch({Exception: handle_exception(f"Error when running {name}", adapter=adapter)}):
             async with anyio.create_task_group() as tg:
                 for hook_func in hooks:
                     tg.start_soon(
@@ -188,9 +187,7 @@ class Bot:
                             hook_func,
                             dependency_cache={
                                 Adapter: adapter,
-                                "adapter": adapter,
                                 Bot: self,
-                                "bot": self,
                             },
                         ),
                         (SkipException,),
@@ -218,7 +215,6 @@ class Bot:
             await self.startup()
             async with anyio.create_task_group() as tg:
                 tg.start_soon(self._run)
-                tg.start_soon(cancel_on_exit, self._should_exit, tg.cancel_scope)
                 if self._handle_signals:  # pragma: no cover
                     tg.start_soon(self._handle_exit_signal)
             if self._restart_flag:
@@ -256,28 +252,31 @@ class Bot:
         await self._run_bot_hooks(self._bot_run_hooks, "BotRunHooks")
 
         try:
-            for _adapter in self.adapters:
-                await self._run_adapter_hooks(
-                    self._adapter_startup_hooks, _adapter, "AdapterStartupHooks"
-                )
-                try:
-                    await _adapter.startup()
-                except Exception:
-                    logger.exception("Startup adapter failed", adapter=_adapter)
-
-            try:
-                await self.manager.startup()
-            except Exception:
-                logger.exception("Startup manager failed", manager=self.manager)
-
             async with anyio.create_task_group() as tg:
+                tg.start_soon(cancel_on_exit, self._should_exit, tg.cancel_scope)
+
                 for _adapter in self.adapters:
                     await self._run_adapter_hooks(
-                        self._adapter_run_hooks, _adapter, "AdapterRunHooks"
+                        self._adapter_startup_hooks, _adapter, "AdapterStartupHooks"
                     )
-                    tg.start_soon(_adapter.safe_run)
+                    try:
+                        await _adapter.startup()
+                    except Exception:
+                        logger.exception("Startup adapter failed", adapter=_adapter)
 
-                tg.start_soon(self.manager.run)
+                try:
+                    await self.manager.startup()
+                except Exception:
+                    logger.exception("Startup manager failed", manager=self.manager)
+
+                async with anyio.create_task_group() as tg:
+                    for _adapter in self.adapters:
+                        await self._run_adapter_hooks(
+                            self._adapter_run_hooks, _adapter, "AdapterRunHooks"
+                        )
+                        tg.start_soon(_adapter.safe_run)
+
+                    tg.start_soon(self.manager.run)
 
         finally:
             for _adapter in self.adapters:

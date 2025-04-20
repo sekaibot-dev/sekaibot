@@ -1,0 +1,51 @@
+[bot]
+# 这里是 KafuBot 自身的配置
+event_queue_size=100
+nodes = []
+node_dirs = ["./example/nodes"]
+adapters = ["sekaibot.adapter.cqhttp"]
+adapter_max_retries = 3
+
+
+[bot.log]
+# 这里是 KafuBot 自身日志相关的配置
+level = "INFO"
+verbose_exception = true
+
+[adapter.cqhttp]
+# 这里是 CQHTTP 适配器的配置
+adapter_type = "reverse-ws"
+host = "127.0.0.1"
+port = 8080
+url = "/cqhttp/ws"
+api_timeout=10
+
+[permission]
+superusers = ["2682064633", "3613158872", "2641460187", "group_596488203", "group_895484096", "group_1011357049"]
+
+[apiadapter.chatgpt]
+# 这里是 ChatGPT 适配器的配置
+model = "gpt-4o-mini"
+max_concurrent_requests = 10
+reconnect_interval = 5.0
+api_keys = [
+        ["free","sk-ADX97OSA3STCkdmZRruOwzScdpPueRZ6ucOD2orI0ZszZ7Xn",195],
+        ["paid","sk-dFzsKInVuNhZhAt8KpV4qXhyWeFbME0RYxiGJLXjDHrhirkb",-1]
+    ]
+base_url = "https://api.chatanywhere.tech/v1"
+
+[plugin.chat_config]
+config_path = "D:/QQBot/chatbot/example/chat_config.toml"
+
+[plugin.mysql_config]
+host = "localhost"
+port = 3306
+user = "root"
+password = "090416Wds_"
+db = "kafu_bot"
+charset = "utf8mb4"
+
+[plugin.redis_config]
+host = "localhost"
+port = 6379
+db = 0

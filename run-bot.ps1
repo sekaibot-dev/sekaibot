@@ -5,7 +5,7 @@ $env:PYTHONPATH = "d:\QQBot\chatbot;d:\QQBot\chatbot\packages\sekaibot-adapter-o
 $env:SEKAIBOT_DEV = "1"
 
 # 执行指定 Python 文件
-& "d:\QQBot\chatbot\.conda\python.exe" "d:\QQBot\chatbot\test\main.py"
+& "d:\QQBot\chatbot\.conda\python.exe" "d:\QQBot\chatbot\example\main.py"
 
 # 等待按键防止窗口关闭
 Read-Host "Press Enter to exit"
