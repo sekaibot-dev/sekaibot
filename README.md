@@ -4,7 +4,7 @@
 
 <div align="center">
 
-# SekaiBot
+<img src="https://raw.githubusercontent.com/sekaibot-dev/sekaibot/main/docs/public/name.png" width="140" alt="sekaibot">
 
 _-跨平台的 Python 异步渐进式机器人开发框架-_
 
