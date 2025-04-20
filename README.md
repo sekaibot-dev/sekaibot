@@ -1,5 +1,5 @@
 <p align="center">
-  <a href=""><img src="https://raw.githubusercontent.com/sekaibot-dev/sekaibot/main/docs/public/logo.png" width="200" height="200" alt="sekaibot"></a>
+  <a href=""><img src="https://raw.githubusercontent.com/sekaibot-dev/sekaibot/main/docs/public/logo.png" width="250" height="250" alt="sekaibot"></a>
 </p>
 
 <div align="center">
