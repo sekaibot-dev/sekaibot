@@ -27,7 +27,7 @@ class User(PermissionChecker):
 
     @override
     @classmethod
-    def checker(cls, *users: str, perm: Permission | None = None) -> bool:
+    def Checker(cls, *users: str, perm: Permission | None = None) -> bool:
         """匹配当前事件属于指定会话。
 
         Args:
@@ -37,7 +37,7 @@ class User(PermissionChecker):
                 - 精准会话 ID 格式为：`"group_<群聊ID>_<用户ID>"`
             perm: 需要同时满足的权限
         """
-        return super().checker(users, perm=perm)
+        return super().Checker(users, perm=perm)
 
 
 class SuperUser(PermissionChecker):
@@ -48,6 +48,6 @@ class SuperUser(PermissionChecker):
 
     @override
     @classmethod
-    def checker(cls) -> bool:
+    def Checker(cls) -> bool:
         """检查当前事件是否是消息事件且属于超级管理员"""
-        return super().checker()
+        return super().Checker()

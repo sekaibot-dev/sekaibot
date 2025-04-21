@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from sekaibot.utils.counter import Counter, RecordedEvent
+from sekaibot.internal.rule._counter import Counter, RecordedEvent
 
 
 class DummyTime:

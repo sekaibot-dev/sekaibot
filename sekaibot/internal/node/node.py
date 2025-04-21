@@ -42,7 +42,6 @@ from sekaibot.permission import Permission
 from sekaibot.rule import Rule
 from sekaibot.typing import (
     ConfigT,
-    DependencyCacheT,
     EventT,
     GlobalStateT,
     NameT,
@@ -369,7 +368,7 @@ class Node(Generic[EventT, NodeStateT, ConfigT]):
         event: Event[Any],
         global_state: GlobalStateT,
         stack: AsyncExitStack | None = None,
-        dependency_cache: DependencyCacheT | None = None,
+        dependency_cache: dict[Any, Any] | None = None,
     ) -> bool:
         """检查节点权限。"""
         return (
@@ -408,7 +407,7 @@ class Node(Generic[EventT, NodeStateT, ConfigT]):
         state: StateT,
         global_state: GlobalStateT,
         stack: AsyncExitStack | None = None,
-        dependency_cache: DependencyCacheT | None = None,
+        dependency_cache: dict[Any, Any] | None = None,
     ) -> bool:
         """检查节点规则。"""
         return await cls.__node_rule__(

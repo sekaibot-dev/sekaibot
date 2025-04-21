@@ -21,7 +21,7 @@ url = "/cqhttp/ws"
 api_timeout=10
 
 [permission]
-superusers = ["3613158872", "2641460187", "group_596488203", "group_895484096", "group_1011357049"]#"2682064633", 
+superusers = ["2682064633", "3613158872", "2641460187", "group_596488203", "group_1011357049"]
 
 [apiadapter.chatgpt]
 # 这里是 ChatGPT 适配器的配置

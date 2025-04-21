@@ -153,7 +153,7 @@ class Adapter(ABC, Generic[MessageSegmentT, ConfigT]):
                 ]
                 if not excs:
                     return
-                elif len(excs) > 1:
+                if len(excs) > 1:
                     logger.warning("Multiple hooks want to mock API result. Use the first one.")
 
                 skip_calling_api = True
@@ -194,7 +194,7 @@ class Adapter(ABC, Generic[MessageSegmentT, ConfigT]):
                 ]
                 if not excs:
                     return
-                elif len(excs) > 1:
+                if len(excs) > 1:
                     logger.warning("Multiple hooks want to mock API result. Use the first one.")
 
                 result = excs[0].result

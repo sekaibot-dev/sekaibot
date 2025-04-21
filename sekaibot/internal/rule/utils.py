@@ -15,7 +15,7 @@ import re
 import shlex
 from argparse import Action, ArgumentError, Namespace
 from argparse import ArgumentParser as ArgParser
-from collections.abc import Sequence
+from collections.abc import Hashable, Sequence
 from contextvars import ContextVar
 from gettext import gettext
 from itertools import chain, product
@@ -60,7 +60,8 @@ from sekaibot.internal.message import Message, MessageSegment
 from sekaibot.internal.rule import Rule
 from sekaibot.log import logger
 from sekaibot.typing import GlobalStateT, NameT, StateT
-from sekaibot.utils import Counter
+
+from ._counter import Counter
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
@@ -195,14 +196,17 @@ class FullmatchRule:
         msgs: tuple[str | Message[Any] | MessageSegment[Any], ...],
         ignorecase: bool = False,
     ) -> None:
-        self.msgs: set[str | Message[Any]] = {
-            msg.casefold()
-            if ignorecase and isinstance(msg, str)
-            else msg.get_message_class()(msg)
-            if isinstance(msg, MessageSegment)
-            else msg
-            for msg in msgs
-        }
+        self.msgs = cast(
+            "set[str | Message[Any]]",
+            {
+                msg.casefold()
+                if ignorecase and isinstance(msg, str)
+                else msg.get_message_class()(msg)
+                if isinstance(msg, MessageSegment)
+                else cast("Hashable", msg)
+                for msg in msgs
+            },
+        )
         self.ignorecase = ignorecase
 
     @override
@@ -253,10 +257,10 @@ class KeywordsRule:
     def __init__(
         self, keywords: tuple[str | MessageSegment[Any], ...], ignorecase: bool = False
     ) -> None:
-        self.keywords = set(
+        self.keywords = {
             keyword.casefold() if ignorecase and isinstance(keyword, str) else keyword
             for keyword in keywords
-        )
+        }
         self.ignorecase = ignorecase
 
     @override
@@ -349,9 +353,9 @@ class WordFilterRule:
         min_aho_words = 2000
         if self.use_aho and len(self.words) > min_aho_words:
             try:
-                from ahocorasick import Automaton
+                from ahocorasick import Automaton  # type: ignore
 
-                self._automaton = Automaton()
+                self._automaton = cast("Any", Automaton())
                 for idx, word in enumerate(self.words):
                     self._automaton.add_word(word, (idx, word))
                 self._automaton.make_automaton()
@@ -579,10 +583,10 @@ class CountTriggerRule:
 class TrieRule:
     """Trie 规则类"""
 
-    prefix: CharTrie
+    prefix: Any
 
     def __init__(self) -> None:
-        self.prefix = CharTrie()
+        self.prefix: Any = cast("Any", CharTrie())
 
     def add_prefix(self, prefix: str, value: TrieValue) -> None:
         """添加 prefix"""
@@ -654,10 +658,10 @@ class CommandRule:
 
     def __init__(
         self,
-        cmds: list[tuple[str, ...]],
+        cmds: tuple[tuple[str, ...], ...],
         force_whitespace: str | bool | None = None,
     ) -> None:
-        self.cmds = tuple(cmds)
+        self.cmds = cmds
         self.force_whitespace = force_whitespace
         self.char_trie = TrieRule()
 
@@ -816,14 +820,14 @@ class ShellCommandRule:
     __slots__ = ("char_trie", "cmds", "parser")
 
     def __init__(
-        self, cmds: list[tuple[str, ...]], parser: ArgumentParser | None
+        self, cmds: tuple[tuple[str, ...], ...], parser: ArgumentParser | None
     ) -> None:
         if parser is not None and not isinstance(parser, ArgumentParser):
             raise TypeError(
                 "`parser` must be an instance of nonebot.rule.ArgumentParser"
             )
 
-        self.cmds = tuple(cmds)
+        self.cmds = cmds
         self.parser = parser
         self.char_trie = TrieRule()
 

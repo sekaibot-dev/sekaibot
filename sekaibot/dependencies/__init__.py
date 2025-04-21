@@ -7,7 +7,7 @@ from contextlib import AsyncExitStack
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from sekaibot.internal.event import Event
-from sekaibot.typing import DependencyCacheT, GlobalStateT, NodeStateT, StateT
+from sekaibot.typing import GlobalStateT, NodeStateT, StateT
 
 from .utils import Dependency, InnerDepends, solve_dependencies
 
@@ -26,7 +26,7 @@ __all__ = [
 ]
 
 
-def Depends(  # noqa: N802 # pylint: disable=invalid-name
+def Depends(
     dependency: Dependency[_T] | None = None, *, use_cache: bool = True
 ) -> _T:
     """子依赖装饰器。
@@ -89,7 +89,6 @@ async def solve_dependencies_in_bot(
             "node_state": node_state,
         }
     )
-    dependency_cache.update({DependencyCacheT: dependency_cache})
     return await solve_dependencies(
         dependent, use_cache=use_cache, stack=stack, dependency_cache=dependency_cache
     )

@@ -5,7 +5,7 @@
 """
 
 from abc import ABC, abstractmethod
-from collections.abc import ItemsView, Iterator, KeysView, Mapping, ValuesView
+from collections.abc import ItemsView, Iterable, Iterator, KeysView, Mapping, ValuesView
 from typing import (  # noqa: UP035
     Any,
     Generic,
@@ -14,25 +14,27 @@ from typing import (  # noqa: UP035
     SupportsIndex,
     Type,
     TypeVar,
+    cast,
     overload,
 )
+from typing_extensions import override
 
 from pydantic import BaseModel, Field, GetCoreSchemaHandler
 from pydantic_core import core_schema
 
 __all__ = [
-    "MessageT",
-    "MessageSegmentT",
     "BuildMessageType",
     "Message",
     "MessageSegment",
+    "MessageSegmentT",
+    "MessageT",
 ]
 
 MessageT = TypeVar("MessageT", bound="Message[Any]")
 MessageSegmentT = TypeVar("MessageSegmentT", bound="MessageSegment[Any]")
 
 # 可以转化为 Message 的类型
-BuildMessageType = list[MessageSegmentT] | MessageSegmentT | str | Mapping[str, Any]
+BuildMessageType = Iterable[MessageSegmentT] | MessageSegmentT | str | Mapping[str, Any]
 
 
 class Message(ABC, list[MessageSegmentT]):
@@ -52,14 +54,16 @@ class Message(ABC, list[MessageSegmentT]):
         """
         segment_class = self.get_segment_class()
         for message in messages:
-            if isinstance(message, list):
-                self.extend(message)
-            elif isinstance(message, segment_class):
+            if isinstance(message, segment_class):
                 self.append(message)
             elif isinstance(message, str):
                 self.append(segment_class.from_str(message))
             elif isinstance(message, Mapping):
-                self.append(segment_class.from_mapping(message))
+                self.append(
+                    segment_class.from_mapping(cast("Mapping[str, Any]", message))
+                )
+            elif isinstance(message, Iterable):
+                self.extend(message)
             else:
                 raise TypeError(
                     f"message type error, expect list[{segment_class}], "
@@ -92,6 +96,7 @@ class Message(ABC, list[MessageSegmentT]):
             ]
         )
 
+    @override
     def __repr__(self) -> str:
         """返回消息的描述。
 
@@ -100,6 +105,7 @@ class Message(ABC, list[MessageSegmentT]):
         """
         return f"Message:[{','.join(map(repr, self))}]"
 
+    @override
     def __str__(self) -> str:
         """返回消息的文本表示。
 
@@ -108,7 +114,8 @@ class Message(ABC, list[MessageSegmentT]):
         """
         return "".join(map(str, self))
 
-    def __eq__(self, other: str | BuildMessageType[MessageSegmentT]) -> bool:
+    @override
+    def __eq__(self, other: str | BuildMessageType[MessageSegmentT] | Any) -> bool:
         """判断消息是否等于另一消息。
 
         Args:
@@ -119,9 +126,14 @@ class Message(ABC, list[MessageSegmentT]):
         """
         if isinstance(other, str):
             return str(self) == other
-        return super().__eq__(self.__class__(other))
+        if isinstance(
+            other, list[MessageSegmentT] | MessageSegmentT | str | Mapping[str, Any]
+        ):
+            return super().__eq__(self.__class__(other))
+        return False
 
-    def __ne__(self, other: str | BuildMessageType[MessageSegmentT]) -> bool:
+    @override
+    def __ne__(self, other: str | BuildMessageType[MessageSegmentT] | Any) -> bool:
         """判断消息是否不等于另一消息。
 
         Args:
@@ -132,6 +144,7 @@ class Message(ABC, list[MessageSegmentT]):
         """
         return not self.__eq__(other)
 
+    @override
     def __contains__(self, item: object) -> bool:
         """判断消息中是否包含指定文本或消息字段。
 
@@ -196,18 +209,23 @@ class Message(ABC, list[MessageSegmentT]):
         """
         return "".join(map(str, filter(lambda x: x.is_text(), self)))
 
-
-    def get_message(self, include: set | None = None, exclude: set | None = None) -> Self:
+    def filter_message(
+        self, include: set[str] | None = None, exclude: set[str] | None = None
+    ) -> "Message[MessageSegmentT]":
         """获取消息中某一类型的部分。
 
         Returns:
             消息中某一类型的部分。
         """
-        return filter(
-            lambda x: (not include or x.type in include) and (not exclude or x.type not in exclude),
-            self,
+        return self.__class__(
+            filter(
+                lambda x: (not include or x.type in include)
+                and (not exclude or x.type not in exclude),
+                self,
+            )
         )
 
+    @override
     def copy(self) -> Self:
         """返回自身的浅复制。
 
@@ -217,14 +235,14 @@ class Message(ABC, list[MessageSegmentT]):
         return self.__class__(self)
 
     @overload
-    def startswith(
+    def startswith(  # type: ignore
         self,
         prefix: str | MessageSegmentT | tuple[str | MessageSegmentT, ...],
         start: SupportsIndex | None = ...,
         end: SupportsIndex | None = ...,
         ignorecase: bool = ...,
+        *,
         return_key: Literal[False] = ...,
-        default: None = ...,
     ) -> bool: ...
 
     @overload
@@ -234,8 +252,8 @@ class Message(ABC, list[MessageSegmentT]):
         start: SupportsIndex | None = ...,
         end: SupportsIndex | None = ...,
         ignorecase: bool = ...,
+        *,
         return_key: Literal[True] = ...,
-        default: str | MessageSegmentT | None = ...,
     ) -> str | MessageSegmentT | None: ...
 
     def startswith(
@@ -244,6 +262,7 @@ class Message(ABC, list[MessageSegmentT]):
         start: SupportsIndex | None = None,
         end: SupportsIndex | None = None,
         ignorecase: bool = False,
+        *,
         return_key: bool = False,
         default: str | MessageSegmentT | None = None,
     ) -> bool | str | MessageSegmentT | None:
@@ -257,6 +276,9 @@ class Message(ABC, list[MessageSegmentT]):
             prefix: 前缀。
             start: 开始检查位置。
             end: 停止检查位置。
+            ignorecase: 是否忽略大小写
+            return_key: 是否返回捕获的 key
+            default: 若未捕获返回的值
 
         Returns:
             检查结果。
@@ -281,7 +303,9 @@ class Message(ABC, list[MessageSegmentT]):
                     if first == item:
                         return item if return_key else True
                 else:
-                    raise TypeError(f"prefix arg must be str or {self.get_segment_class()}")
+                    raise TypeError(
+                        f"prefix arg must be str or {self.get_segment_class()}"
+                    )
         else:
             raise TypeError(
                 f"prefix arg must be str or {self.get_segment_class()}, not {type(prefix)}"
@@ -289,14 +313,14 @@ class Message(ABC, list[MessageSegmentT]):
         return default if return_key else False
 
     @overload
-    def endswith(
+    def endswith(  # type: ignore
         self,
         suffix: str | MessageSegmentT | tuple[str | MessageSegmentT, ...],
         start: SupportsIndex | None = ...,
         end: SupportsIndex | None = ...,
         ignorecase: bool = ...,
+        *,
         return_key: Literal[False] = ...,
-        default: None = ...,
     ) -> bool: ...
 
     @overload
@@ -306,8 +330,8 @@ class Message(ABC, list[MessageSegmentT]):
         start: SupportsIndex | None = ...,
         end: SupportsIndex | None = ...,
         ignorecase: bool = ...,
+        *,
         return_key: Literal[True] = ...,
-        default: str | MessageSegmentT | None = ...,
     ) -> str | MessageSegmentT | None: ...
 
     def endswith(
@@ -316,6 +340,7 @@ class Message(ABC, list[MessageSegmentT]):
         start: SupportsIndex | None = None,
         end: SupportsIndex | None = None,
         ignorecase: bool = False,
+        *,
         return_key: bool = False,
         default: str | MessageSegmentT | None = None,
     ) -> bool | str | MessageSegmentT | None:
@@ -329,6 +354,9 @@ class Message(ABC, list[MessageSegmentT]):
             suffix: 后缀。
             start: 开始检查位置。
             end: 停止检查位置。
+            ignorecase: 是否忽略大小写
+            return_key: 是否返回捕获的 key
+            default: 若未捕获返回的值
 
         Returns:
             检查结果。
@@ -353,7 +381,9 @@ class Message(ABC, list[MessageSegmentT]):
                     if last == item:
                         return item if return_key else True
                 else:
-                    raise TypeError(f"suffix arg must be str or {self.get_segment_class()}")
+                    raise TypeError(
+                        f"suffix arg must be str or {self.get_segment_class()}"
+                    )
         else:
             raise TypeError(
                 f"suffix arg must be str or {self.get_segment_class()}, not {type(suffix)}"
@@ -387,7 +417,7 @@ class Message(ABC, list[MessageSegmentT]):
 
         Returns:
             替换后的消息对象。
-        """  # noqa: D402
+        """
         if isinstance(old, str):
             if not isinstance(new, str):
                 raise TypeError("when type of old is str, type of new must be str.")
@@ -490,6 +520,7 @@ class MessageSegment(ABC, BaseModel, Mapping[str, Any], Generic[MessageT]):
         """
         return cls(**msg)
 
+    @override
     def __str__(self) -> str:
         """返回消息字段的文本表示。
 
@@ -498,6 +529,7 @@ class MessageSegment(ABC, BaseModel, Mapping[str, Any], Generic[MessageT]):
         """
         return str(self.data)
 
+    @override
     def __repr__(self) -> str:
         """返回消息字段的描述。
 
@@ -506,6 +538,7 @@ class MessageSegment(ABC, BaseModel, Mapping[str, Any], Generic[MessageT]):
         """
         return f"MessageSegment<{self.type}>:{self!s}"
 
+    @override
     def __hash__(self) -> int:
         """返回消息字段的哈希值。
 
@@ -514,6 +547,7 @@ class MessageSegment(ABC, BaseModel, Mapping[str, Any], Generic[MessageT]):
         """
         return hash((self.type, tuple(sorted(self.data.items()))))
 
+    @override
     def __getitem__(self, key: str) -> Any:
         """取索引。相当于对 `data` 属性进行此操作。
 
@@ -542,6 +576,7 @@ class MessageSegment(ABC, BaseModel, Mapping[str, Any], Generic[MessageT]):
         """
         del self.data[key]
 
+    @override
     def __len__(self) -> int:
         """取长度。相当于对 `data` 属性进行此操作。
 
@@ -558,6 +593,7 @@ class MessageSegment(ABC, BaseModel, Mapping[str, Any], Generic[MessageT]):
         """
         yield from self.data.__iter__()
 
+    @override
     def __contains__(self, key: object) -> bool:
         """索引是否包含在对象内。相当于对 `data` 属性进行此操作。
 
@@ -569,6 +605,7 @@ class MessageSegment(ABC, BaseModel, Mapping[str, Any], Generic[MessageT]):
         """
         return key in self.data
 
+    @override
     def __eq__(self, other: object) -> bool:
         """判断是否相等。允许在定义自字段时覆写，已适配QQ图片id不相等，而unique相等的情况。
 
@@ -584,6 +621,7 @@ class MessageSegment(ABC, BaseModel, Mapping[str, Any], Generic[MessageT]):
             and self.data == other.data
         )
 
+    @override
     def __ne__(self, other: object) -> bool:
         """判断是否不相等。
 
@@ -617,18 +655,22 @@ class MessageSegment(ABC, BaseModel, Mapping[str, Any], Generic[MessageT]):
         """
         return self.get_message_class()(other) + self
 
+    @override
     def get(self, key: str, default: Any = None) -> Any:
         """如果 `key` 存在于 `data` 字典中则返回 `key` 的值，否则返回 `default`。"""
         return self.data.get(key, default)
 
+    @override
     def keys(self) -> KeysView[str]:
         """返回由 `data` 字典键组成的一个新视图。"""
         return self.data.keys()
 
+    @override
     def values(self) -> ValuesView[Any]:
         """返回由 `data` 字典值组成的一个新视图。"""
         return self.data.values()
 
+    @override
     def items(self) -> ItemsView[str, Any]:
         """返回由 `data` 字典项 (`(键, 值)` 对) 组成的一个新视图。"""
         return self.data.items()
@@ -640,11 +682,3 @@ class MessageSegment(ABC, BaseModel, Mapping[str, Any], Generic[MessageT]):
             是否是纯文本消息字段。
         """
         return self.type == "text"
-
-    def is_type(self, _type) -> bool:
-        """是否是某类型消息字段。
-
-        Returns:
-            是否是某类型消息字段。
-        """
-        return self.type == _type

@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any
 
 from sekaibot import Node
@@ -6,7 +7,7 @@ from sekaibot.adapter.cqhttp.message import CQHTTPMessage, CQHTTPMessageSegment
 from sekaibot.rule import WordFilter
 
 
-#@WordFilter(word_file="./example/nodes/sensitive_words_lines.txt", use_aho=True)
+@WordFilter(word_file=Path("./example/nodes/sensitive_words_lines.txt"), use_aho=True)
 class CopyWith(Node[GroupMessageEvent, dict, Any]):
     priority: int = 2
 

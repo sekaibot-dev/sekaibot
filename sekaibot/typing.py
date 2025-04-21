@@ -7,7 +7,6 @@ from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any, TypeVar
 
 if TYPE_CHECKING:
-    from sekaibot.bot import Bot
     from sekaibot.config import ConfigModel
     from sekaibot.internal.adapter import Adapter
     from sekaibot.internal.event import Event
@@ -16,7 +15,6 @@ if TYPE_CHECKING:
 __all__ = [
     "BotHook",
     "ConfigT",
-    "DependencyCacheT",
     "EventHook",
     "EventT",
     "NodeStateT",
@@ -34,7 +32,6 @@ NodeT = TypeVar("NodeT", bound="Node[Any, Any, Any]")
 StateT = TypeVar("StateT", bound="dict[str, dict[str, Any] | Any]")
 NodeStateT = TypeVar("NodeStateT")
 GlobalStateT = TypeVar("GlobalStateT", bound="dict[str, dict[str, Any]]")
-DependencyCacheT = TypeVar("DependencyCacheT", bound="dict[Any, Any]")
 NameT = TypeVar("NameT", bound="str")
 
 RuleCheckerT = Callable[..., bool | Awaitable[bool]]
@@ -45,7 +42,7 @@ BotHook = HookT[None]
 AdapterHook = HookT[None]
 EventHook = HookT[None]
 NodeHook = HookT[None]
-CallingAPIHook = Callable[["Bot", str, dict[str, Any]], Awaitable[Any]]
+CallingAPIHook = Callable[["Adapter[Any, Any]", str, dict[str, Any]], Awaitable[Any]]
 CalledAPIHook = Callable[
-    ["Bot", Exception | None, str, dict[str, Any], Any], Awaitable[Any]
+    ["Adapter[Any, Any]", Exception | None, str, dict[str, Any], Any], Awaitable[Any]
 ]

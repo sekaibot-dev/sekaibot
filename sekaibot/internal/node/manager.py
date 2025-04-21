@@ -1,9 +1,10 @@
+"""SekaiBot 事件分配类"""
+
 import time
-from collections import defaultdict
 from collections.abc import Awaitable, Callable
 from contextlib import AsyncExitStack
 from functools import partial
-from typing import TYPE_CHECKING, Any, overload
+from typing import TYPE_CHECKING, Any, cast, overload
 
 import anyio
 from anyio.abc import TaskStatus
@@ -24,9 +25,8 @@ from sekaibot.internal.adapter import Adapter
 from sekaibot.internal.event import Event, EventHandleOption
 from sekaibot.internal.node import Node
 from sekaibot.log import logger
-from sekaibot.typing import ConfigT, DependencyCacheT, EventT, NameT, StateT
+from sekaibot.typing import ConfigT, EventT, NameT, StateT
 from sekaibot.utils import (
-    cancel_on_exit,
     handle_exception,
     run_coro_with_catch,
     wrap_get_func,
@@ -37,21 +37,22 @@ if TYPE_CHECKING:
 
 
 class NodeManager:
+    """事件分配类"""
+
     bot: "Bot"
 
     _condition: anyio.Condition
-    _cancel_event: anyio.Event
     _current_event: Event[Adapter[Any, Any]] | None
 
     _event_send_stream: MemoryObjectSendStream[EventHandleOption]  # pyright: ignore[reportUninitializedInstanceVariable]
     _event_receive_stream: MemoryObjectReceiveStream[EventHandleOption]  # pyright: ignore[reportUninitializedInstanceVariable]
 
-    def __init__(self, bot: "Bot"):
+    def __init__(self, bot: "Bot") -> None:
         self.bot = bot
 
     async def startup(self) -> None:
+        """初始化事件分配器"""
         self._condition = anyio.Condition()
-        self._cancel_event = anyio.Event()
         self._event_send_stream, self._event_receive_stream = (
             anyio.create_memory_object_stream(
                 max_buffer_size=self.bot.config.bot.event_queue_size
@@ -59,16 +60,25 @@ class NodeManager:
         )
 
     async def run(self) -> None:
+        """运行事件分配器"""
         async with anyio.create_task_group() as tg:
             tg.start_soon(self._handle_event_receive)
-            tg.start_soon(cancel_on_exit, self._cancel_event, tg)
+
+    async def safe_run(self) -> None:
+        """安全运行事件分配器"""
+        while not self.bot._should_exit.is_set():
+            with catch({Exception: handle_exception("Run manager failed")}):
+                await self.run()
+            if self.bot._should_exit.is_set():
+                break
+            logger.info("Retry running the manager...")
 
     async def _run_event_preprocessors(
         self,
         current_event: Event[Any],
         state: StateT,
         stack: AsyncExitStack | None = None,
-        dependency_cache: DependencyCacheT | None = None,
+        dependency_cache: dict[Any, Any] | None = None,
     ) -> bool:
         """运行事件预处理。
 
@@ -101,7 +111,7 @@ class NodeManager:
             async with anyio.create_task_group() as tg:
                 for hook_func in self.bot._event_preprocessor_hooks:
                     tg.start_soon(
-                        run_coro_with_catch,
+                        cast("Callable[..., Awaitable[Any]]", run_coro_with_catch),
                         solve_dependencies_in_bot(
                             hook_func,
                             bot=self.bot,
@@ -122,7 +132,7 @@ class NodeManager:
         current_event: Event[Any],
         state: StateT,
         stack: AsyncExitStack | None = None,
-        dependency_cache: DependencyCacheT | None = None,
+        dependency_cache: dict[Any, Any] | None = None,
     ) -> None:
         """运行事件后处理。
 
@@ -143,7 +153,7 @@ class NodeManager:
             async with anyio.create_task_group() as tg:
                 for hook_func in self.bot._event_postprocessor_hooks:
                     tg.start_soon(
-                        run_coro_with_catch,
+                        cast("Callable[..., Awaitable[Any]]", run_coro_with_catch),
                         solve_dependencies_in_bot(
                             hook_func,
                             bot=self.bot,
@@ -158,17 +168,16 @@ class NodeManager:
     async def _run_node_preprocessors(
         self,
         current_event: Event[Any],
-        node: Node,
+        node: Node[Any, Any, Any],
         stack: AsyncExitStack | None = None,
-        dependency_cache: DependencyCacheT | None = None,
+        dependency_cache: dict[Any, Any] | None = None,
     ) -> bool:
         """运行事件响应器运行前处理。
 
         Args:
-            bot: Bot 对象
             current_event: Event[Any] 对象
+            node: 节点类实例
             state: 会话状态
-            matcher: 事件响应器
             stack: 异步上下文栈
             dependency_cache: 依赖缓存
 
@@ -178,29 +187,30 @@ class NodeManager:
         if not self.bot._node_preprocessor_hooks:
             return True
 
-        with (
-            catch(
-                {
-                    IgnoreException: handle_exception(
-                        "running is cancelled", level="info", node=node.name
-                    ),
-                    Exception: handle_exception(
-                        "Error when running RunPreProcessors. Running cancelled!"
-                    ),
-                }
-            ),
+        with catch(
+            {
+                IgnoreException: handle_exception(
+                    "running is cancelled", level="info", node=node.name
+                ),
+                Exception: handle_exception(
+                    "Error when running RunPreProcessors. Running cancelled!"
+                ),
+            }
         ):
             async with anyio.create_task_group() as tg:
                 for hook_func in self.bot._node_preprocessor_hooks:
                     tg.start_soon(
-                        run_coro_with_catch,
+                        cast("Callable[..., Awaitable[Any]]", run_coro_with_catch),
                         solve_dependencies_in_bot(
                             hook_func,
                             bot=self.bot,
                             event=current_event,
                             state=node.state,
                             stack=stack,
-                            dependency_cache=dependency_cache | {Node: node},
+                            dependency_cache=(
+                                dependency_cache if dependency_cache else {}
+                            )
+                            | {Node: node},
                         ),
                         (SkipException,),
                     )
@@ -211,18 +221,17 @@ class NodeManager:
 
     async def _run_node_postprocessors(
         self,
-        current_event: "Event",
-        node: Node,
-        exception: Exception | None = None,
+        current_event: Event[Any],
+        node: Node[Any, Any, Any],
+        exception: PruningException | JumpToException | None = None,
         stack: AsyncExitStack | None = None,
-        dependency_cache: DependencyCacheT | None = None,
+        dependency_cache: dict[Any, Any] | None = None,
     ) -> None:
         """运行事件响应器运行后处理。
 
         Args:
-            bot: Bot 对象
             current_event: Event[Any] 对象
-            matcher: 事件响应器
+            node: 节点类实例
             exception: 事件响应器运行异常
             stack: 异步上下文栈
             dependency_cache: 依赖缓存
@@ -230,22 +239,22 @@ class NodeManager:
         if not self.bot._node_postprocessor_hooks:
             return
 
-        with (
-            catch(
-                {Exception: handle_exception("Error when running RunPostProcessors. ")}
-            ),
+        with catch(
+            {Exception: handle_exception("Error when running RunPostProcessors. ")}
         ):
             async with anyio.create_task_group() as tg:
                 for hook_func in self.bot._node_postprocessor_hooks:
                     tg.start_soon(
-                        run_coro_with_catch,
+                        cast("Callable[..., Awaitable[Any]]", run_coro_with_catch),
                         solve_dependencies_in_bot(
                             hook_func,
                             bot=self.bot,
                             event=current_event,
                             state=node.state,
                             stack=stack,
-                            dependency_cache=dependency_cache
+                            dependency_cache=(
+                                dependency_cache if dependency_cache else {}
+                            )
                             | {Node: node, Exception: exception},
                         ),
                         (SkipException,),
@@ -303,23 +312,25 @@ class NodeManager:
 
     async def add_temporary_task(
         self,
-        node_class: type[Node],
+        node_class: type[Node[Any, Any, Any]],
         current_event: Event[Any],
         state: StateT,
         max_try_times: int | None = None,
         timeout: float = MAX_TIMEOUT,
-    ):
+    ) -> None:
         """添加一个临时节点任务，在调用 reject 时运行。
 
         Args:
-            node: 要添加的节点，必须是类实例。
+            node_class: 要添加的节点，必须是类实例。
+            current_event: 当前事件。
+            state: 节点状态。
             max_try_times: 最大事件数。
             timeout: 超时时间。
         """
 
         async def temporary_task(
-            func: Callable[[Event], bool | Awaitable[bool]] | None = None,
-        ):
+            func: Callable[[Event[Any]], bool | Awaitable[bool]] | None = None,
+        ) -> None:
             async def check(event: Event[Any]) -> bool:
                 if event.get_session_id() != current_event.get_session_id():
                     return False
@@ -343,19 +354,16 @@ class NodeManager:
 
     async def _check_node(
         self,
-        node_class: type[Node],
+        node_class: type[Node[Any, Any, Any]],
         current_event: Event[Any],
         state: StateT,
         stack: AsyncExitStack | None = None,
-        dependency_cache: DependencyCacheT | None = None,
+        dependency_cache: dict[Any, Any] | None = None,
     ) -> bool:
-        """检查事件响应器是否符合运行条件。
-
-        请注意，过时的事件响应器将被**销毁**。对于未过时的事件响应器，将会一次检查其响应类型、权限和规则。
+        """检查节点是否符合运行条件。
 
         Args:
-            Matcher: 要检查的事件响应器
-            bot: Bot 对象
+            node_class: 要检查的节点
             current_event: Event[Any] 对象
             state: 会话状态
             stack: 异步上下文栈
@@ -401,12 +409,12 @@ class NodeManager:
 
     async def _run_node(
         self,
-        node_class: type[Node],
+        node_class: type[Node[Any, Any, Any]],
         current_event: Event[Any],
         state: StateT,
         stack: AsyncExitStack | None = None,
-        dependency_cache: DependencyCacheT | None = None,
-    ) -> tuple[PruningException | JumpToException | None, StateT]:
+        dependency_cache: dict[Any, Any] | None = None,
+    ) -> tuple[PruningException | JumpToException | None, StateT | None]:
         _node = await solve_dependencies_in_bot(
             node_class,
             bot=self.bot,
@@ -420,9 +428,9 @@ class NodeManager:
         )
 
         if _node.name not in self.bot.node_state:
-            state = _node.__init_state__()
-            if state is not None:
-                self.bot.node_state[_node.name] = state
+            node_state = _node.__init_state__()
+            if node_state is not None:
+                self.bot.node_state[_node.name] = node_state
 
         if not await self._run_node_preprocessors(
             current_event=current_event,
@@ -441,20 +449,20 @@ class NodeManager:
             stack=stack,
             dependency_cache=dependency_cache,
         )
-        return exception, _node.state
+        return exception, cast("StateT", _node.state)
 
     async def _check_and_run_node(
         self,
-        node_class: type[Node],
+        node_class: type[Node[Any, Any, Any]],
         current_event: Event[Any],
         state: StateT,
         stack: AsyncExitStack | None,
-        dependency_cache: DependencyCacheT | None = None,
+        dependency_cache: dict[Any, Any] | None = None,
     ) -> tuple[PruningException | JumpToException | None, StateT | None]:
         if not await self._check_node(
             node_class, current_event, state, stack, dependency_cache
         ):
-            return StopException() if node_class.block else PruningException(), None
+            return PruningException(), None
 
         return await self._run_node(
             node_class, current_event, state, stack, dependency_cache
@@ -463,23 +471,25 @@ class NodeManager:
     async def _handle_event(
         self,
         current_event: Event[Any],
-        state: StateT | None = None,
+        state: dict[Any, Any] | None = None,
         start_class: type[Node[Any, Any, Any]] | None = None,
     ) -> None:
-        """处理事件并匹配相应的节点（插件）。
+        """处理事件并匹配相应的节点 (插件) 。
 
         此方法在 `current_event` 被处理后不会再次处理，遍历 `nodes_list`
         来匹配事件，并根据插件的处理结果进行剪枝、跳转或停止。
 
         Args:
             current_event: 当前需要处理的事件对象。
+            state: 初始
+            start_class: 其实节点
         """
         if current_event.__handled__:
             return
 
         async with AsyncExitStack() as stack:
-            dependency_cache = {}
-
+            dependency_cache: dict[Any, Any] = {}
+            state = state or {}
             if not await self._run_event_preprocessors(
                 current_event=current_event,
                 state=state,
@@ -489,14 +499,13 @@ class NodeManager:
                 return
 
             nodes_list = self.bot.nodes_list.copy()
-            state = state or defaultdict(lambda: None)
             jump_to_index_map = {
                 node.__name__: i for i, (node, _) in enumerate(nodes_list)
             }
             index = jump_to_index_map.get(start_class.__name__, 0) if start_class else 0
             interrupted = False
 
-            def _handle_stop_propagation(exc_group: BaseExceptionGroup) -> None:
+            def _handle_stop_propagation(_: BaseExceptionGroup) -> None:
                 nonlocal interrupted
                 interrupted = True
                 logger.debug("Stop event propagation")
@@ -534,7 +543,7 @@ class NodeManager:
                         next_index = pruning_node
 
                     elif isinstance(exc, JumpToException):
-                        if node_name := _state[JUMO_TO_TARGET]:
+                        if node_name := cast("str", _state[JUMO_TO_TARGET]):
                             jump_to_index = jump_to_index_map.get(node_name)
                             if jump_to_index is None:
                                 logger.warning(
@@ -569,7 +578,6 @@ class NodeManager:
 
     async def shutdown(self) -> None:
         """关闭并清理事件。"""
-        self._cancel_event.set()
         self.bot.node_state.clear()
         await self._event_send_stream.aclose()
         await self._event_receive_stream.aclose()
@@ -591,7 +599,7 @@ class NodeManager:
         func: Callable[[EventT], bool | Awaitable[bool]] | None = None,
         *,
         event_type: None = None,
-        adapter_type: type[Adapter[EventT, Any]],
+        adapter_type: type[Adapter[EventT, Any]],  # type: ignore
         max_try_times: int | None = None,
         timeout: float | None = None,
     ) -> EventT: ...
@@ -607,11 +615,11 @@ class NodeManager:
         timeout: float | None = None,
     ) -> EventT: ...
 
-    async def get(
+    async def get(  # type: ignore
         self,
         func: Callable[[Any], bool | Awaitable[bool]] | None = None,
         *,
-        event_type: type[Event] | None = None,
+        event_type: type[Event[Any]] | None = None,
         adapter_type: type[Adapter[Any, Any]] | None = None,
         max_try_times: int | None = None,
         timeout: float = MAX_TIMEOUT,
@@ -640,18 +648,15 @@ class NodeManager:
         while not self.bot._should_exit.is_set():
             if max_try_times is not None and try_times > max_try_times:
                 break
-            if timeout is not None and time.time() - start_time > timeout:
+            if time.time() - start_time > timeout:
                 break
 
             async with self._condition:
-                if timeout is None:
-                    await self._condition.wait()
-                else:
-                    try:
-                        with anyio.fail_after(start_time + timeout - time.time()):
-                            await self._condition.wait()
-                    except TimeoutError:
-                        break
+                try:
+                    with anyio.fail_after(start_time + timeout - time.time()):
+                        await self._condition.wait()
+                except TimeoutError:
+                    break
 
                 if (
                     self._current_event is not None
@@ -659,7 +664,7 @@ class NodeManager:
                     and await _func(self._current_event)
                 ):
                     self._current_event.__handled__ = True
-                    logger.debug("Event caught", event=self._current_event)
+                    logger.debug("Event caught", current_event=self._current_event)
                     return self._current_event
 
                 try_times += 1

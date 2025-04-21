@@ -2,8 +2,10 @@
 
 所有 Rule 类的基类
 """
+
 from collections.abc import Awaitable, Callable
 from contextlib import AsyncExitStack
+from copy import deepcopy
 from typing import TYPE_CHECKING, Any, NoReturn, Self, cast, final
 from typing_extensions import override
 
@@ -13,7 +15,7 @@ from exceptiongroup import catch
 from sekaibot.dependencies import Dependency, Depends, solve_dependencies_in_bot
 from sekaibot.exceptions import SkipException
 from sekaibot.internal.event import Event
-from sekaibot.typing import DependencyCacheT, GlobalStateT, NodeT, RuleCheckerT, StateT
+from sekaibot.typing import GlobalStateT, NodeT, RuleCheckerT, StateT
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
@@ -56,7 +58,7 @@ class Rule:
         state: StateT,
         global_state: GlobalStateT,
         stack: AsyncExitStack | None = None,
-        dependency_cache: DependencyCacheT | None = None,
+        dependency_cache: dict[Any, Any] | None = None,
     ) -> bool:
         """检查是否符合所有规则
 
@@ -148,23 +150,25 @@ class Rule:
 class RuleChecker:
     """抽象基类，匹配消息规则。"""
 
+    _rule: Rule
+
     def __init__(self, rule: Rule) -> None:
-        self.__rule__ = rule
+        self._rule = rule
 
     def __call__(self, cls: NodeT) -> NodeT:
         """将检查器添加到 Node 类中。"""
-        if not isinstance(cls, type):
-            raise TypeError(f"class should be NodeT, not `{type(cls)}`.")
-        cls.__node_rule__ += self.__rule__
+        if "__node_rule__" not in cls.__dict__:
+            cls.__node_rule__ = deepcopy(cls.__node_rule__)
+        cls.__node_rule__ += self._rule
         return cls
 
     @classmethod
     def _rule_check(cls, *args: Any, **kwargs: Any) -> Callable[..., Awaitable[bool]]:
         """默认实现检查方法，子类可覆盖。"""
-        return cls(*args, **kwargs)._check  # noqa: SLF001
+        return cls(*args, **kwargs)._check
 
     @classmethod
-    def checker(cls, *args: Any, **kwargs: Any) -> bool:
+    def Checker(cls, *args: Any, **kwargs: Any) -> bool:
         """默认实现检查方法的依赖注入方法，子类可覆盖。"""
         return Depends(cls._rule_check(*args, **kwargs), use_cache=False)
 
@@ -176,10 +180,10 @@ class RuleChecker:
         state: StateT,
         global_state: GlobalStateT,
         stack: AsyncExitStack | None = None,
-        dependency_cache: DependencyCacheT | None = None,
+        dependency_cache: dict[Any, Any] | None = None,
     ) -> bool:
         """直接运行检查器并获取结果。"""
-        return await self.__rule__(
+        return await self._rule(
             bot,
             event,
             state,

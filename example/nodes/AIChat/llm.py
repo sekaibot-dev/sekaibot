@@ -33,6 +33,8 @@ system = """
 图像中出现你或你的朋友的特征外貌，且对话涉及识别或评论。
 除了以上情况，不论内容是否有趣、是否包含泛泛的称赞、玩笑或无关提及，都必须返回 `##ignore` ，不能添加额外内容或表情。这条非常重要！！！
 
+你的回复要简短，这很重要！！！
+
 以下是你的设定：
 
 1.角色设定
@@ -163,7 +165,7 @@ def get_session_history(session_id: str):
     # 持久化文件版（每个 session 存到不同文件）
     if session_id not in histories:
         histories[session_id] = ChatMessageHistory(
-            file_path=Path(f"./history_{session_id}.json"), max_len=20
+            file_path=Path(f"D:/QQBot/sekaibot-cache/history_{session_id}.json"), max_len=20
         )
     return histories[session_id]
 
@@ -179,18 +181,24 @@ agent_with_history = RunnableWithMessageHistory(
 message_dict: dict[str, list] = defaultdict(list)
 
 
-async def get_answer(session_id: str, name: str, input: str, is_url: bool = False) -> str | None:
-    if is_url:
-        base64_image = await fetch_image_as_base64(input)
-        content = [
-            {"type": "text", "text": f"{name}发送了图片或表情包"},
-            {
-                "type": "image_url",
-                "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
-            },
-        ]
+async def get_answer(session_id: str, name: str, input: str, is_url: bool = False, is_tome: bool = False) -> str | None:
+    if is_url and not is_tome:
+        try:
+            base64_image = await fetch_image_as_base64(input)
+            content = [
+                {"type": "text", "text": f"{name}发送了图片或表情包"},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
+                },
+            ]
+        except Exception:
+            return None
     else:
         content = f"{name}: {input}"
+
+    if is_tome:
+        content = "可不，" + content
 
     trigger = random()
     keyws = [
@@ -223,12 +231,13 @@ async def get_answer(session_id: str, name: str, input: str, is_url: bool = Fals
         trigger += 0.3
 
     message_dict[session_id].append(HumanMessage(content))
-    if not is_url and trigger >= 0.8:
+    if (not is_url and trigger >= 0.8) or is_tome:
         res = await use_llm(session_id, message_dict[session_id])
-        message_dict[session_id] = []
         answer: str = res.get("output", "ignore")
         if "ignore" not in answer:
+            message_dict[session_id] = []
             return answer
+        message_dict[session_id] = message_dict[session_id][-1:]
     return None
 
 

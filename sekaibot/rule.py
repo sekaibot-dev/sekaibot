@@ -2,6 +2,7 @@
 
 import re
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any, Literal, overload
 from typing_extensions import override
 
@@ -22,7 +23,7 @@ from sekaibot.consts import (
     SHELL_ARGV,
     STARTSWITH_KEY,
 )
-from sekaibot.dependencies import Dependency, Depends
+from sekaibot.dependencies import Depends
 from sekaibot.internal.event import Event
 from sekaibot.internal.message import Message, MessageSegment
 from sekaibot.internal.rule import Rule, RuleChecker
@@ -67,29 +68,32 @@ class StartsWith(RuleChecker):
             msgs: 指定消息开头字符串或 MessageSegment 元组
             ignorecase: 是否忽略大小写
         """
-        super().__init__(StartswithRule(msgs, ignorecase=ignorecase))
+        super().__init__(Rule(StartswithRule(msgs, ignorecase=ignorecase)))
 
+    @override
     @classmethod
-    def checker(cls, *msgs: str | MessageSegment[Any], ignorecase: bool = False):
+    def Checker(
+        cls, *msgs: str | MessageSegment[Any], ignorecase: bool = False
+    ) -> bool:
         """匹配消息富文本开头。
 
         Args:
             msgs: 指定消息开头字符串或 MessageSegment 元组
             ignorecase: 是否忽略大小写
         """
-        return super().checker(msgs, ignorecase=ignorecase)
+        return super().Checker(msgs, ignorecase=ignorecase)
 
     @staticmethod
-    def _param(state: StateT):
+    def _param(state: StateT) -> Any:
         return state[STARTSWITH_KEY]
 
     @classmethod
-    def Param(cls) -> str | MessageSegment:
+    def Param(cls) -> str | MessageSegment[Any]:
         """在依赖注入里获取检查器的数据。"""
-        return Depends(cls._param, use_cache=False)
+        return Depends(cls._param, use_cache=False)  # type: ignore
 
 
-class EndsWith(RuleChecker[tuple[tuple[str | MessageSegment[Any], ...], bool]]):
+class EndsWith(RuleChecker):
     """匹配消息富文本结尾。"""
 
     def __init__(
@@ -101,69 +105,69 @@ class EndsWith(RuleChecker[tuple[tuple[str | MessageSegment[Any], ...], bool]]):
             msgs: 指定消息结尾字符串或 MessageSegment 元组
             ignorecase: 是否忽略大小写
         """
-        super().__init__(EndswithRule(msgs, ignorecase=ignorecase))
+        super().__init__(Rule(EndswithRule(msgs, ignorecase=ignorecase)))
 
     @override
     @classmethod
-    def checker(cls, *msgs: str | MessageSegment[Any], ignorecase: bool = False):
+    def Checker(
+        cls, *msgs: str | MessageSegment[Any], ignorecase: bool = False
+    ) -> bool:
         """匹配消息富文本结尾。
 
         Args:
             msgs: 指定消息结尾字符串或 MessageSegment 元组
             ignorecase: 是否忽略大小写
         """
-        return super().checker(msgs, ignorecase=ignorecase)
+        return super().Checker(msgs, ignorecase=ignorecase)
 
     @staticmethod
-    def _param(state: StateT):
+    def _param(state: StateT) -> Any:
         return state[ENDSWITH_KEY]
 
     @classmethod
-    def Param(cls) -> str | MessageSegment:
+    def Param(cls) -> str | MessageSegment[Any]:
         """在依赖注入里获取检查器的数据。"""
         return Depends(cls._param, use_cache=False)
 
 
-class FullMatch(
-    RuleChecker[tuple[tuple[str | Message | MessageSegment[Any], ...], bool]]
-):
+class FullMatch(RuleChecker):
     """完全匹配消息。"""
 
     def __init__(
-        self, *msg: str | Message | MessageSegment[Any], ignorecase: bool = False
+        self, *msgs: str | Message[Any] | MessageSegment[Any], ignorecase: bool = False
     ) -> None:
         """完全匹配消息。
 
         Args:
-            msg: 指定消息全匹配字符串或 Message 或 MessageSegment 元组
+            msgs: 指定消息全匹配字符串或 Message 或 MessageSegment 元组
             ignorecase: 是否忽略大小写
         """
-        super().__init__(FullmatchRule(msg, ignorecase=ignorecase))
+        super().__init__(Rule(FullmatchRule(msgs, ignorecase=ignorecase)))
 
     @override
     @classmethod
-    def checker(
-        cls, *msgs: str | Message | MessageSegment[Any], ignorecase: bool = False
-    ):
+    def Checker(
+        cls, *msgs: str | Message[Any] | MessageSegment[Any], ignorecase: bool = False
+    ) -> bool:
         """完全匹配消息。
 
         Args:
-            msg: 指定消息全匹配字符串或 Message 或 MessageSegment 元组
+            msgs: 指定消息全匹配字符串或 Message 或 MessageSegment 元组
             ignorecase: 是否忽略大小写
         """
-        return super().checker(msgs, ignorecase=ignorecase)
+        return super().Checker(msgs, ignorecase=ignorecase)
 
     @staticmethod
-    def _param(state: StateT):
+    def _param(state: StateT) -> Any:
         return state[FULLMATCH_KEY]
 
     @classmethod
-    def Param(cls) -> str | Message:
+    def Param(cls) -> str | Message[Any]:
         """在依赖注入里获取检查器的数据。"""
         return Depends(cls._param, use_cache=False)
 
 
-class Keywords(RuleChecker[tuple[tuple[str | MessageSegment[Any], ...], bool]]):
+class Keywords(RuleChecker):
     """匹配消息富文本关键词。"""
 
     def __init__(
@@ -175,21 +179,23 @@ class Keywords(RuleChecker[tuple[tuple[str | MessageSegment[Any], ...], bool]]):
             keywords: 指定关键字元组
             ignorecase: 是否忽略大小写
         """
-        super().__init__(KeywordsRule(keywords, ignorecase=ignorecase))
+        super().__init__(Rule(KeywordsRule(keywords, ignorecase=ignorecase)))
 
     @override
     @classmethod
-    def checker(cls, *keywords: str | MessageSegment[Any], ignorecase: bool = False):
+    def Checker(
+        cls, *keywords: str | MessageSegment[Any], ignorecase: bool = False
+    ) -> bool:
         """匹配消息富文本关键词。
 
         Args:
             keywords: 指定关键字元组
             ignorecase: 是否忽略大小写
         """
-        return super().checker(keywords, ignorecase=ignorecase)
+        return super().Checker(keywords, ignorecase=ignorecase)
 
     @staticmethod
-    def _param(state: StateT):
+    def _param(state: StateT) -> Any:
         return state[KEYWORD_KEY]
 
     @classmethod
@@ -198,13 +204,13 @@ class Keywords(RuleChecker[tuple[tuple[str | MessageSegment[Any], ...], bool]]):
         return Depends(cls._param, use_cache=False)
 
 
-class WordFilter(RuleChecker[tuple[tuple[str, ...], str, bool, bool]]):
+class WordFilter(RuleChecker):
     """检查消息纯文本是不包含指定关键字，用于敏感词过滤。"""
 
     def __init__(
         self,
         *words: str,
-        word_file: str | None = None,
+        word_file: Path | None = None,
         ignorecase: bool = False,
         use_pinyin: bool = False,
         use_aho: bool = False,
@@ -213,41 +219,43 @@ class WordFilter(RuleChecker[tuple[tuple[str, ...], str, bool, bool]]):
 
         Args:
             words: 指定关键字集合
-            word_file: 可选的词库文件路径（每行一个词）
+            word_file: 可选的词库文件路径 (每行一个词)
             ignorecase: 是否忽略大小写
             use_pinyin: 是否启用拼音匹配，使用 `pypinyin` 库
-            use_aho: 是否启用 Aho-Corasick 算法（当词数较大时自动激活），使用 `pyahocorasick` 库
+            use_aho: 是否启用 Aho-Corasick 算法 (当词数较大时自动激活) ，使用 `pyahocorasick` 库
         """
         super().__init__(
-            WordFilterRule(
-                word_file=word_file,
-                words=words,
-                ignorecase=ignorecase,
-                use_pinyin=use_pinyin,
-                use_aho=use_aho,
+            Rule(
+                WordFilterRule(
+                    word_file=word_file,
+                    words=words,
+                    ignorecase=ignorecase,
+                    use_pinyin=use_pinyin,
+                    use_aho=use_aho,
+                )
             )
         )
 
     @override
     @classmethod
-    def checker(
+    def Checker(
         cls,
         *words: str,
         word_file: str | None = None,
         ignorecase: bool = False,
         use_pinyin: bool = False,
         use_aho: bool = False,
-    ):
+    ) -> bool:
         """匹配消息富文本关键词。
 
         Args:
             words: 指定关键字集合
-            word_file: 可选的词库文件路径（每行一个词）
+            word_file: 可选的词库文件路径 (每行一个词)
             ignorecase: 是否忽略大小写
             use_pinyin: 是否启用拼音匹配，使用 `pypinyin` 库
-            use_aho: 是否启用 Aho-Corasick 算法（当词数较大时自动激活），使用 `pyahocorasick` 库
+            use_aho: 是否启用 Aho-Corasick 算法 (当词数较大时自动激活) ，使用 `pyahocorasick` 库
         """
-        return super().checker(
+        return super().Checker(
             word_file=word_file,
             words=words,
             ignorecase=ignorecase,
@@ -256,7 +264,7 @@ class WordFilter(RuleChecker[tuple[tuple[str, ...], str, bool, bool]]):
         )
 
 
-class Regex(RuleChecker[tuple[str, re.RegexFlag]]):
+class Regex(RuleChecker):
     """匹配符合正则表达式的消息字符串。
 
     Depends:
@@ -274,28 +282,28 @@ class Regex(RuleChecker[tuple[str, re.RegexFlag]]):
         而非 `EventMessage` 的 `PlainText` 纯文本字符串。
     """
 
-    def __init__(self, regex: str, flags: int | re.RegexFlag = 0):
+    def __init__(self, regex: str, flags: int | re.RegexFlag = 0) -> None:
         """匹配符合正则表达式的消息字符串。
 
         Args:
             regex: 正则表达式
             flags: 正则表达式标记
         """
-        super().__init__(RegexRule(regex, flags))
+        super().__init__(Rule(RegexRule(regex, flags)))
 
     @override
     @classmethod
-    def checker(cls, regex: str, flags: int | re.RegexFlag = 0):
+    def Checker(cls, regex: str, flags: int | re.RegexFlag = 0) -> bool:
         """匹配符合正则表达式的消息字符串。
 
         Args:
             regex: 正则表达式
             flags: 正则表达式标记
         """
-        return super().checker(regex, flags)
+        return super().Checker(regex, flags)
 
     @staticmethod
-    def _regex_matched(state: StateT) -> re.Match[str]:
+    def _regex_matched(state: StateT) -> Any:
         return state[REGEX_MATCHED]
 
     @classmethod
@@ -335,10 +343,10 @@ class Regex(RuleChecker[tuple[str, re.RegexFlag]]):
         return Depends(cls._regex_str(groups), use_cache=False)
 
     @classmethod
-    def _regex_group(cls) -> tuple[Any, ...]:
+    def _regex_group(cls) -> Callable[[StateT], tuple[Any, ...]]:
         def _regex_group_dependency(
             state: StateT,
-        ) -> Callable[[StateT], tuple[Any, ...]]:
+        ) -> tuple[Any, ...]:
             return cls._regex_matched(state).groups()
 
         return _regex_group_dependency
@@ -361,78 +369,85 @@ class Regex(RuleChecker[tuple[str, re.RegexFlag]]):
         return Depends(cls._regex_dict(), use_cache=False)
 
 
-class CountTrigger(RuleChecker[tuple[str, Dependency[bool], int, int, int, int]]):
+class CountTrigger(RuleChecker):
     """计数器规则。"""
 
     def __init__(
         self,
-        name: str,
-        func: Dependency[bool] | None = None,
         min_trigger: int = 10,
         time_window: int = 60,
         count_window: int = 30,
         max_size: int | None = 100,
-    ):
+        rule: Rule | None = None,
+    ) -> None:
         """计数器规则。
 
         Args:
-            name: 计数器名称
-            func: 计数器触发函数，返回 bool 值
-            min_trigger: 触发次数
-            time_window: 时间窗口（秒）
-            count_window: 计数窗口（秒）
-            max_size: 最大缓存大小
+            min_trigger (int): 触发次数
+            time_window (int): 时间窗口 (秒)
+            count_window (int): 计数窗口 (秒)
+            max_size (int): 最大缓存大小
+            rule (Rule): 触发计数器需要满足的 Rule
         """
         super().__init__(
-            CountTriggerRule(
-                name, func, min_trigger, time_window, count_window, max_size
+            Rule(
+                CountTriggerRule(
+                    time_window=time_window,
+                    count_window=count_window,
+                    min_trigger=min_trigger,
+                    max_size=max_size,
+                    rule=rule,
+                )
             )
         )
 
     @override
     @classmethod
-    def checker(
+    def Checker(
         cls,
-        name: str,
-        func: Dependency[bool] | None = None,
         min_trigger: int = 10,
         time_window: int = 60,
         count_window: int = 30,
         max_size: int | None = 100,
-    ):
+        rule: Rule | None = None,
+    ) -> bool:
         """计数器规则。
 
         Args:
-            name: 计数器名称
-            func: 计数器触发函数，返回 bool 值
-            min_trigger: 触发次数
-            time_window: 时间窗口（秒）
-            count_window: 计数窗口（秒）
-            max_size: 最大缓存大小
+            min_trigger (int): 触发次数
+            time_window (int): 时间窗口 (秒)
+            count_window (int): 计数窗口 (秒)
+            max_size (int): 最大缓存大小
+            rule (Rule): 触发计数器需要满足的 Rule
         """
-        return super().checker(
-            name, name, func, min_trigger, time_window, count_window, max_size
+        return super().Checker(
+            time_window=time_window,
+            count_window=count_window,
+            min_trigger=min_trigger,
+            max_size=max_size,
+            rule=rule,
         )
 
     @staticmethod
-    def _time_trigger(state: StateT) -> tuple[Event, ...]:
+    def _time_trigger(state: StateT) -> Any:
         return state[COUNTER_TIME_TIGGERS]
 
     @classmethod
-    def TimeTrigger(cls):
+    def TimeTrigger(cls) -> tuple[Event[Any], ...]:
         """在依赖注入里获取检查器的数据。"""
         return Depends(cls._time_trigger, use_cache=False)
 
-    def _latest_trigger(state: StateT) -> tuple[Event, ...]:
+    @staticmethod
+    def _latest_trigger(state: StateT) -> Any:
         return state[COUNTER_LATEST_TIGGERS]
 
     @classmethod
-    def LatestTrigger(cls):
+    def LatestTrigger(cls) -> tuple[Event[Any], ...]:
         """在依赖注入里获取检查器的数据。"""
         return Depends(cls._latest_trigger, use_cache=False)
 
 
-class Command(RuleChecker[tuple[tuple[str, ...], str | bool | None]]):
+class Command(RuleChecker):
     """匹配消息命令。
 
     Config:
@@ -440,8 +455,8 @@ class Command(RuleChecker[tuple[tuple[str, ...], str | bool | None]]):
         `{ref}sekaibot.config.MainConfig.rule.command_sep`
 
     Depends:
-        `{ref}sekaibot.rule.Command.Command`: 获取匹配成功的命令元组（如: `("test",)`）
-        `{ref}sekaibot.rule.Command.RawCommand`: 获取原始命令文本（如: `"/test"`）
+        `{ref}sekaibot.rule.Command.Command`: 获取匹配成功的命令元组 (如: `("test",)`)
+        `{ref}sekaibot.rule.Command.RawCommand`: 获取原始命令文本 (如: `"/test"`)
         `{ref}sekaibot.rule.Command.CommandArg`: 获取匹配成功的命令参数字符串
 
     Tip:
@@ -461,38 +476,38 @@ class Command(RuleChecker[tuple[tuple[str, ...], str | bool | None]]):
 
         Args:
             cmds (str | tuple[str, ...]): 命令文本或命令元组。
-            force_whitespace (bool): 是否强制命令后必须有空白符（如空格、换行等）。
+            force_whitespace (bool): 是否强制命令后必须有空白符 (如空格、换行等) 。
         """
-        super().__init__(CommandRule(*cmds, force_whitespace=force_whitespace))
+        super().__init__(Rule(CommandRule(cmds, force_whitespace=force_whitespace)))
 
     @override
     @classmethod
-    def checker(
+    def Checker(
         cls, *cmds: tuple[str, ...], force_whitespace: str | bool | None = None
-    ):
+    ) -> bool:
         """匹配消息命令。
 
         Args:
             cmds (str | tuple[str, ...]): 命令文本或命令元组。
-            force_whitespace (bool): 是否强制命令后必须有空白符（如空格、换行等）。
+            force_whitespace (bool): 是否强制命令后必须有空白符 (如空格、换行等) 。
         """
-        return super().checker(*cmds, force_whitespace=force_whitespace)
+        return super().Checker(cmds, force_whitespace=force_whitespace)
 
     @staticmethod
-    def _command(state: StateT) -> tuple[str, ...]:
+    def _command(state: StateT) -> Any:
         return state[PREFIX_KEY][CMD_KEY]
 
     @classmethod
-    def Command(cls):
+    def Command(cls) -> tuple[str, ...]:
         """消息命令元组"""
         return Depends(cls._command, use_cache=False)
 
     @staticmethod
-    def _raw_command(state: StateT) -> str:
+    def _raw_command(state: StateT) -> Any:
         return state[PREFIX_KEY][RAW_CMD_KEY]
 
     @classmethod
-    def RawCommand(cls):
+    def RawCommand(cls) -> str:
         """消息命令文本"""
         return Depends(cls._raw_command, use_cache=False)
 
@@ -501,30 +516,30 @@ class Command(RuleChecker[tuple[tuple[str, ...], str | bool | None]]):
         return state[PREFIX_KEY][CMD_ARG_KEY]
 
     @classmethod
-    def CommandArg(cls):
+    def CommandArg(cls) -> Any:
         """消息命令参数"""
         return Depends(cls._command_arg, use_cache=False)
 
     @staticmethod
-    def _command_start(state: StateT) -> str:
+    def _command_start(state: StateT) -> Any:
         return state[PREFIX_KEY][CMD_START_KEY]
 
     @classmethod
-    def CommandStart(cls):
+    def CommandStart(cls) -> str:
         """消息命令开头"""
         return Depends(cls._command_start, use_cache=False)
 
     @staticmethod
-    def _command_whitespace(state: StateT) -> str:
+    def _command_whitespace(state: StateT) -> Any:
         return state[PREFIX_KEY][CMD_WHITESPACE_KEY]
 
     @classmethod
-    def CommandWhitespace(cls):
+    def CommandWhitespace(cls) -> str:
         """消息命令与参数之间的空白"""
         return Depends(cls._command_whitespace, use_cache=False)
 
 
-class ShellCommand(Command, RuleChecker[tuple[tuple[str, ...], ArgumentParser | None]]):
+class ShellCommand(Command):
     """匹配 `shell_like` 形式的消息命令。
 
     Config:
@@ -532,10 +547,10 @@ class ShellCommand(Command, RuleChecker[tuple[tuple[str, ...], ArgumentParser | 
     - `{ref}sekaibot.config.MainConfig.rule.command_sep`
 
     Depends:
-    - `{ref}sekaibot.rule.ShellCommand.Command`: 匹配成功的命令元组（例如: `("test",)`）
-    - `{ref}sekaibot.rule.ShellCommand.RawCommand`: 原始命令文本（例如: `"/test"`）
-    - `{ref}sekaibot.rule.ShellCommand.ShellCommandArgv`: 解析前的参数列表（例如: `["arg", "-h"]`）
-    - `{ref}sekaibot.rule.ShellCommand.ShellCommandArgs`: 解析后的参数字典（例如: `{"arg": "arg", "h": True}`）
+    - `{ref}sekaibot.rule.ShellCommand.Command`: 匹配成功的命令元组 (例如: `("test",)`)
+    - `{ref}sekaibot.rule.ShellCommand.RawCommand`: 原始命令文本 (例如: `"/test"`)
+    - `{ref}sekaibot.rule.ShellCommand.ShellCommandArgv`: 解析前的参数列表 (例如: `["arg", "-h"]`)
+    - `{ref}sekaibot.rule.ShellCommand.ShellCommandArgs`: 解析后的参数字典 (例如: `{"arg": "arg", "h": True}`)
 
     Warnings:
         如果参数解析失败，通过 `{ref}sekaibot.rule.ShellCommandArgs` 获取的将是
@@ -566,18 +581,20 @@ class ShellCommand(Command, RuleChecker[tuple[tuple[str, ...], ArgumentParser | 
             cmds (str | tuple[str, ...]): 命令文本或命令元组。
             parser (ArgumentParser | None): 可选的 `{ref}sekaibot.rule.ArgumentParser` 对象。
         """
-        super().__init__(ShellCommandRule(*cmds, parser=parser))
+        super(Command, self).__init__(Rule(ShellCommandRule(cmds, parser=parser)))
 
     @override
     @classmethod
-    def checker(cls, *cmds: tuple[str, ...], parser: ArgumentParser | None = None):
+    def Checker(  # type: ignore
+        cls, *cmds: tuple[str, ...], parser: ArgumentParser | None = None
+    ) -> bool:
         """匹配 `shell_like` 形式的消息命令。
 
         Args:
             cmds (str | tuple[str, ...]): 命令文本或命令元组。
             parser (ArgumentParser | None): 可选的 `{ref}sekaibot.rule.ArgumentParser` 对象。
         """
-        return super().checker(*cmds, parser=parser)
+        return super(Command, cls).Checker(*cmds, parser=parser)
 
     @staticmethod
     def _shell_command_args(state: StateT) -> Any:
@@ -589,31 +606,32 @@ class ShellCommand(Command, RuleChecker[tuple[tuple[str, ...], ArgumentParser | 
         return Depends(cls._shell_command_args, use_cache=False)
 
     @staticmethod
-    def _shell_command_argv(state: StateT) -> list[str | MessageSegment]:
+    def _shell_command_argv(state: StateT) -> Any:
         return state[SHELL_ARGV]
 
     @classmethod
-    def ShellCommandArgv(cls) -> Any:
+    def ShellCommandArgv(cls) -> list[str | MessageSegment[Any]]:
         """Shell 命令原始参数列表"""
         return Depends(cls._shell_command_argv, use_cache=False)
 
 
-class ToMe(RuleChecker[Any]):
+class ToMe(RuleChecker):
     """匹配与机器人有关的事件。"""
 
     def __init__(self) -> None:
-        super().__init__(ToMeRule())
+        super().__init__(Rule(ToMeRule()))
 
     @override
     @classmethod
-    def checker(cls):
-        return super().checker()
+    def Checker(cls) -> bool:
+        """匹配与机器人有关的事件。"""
+        return super().Checker()
 
     @staticmethod
-    def _param(event: Event) -> bool:
+    def _param(event: Event[Any]) -> bool:
         return event.is_tome()
 
     @classmethod
-    def Param(cls) -> dict:
+    def Param(cls) -> bool:
         """在依赖注入里获取检查器的数据。"""
         return Depends(cls._param, use_cache=False)

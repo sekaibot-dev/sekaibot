@@ -4,7 +4,8 @@
 """
 
 from abc import ABCMeta, abstractmethod
-from typing import Literal, override
+from typing import Literal
+from typing_extensions import override
 
 import aiohttp
 import anyio
@@ -26,7 +27,7 @@ __all__ = [
 ]
 
 
-class PollingAdapter(Adapter[EventT, ConfigT], metaclass=ABCMeta):
+class PollingAdapter(Adapter[EventT, ConfigT], metaclass=ABCMeta):  # type: ignore
     """轮询式适配器示例。"""
 
     @override
@@ -54,7 +55,7 @@ class HttpClientAdapter(PollingAdapter[EventT, ConfigT], metaclass=ABCMeta):
         await self.session.close()
 
 
-class WebSocketClientAdapter(Adapter[EventT, ConfigT], metaclass=ABCMeta):
+class WebSocketClientAdapter(Adapter[EventT, ConfigT], metaclass=ABCMeta):  # type: ignore
     """WebSocket 客户端适配器示例。"""
 
     url: str
@@ -77,7 +78,7 @@ class WebSocketClientAdapter(Adapter[EventT, ConfigT], metaclass=ABCMeta):
         """处理响应。"""
 
 
-class HttpServerAdapter(Adapter[EventT, ConfigT], metaclass=ABCMeta):
+class HttpServerAdapter(Adapter[EventT, ConfigT], metaclass=ABCMeta):  # type: ignore
     """HTTP 服务端适配器示例。"""
 
     app: web.Application
@@ -114,7 +115,7 @@ class HttpServerAdapter(Adapter[EventT, ConfigT], metaclass=ABCMeta):
         """处理响应。"""
 
 
-class WebSocketServerAdapter(Adapter[EventT, ConfigT], metaclass=ABCMeta):
+class WebSocketServerAdapter(Adapter[EventT, ConfigT], metaclass=ABCMeta):  # type: ignore
     """WebSocket 服务端适配器示例。"""
 
     app: web.Application
@@ -132,8 +133,8 @@ class WebSocketServerAdapter(Adapter[EventT, ConfigT], metaclass=ABCMeta):
     async def startup(self) -> None:
         self.app = web.Application()
         self.app.add_routes([web.get(self.url, self.handle_response)])
-        self._msg_send_stream, self._msg_receive_stream = anyio.create_memory_object_stream(
-            max_buffer_size=float("inf")
+        self._msg_send_stream, self._msg_receive_stream = (
+            anyio.create_memory_object_stream(max_buffer_size=float("inf"))
         )
 
     @override
@@ -178,7 +179,7 @@ class WebSocketServerAdapter(Adapter[EventT, ConfigT], metaclass=ABCMeta):
         """处理 WebSocket 响应。"""
 
 
-class WebSocketAdapter(Adapter[EventT, ConfigT], metaclass=ABCMeta):
+class WebSocketAdapter(Adapter[EventT, ConfigT], metaclass=ABCMeta):  # type: ignore
     """WebSocket 适配器示例。
 
     同时支持 WebSocket 客户端和服务端。
@@ -217,8 +218,8 @@ class WebSocketAdapter(Adapter[EventT, ConfigT], metaclass=ABCMeta):
                 'Config "adapter_type" must be "ws" or "reverse-ws"',
                 adapter_type=self.adapter_type,
             )
-        self._msg_send_stream, self._msg_receive_stream = anyio.create_memory_object_stream(
-            max_buffer_size=float("inf")
+        self._msg_send_stream, self._msg_receive_stream = (
+            anyio.create_memory_object_stream(max_buffer_size=float("inf"))
         )
 
     @override
@@ -254,7 +255,9 @@ class WebSocketAdapter(Adapter[EventT, ConfigT], metaclass=ABCMeta):
         await self._msg_send_stream.aclose()
         await self._msg_receive_stream.aclose()
 
-    async def handle_reverse_ws_response(self, request: web.Request) -> web.WebSocketResponse:
+    async def handle_reverse_ws_response(
+        self, request: web.Request
+    ) -> web.WebSocketResponse:
         """处理 aiohttp WebSocket 服务器的接收。"""
         self.websocket = web.WebSocketResponse()
         await self.websocket.prepare(request)

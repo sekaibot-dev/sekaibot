@@ -97,6 +97,8 @@ ignore = [
     "BLE001",
     "PLW2901",
     "TRY301",
+    "N802",
+    "SLF001",
 ]
 allowed-confusables = ["，", "：", "！"]
 
@@ -140,6 +142,7 @@ reportPropertyTypeMismatch = true
 reportInvalidTypeVarUse = false
 reportShadowedImports = true
 reportUninitializedInstanceVariable = false
+reportPrivateUsage = false
 extraPaths = [
     "test", "test/test_utils",
     "packages/sekaibot-adapter-cqhttp",

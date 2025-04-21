@@ -1,29 +1,38 @@
+"""一个简单的计数器方法
+
+用于 Rule 的 Counter 方法
+"""
+
 import json
 import time as time_util
 from collections import deque
 from collections.abc import Callable, Iterator
 from dataclasses import asdict, dataclass
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Self, TypeVar
+from typing_extensions import override
 
-T = TypeVar("T")
+_T = TypeVar("_T")
 
 
 @dataclass(frozen=True)
-class RecordedEvent(Generic[T]):
+class RecordedEvent(Generic[_T]):
     """表示记录的事件及其属性。"""
 
-    event: T
+    event: _T
     matched: bool
     timestamp: float
 
 
-class Counter(Generic[T]):
+class Counter(Generic[_T]):
     """简单易用的事件计数器：支持时间窗口、数量窗口命中分析及合并、导出、还原等功能。"""
 
     __slots__ = ("_events", "_max_size", "_time")
 
     def __init__(
-        self, max_size: int | None = None, *, time_func: Callable[[], float] = time_util.time
+        self,
+        max_size: int | None = None,
+        *,
+        time_func: Callable[[], float] = time_util.time,
     ) -> None:
         """初始化事件计数器。
 
@@ -31,12 +40,12 @@ class Counter(Generic[T]):
             max_size: 最大记录数。
             time_func: 用于生成时间戳的函数 (默认使用 time.time) 。
         """
-        self._events: deque[RecordedEvent[T]] = deque(maxlen=max_size)
+        self._events: deque[RecordedEvent[_T]] = deque(maxlen=max_size)
         self._time = time_func
         self._max_size = max_size
 
     def record(
-        self, event: T, matched: bool = False, timestamp: float | None = None
+        self, event: _T, matched: bool = False, timestamp: float | None = None
     ) -> None:
         """同步记录事件，并保持时间升序。
 
@@ -58,7 +67,7 @@ class Counter(Generic[T]):
             )
 
     async def arecord(
-        self, event: T, matched: bool = False, timestamp: float | None = None
+        self, event: _T, matched: bool = False, timestamp: float | None = None
     ) -> None:
         """异步记录事件。
 
@@ -69,11 +78,11 @@ class Counter(Generic[T]):
         """
         self.record(event, matched, timestamp)
 
-    def pop(self) -> RecordedEvent[T]:
+    def pop(self) -> RecordedEvent[_T]:
         """弹出最新的事件。"""
         return self._events.pop()
 
-    def popleft(self) -> RecordedEvent[T]:
+    def popleft(self) -> RecordedEvent[_T]:
         """弹出最早的事件。"""
         return self._events.popleft()
 
@@ -120,7 +129,7 @@ class Counter(Generic[T]):
         total = len(self._events)
         return self.count_matched() / total if total > 0 else 0.0
 
-    def latest(self) -> RecordedEvent[T] | None:
+    def latest(self) -> RecordedEvent[_T] | None:
         """获取最近的事件。
 
         Returns:
@@ -128,7 +137,7 @@ class Counter(Generic[T]):
         """
         return self._events[-1] if self._events else None
 
-    def iter_in_time(self, seconds: float, now: float | None = None) -> Iterator[T]:
+    def iter_in_time(self, seconds: float, now: float | None = None) -> Iterator[_T]:
         """迭代过去 seconds 秒内的事件。
 
         Args:
@@ -145,7 +154,7 @@ class Counter(Generic[T]):
             if e.matched and now - seconds <= e.timestamp < now
         )
 
-    def iter_in_latest(self, n: int) -> Iterator[T]:
+    def iter_in_latest(self, n: int) -> Iterator[_T]:
         """迭代最近 n 条记录中的事件。
 
         Args:
@@ -156,7 +165,7 @@ class Counter(Generic[T]):
         """
         return (e.event for e in list(self._events)[-n:] if e.matched)
 
-    def iter_matched(self) -> Iterator[T]:
+    def iter_matched(self) -> Iterator[_T]:
         """迭代所有命中事件。
 
         Returns:
@@ -204,31 +213,36 @@ class Counter(Generic[T]):
         if latest and latest not in self._events:
             self._events.append(latest)
 
-    def copy(self) -> "Counter[T]":
+    def copy(self) -> "Counter[_T]":
         """复制当前事件计数器。"""
-        copied = Counter[T](max_size=self._max_size, time_func=self._time)
+        copied = Counter[_T](max_size=self._max_size, time_func=self._time)
         copied._events.extend(self._events)
         return copied
 
     def __len__(self) -> int:
+        """获取长度"""
         return len(self._events)
 
-    def __contains__(self, event: T) -> bool:
+    def __contains__(self, event: _T) -> bool:
+        """in方法"""
         return event in self._events
 
-    def __iter__(self) -> Iterator[RecordedEvent[T]]:
+    def __iter__(self) -> Iterator[RecordedEvent[_T]]:
+        """iter方法"""
         return iter(self._events)
 
-    def __reversed__(self) -> Iterator[RecordedEvent[T]]:
+    def __reversed__(self) -> Iterator[RecordedEvent[_T]]:
+        """reversed方法"""
         return reversed(self._events)
 
+    @override
     def __repr__(self) -> str:
         return (
             f"<EventCounter(size={len(self)}, matched={self.count_matched()}, "
             f"ratio={self.match_ratio():.2%})>"
         )
 
-    def __add__(self, other: "Counter[T]") -> "Counter[T]":
+    def __add__(self, other: "Counter[_T]") -> "Counter[_T]":
         """合并两个事件计数器。
 
         Args:
@@ -237,13 +251,13 @@ class Counter(Generic[T]):
         Returns:
             新的合并后的 EventCounter。
         """
-        merged = Counter[T](max_size=self._max_size, time_func=self._time)
+        merged = Counter[_T](max_size=self._max_size, time_func=self._time)
         merged._events.extend(
             sorted(list(self._events) + list(other._events), key=lambda e: e.timestamp)
         )
         return merged
 
-    def __iadd__(self, other: "Counter[T]") -> "Counter[T]":
+    def __iadd__(self, other: "Counter[_T]") -> Self:
         """就地合并事件计数器。
 
         Args:

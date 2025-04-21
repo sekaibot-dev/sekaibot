@@ -2,6 +2,7 @@
 
 SekaiBot 的基础模块，每一个 SekaiBot 机器人即是一个 `Bot` 实例。
 """
+
 import inspect
 import json
 import pkgutil
@@ -68,6 +69,7 @@ class Bot:
         plugin_dict: 插件存储字典。
         global_state: 全局状态。
     """
+
     config: MainConfig
     manager: NodeManager
 
@@ -90,14 +92,14 @@ class Bot:
     _extend_nodes: list[
         type[Node[Any, Any, Any]] | str | Path
     ]  # 使用 load_nodes() 方法程序化加载的节点列表
-    _extend_node_dirs: list[Path]  # 使用 load_nodes_from_dirs() 方法程序化加载的节点路径列表
+    _extend_node_dirs: list[
+        Path
+    ]  # 使用 load_nodes_from_dirs() 方法程序化加载的节点路径列表
     _extend_adapters: list[
         type[Adapter[Any, Any]] | str
     ]  # 使用 load_adapter() 方法程序化加载的适配器列表
     _extend_plugins: ClassVar[
-        list[
-            tuple[type[Plugin[Any]], bool]  # | str | Path
-        ]
+        list[type[Plugin[Any]]]  # | str | Path
     ] = []
 
     _bot_startup_hooks: ClassVar[set[BotHook]] = set()
@@ -179,7 +181,7 @@ class Bot:
             async with anyio.create_task_group() as tg:
                 for hook_func in hooks:
                     tg.start_soon(
-                        run_coro_with_catch, # type: ignore
+                        run_coro_with_catch,  # type: ignore
                         solve_dependencies(
                             hook_func,
                             dependency_cache={
@@ -200,11 +202,13 @@ class Bot:
 
         logger.debug(f"Running {name}...", adapter=adapter)
 
-        with catch({Exception: handle_exception(f"Error when running {name}", adapter=adapter)}):
+        with catch(
+            {Exception: handle_exception(f"Error when running {name}", adapter=adapter)}
+        ):
             async with anyio.create_task_group() as tg:
                 for hook_func in hooks:
                     tg.start_soon(
-                        run_coro_with_catch, # type: ignore
+                        run_coro_with_catch,  # type: ignore
                         solve_dependencies(
                             hook_func,
                             dependency_cache={
@@ -272,47 +276,45 @@ class Bot:
 
         await self._run_bot_hooks(self._bot_run_hooks, "BotRunHooks")
 
-        try:
-            async with anyio.create_task_group() as tg:
-                tg.start_soon(cancel_on_exit, self._should_exit, tg.cancel_scope)
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(cancel_on_exit, self._should_exit, tg.cancel_scope)
 
-                for _adapter in self.adapters:
-                    await self._run_adapter_hooks(
-                        self._adapter_startup_hooks, _adapter, "AdapterStartupHooks"
-                    )
-                    try:
-                        await _adapter.startup()
-                    except Exception:
-                        logger.exception("Startup adapter failed", adapter=_adapter)
-
-                try:
-                    await self.manager.startup()
-                except Exception:
-                    logger.exception("Startup manager failed", manager=self.manager)
-
-                async with anyio.create_task_group() as tg:
-                    for _adapter in self.adapters:
-                        await self._run_adapter_hooks(
-                            self._adapter_run_hooks, _adapter, "AdapterRunHooks"
-                        )
-                        tg.start_soon(_adapter.safe_run)
-
-                    tg.start_soon(self.manager.run)
-
-        finally:
             for _adapter in self.adapters:
                 await self._run_adapter_hooks(
-                    self._adapter_shutdown_hooks, _adapter, "AdapterShutdownHooks"
+                    self._adapter_startup_hooks, _adapter, "AdapterStartupHooks"
                 )
-                await _adapter.shutdown()
+                try:
+                    await _adapter.startup()
+                except Exception:
+                    logger.exception("Startup adapter failed", adapter=_adapter)
 
-            await self.manager.shutdown()
+            try:
+                await self.manager.startup()
+            except Exception:
+                logger.exception("Startup manager failed", manager=self.manager)
 
-            await self._run_bot_hooks(self._bot_exit_hooks, "BotExitHooks")
+            async with anyio.create_task_group() as tg:
+                for _adapter in self.adapters:
+                    await self._run_adapter_hooks(
+                        self._adapter_run_hooks, _adapter, "AdapterRunHooks"
+                    )
+                    tg.start_soon(_adapter.safe_run)
 
-            self.nodes_tree.clear()
-            self.nodes_list.clear()
-            self._module_path_finder.path.clear()
+                tg.start_soon(self.manager.safe_run)
+
+        for _adapter in self.adapters:
+            await self._run_adapter_hooks(
+                self._adapter_shutdown_hooks, _adapter, "AdapterShutdownHooks"
+            )
+            await _adapter.shutdown()
+
+        await self.manager.shutdown()
+
+        await self._run_bot_hooks(self._bot_exit_hooks, "BotExitHooks")
+
+        self.nodes_tree.clear()
+        self.nodes_list.clear()
+        self._module_path_finder.path.clear()
 
     async def _handle_exit_signal(self) -> None:  # pragma: no cover
         """根据平台不同注册信号处理程序。"""
@@ -341,7 +343,9 @@ class Bot:
         """更新 config，合并入来自 Node 和 Adapter 的 Config。"""
 
         def update_config(
-            source: list[type[Node[Any, Any, Any]]] | list[Plugin[Any]] | list[Adapter[Any, Any]],
+            source: list[type[Node[Any, Any, Any]]]
+            | list[Plugin[Any]]
+            | list[Adapter[Any, Any]],
             name: str,
             base: type[ConfigModel],
         ) -> tuple[type[ConfigModel], ConfigModel]:
@@ -364,12 +368,16 @@ class Bot:
         self.config = create_model(
             "Config",
             node=update_config(self.nodes, "NodeConfig", NodeConfig),
-            plugin=update_config(list(self.plugin_dict.values()), "PluginConfig", PluginConfig),
+            plugin=update_config(
+                list(self.plugin_dict.values()), "PluginConfig", PluginConfig
+            ),
             adapter=update_config(self.adapters, "AdapterConfig", AdapterConfig),
             __base__=MainConfig,
         )(**self._raw_config_dict)
 
-        configure_logging(self.config.bot.log.level, self.config.bot.log.verbose_exception)
+        configure_logging(
+            self.config.bot.log.level, self.config.bot.log.verbose_exception
+        )
 
     def _load_config_dict(self) -> None:
         """重新加载配置文件，支持 JSON / TOML / YAML 格式。"""
@@ -392,7 +400,12 @@ class Bot:
                         )
             except OSError:
                 logger.exception("Can not open config file:")
-            except (ValueError, json.JSONDecodeError, tomllib.TOMLDecodeError, yaml.YAMLError):
+            except (
+                ValueError,
+                json.JSONDecodeError,
+                tomllib.TOMLDecodeError,
+                yaml.YAMLError,
+            ):
                 logger.exception("Read config file failed:")
 
         try:
@@ -416,15 +429,17 @@ class Bot:
             node_class.__node_load_type__ = load_type
             node_class.__node_file_path__ = file_path
             if node_class.__name__ in nodes_dict:
-                logger.warning("Already have a same name node", name=node_class.__name__)
+                logger.warning(
+                    "Already have a same name node", name=node_class.__name__
+                )
             nodes_dict[node_class.__name__] = node_class
         # 构建节点集合和根节点集合
         all_nodes = set(nodes_dict.values())
         roots = [_node for _node in all_nodes if not _node.parent]
         # 构建 节点-子节点 映射表
-        parent_map: defaultdict[type[Node[Any, Any, Any]], list[type[Node[Any, Any, Any]]]] = (
-            defaultdict(list)
-        )
+        parent_map: defaultdict[
+            type[Node[Any, Any, Any]], list[type[Node[Any, Any, Any]]]
+        ] = defaultdict(list)
         for _node in all_nodes - set(roots):
             if _node.parent not in nodes_dict:
                 logger.warning(
@@ -439,11 +454,14 @@ class Bot:
         roots.sort(key=lambda _node: getattr(_node, "priority", 0))
 
         #  递归建树
-        def build_tree(node_class: type[Node[Any, Any, Any]]) -> dict[type[Node[Any, Any, Any]], Any]:
+        def build_tree(
+            node_class: type[Node[Any, Any, Any]],
+        ) -> dict[type[Node[Any, Any, Any]], Any]:
             return {
                 child: build_tree(child)
                 for child in sorted(
-                    parent_map[node_class], key=lambda _node: getattr(_node, "priority", 0)
+                    parent_map[node_class],
+                    key=lambda _node: getattr(_node, "priority", 0),
                 )
             }
 
@@ -534,7 +552,9 @@ class Bot:
                         if rel_path.stem == "__init__":
                             node_module_name = ".".join(rel_path.parts[:-1])
                         else:
-                            node_module_name = ".".join(rel_path.parts[:-1] + (rel_path.stem,))
+                            node_module_name = ".".join(
+                                rel_path.parts[:-1] + (rel_path.stem,)
+                            )
 
                     module_names.append(node_module_name)
                 else:
@@ -554,7 +574,9 @@ class Bot:
         # 如果有模块名称，则调用新的 _load_nodes_from_module_name 批量加载
         if module_names:
             self._load_nodes_from_module_name(
-                *module_names, node_load_type=node_load_type or NodeLoadType.NAME, reload=reload
+                *module_names,
+                node_load_type=node_load_type or NodeLoadType.NAME,
+                reload=reload,
             )
 
     def load_nodes(self, *nodes: type[Node[Any, Any, Any]] | str | Path) -> None:
@@ -619,9 +641,9 @@ class Bot:
 
     def load_plugins(self) -> None:
         """加载插件。"""
-        for plugin_class, _reload in self._extend_plugins:
+        for plugin_class in self._extend_plugins:
             try:
-                if plugin_class.name not in self.plugin_dict or _reload:
+                if plugin_class.name not in self.plugin_dict:
                     _plugin = plugin_class(self)
                     self.plugin_dict[plugin_class.name] = _plugin
                     logger.info(
@@ -684,9 +706,7 @@ class Bot:
                         module_name=adapter_,
                     )
                 else:
-                    raise TypeError(
-                        f"{adapter_} can not be loaded as adapter"
-                    )
+                    raise TypeError(f"{adapter_} can not be loaded as adapter")
             except Exception:
                 logger.exception("Load adapter failed", adapter=adapter_)
             else:
@@ -710,7 +730,9 @@ class Bot:
     @overload
     def get_adapter(self, adapter: type[AdapterT]) -> AdapterT: ...
 
-    def get_adapter(self, adapter: str | type[AdapterT]) -> Adapter[Any, Any] | AdapterT:
+    def get_adapter(
+        self, adapter: str | type[AdapterT]
+    ) -> Adapter[Any, Any] | AdapterT:
         """按照名称或适配器类获取已经加载的适配器。
 
         Args:
@@ -731,7 +753,9 @@ class Bot:
         raise LookupError(f'Can not find adapter named "{adapter}"')
 
     @classmethod
-    def require_plugin(cls, plugin_class: type[Plugin[Any]], *, reload: bool = False) -> None:
+    def require_plugin(
+        cls, plugin_class: type[Plugin[Any]]
+    ) -> None:
         """声明依赖插件。
 
         Args:
@@ -747,14 +771,11 @@ class Bot:
             and plugin_class != Plugin
         ):
             if plugin_class not in cls._extend_plugins:
-                cls._extend_plugins.append((plugin_class, reload))
-            elif reload:
-                cls._extend_plugins[cls._extend_plugins.index(plugin_class)] = (
-                    plugin_class,
-                    reload,
-                )
+                cls._extend_plugins.append(plugin_class)
         else:
-            logger.error("Require plugin failed: Not a plugin class", plugin_class=plugin_class)
+            logger.error(
+                "Require plugin failed: Not a plugin class", plugin_class=plugin_class
+            )
 
     @classmethod
     def bot_startup_hook(cls, func: BotHook) -> BotHook:

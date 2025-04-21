@@ -15,7 +15,7 @@ from exceptiongroup import catch
 from sekaibot.dependencies import Dependency, Depends, solve_dependencies_in_bot
 from sekaibot.exceptions import SkipException
 from sekaibot.internal.event import Event
-from sekaibot.typing import DependencyCacheT, GlobalStateT, NodeT, PermissionCheckerT
+from sekaibot.typing import GlobalStateT, NodeT, PermissionCheckerT
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
@@ -55,7 +55,7 @@ class Permission:
         event: Event,  # type: ignore
         global_state: GlobalStateT | None = None,
         stack: AsyncExitStack | None = None,
-        dependency_cache: DependencyCacheT | None = None,
+        dependency_cache: dict[Any, Any] | None = None,
     ) -> bool:
         """检查是否满足某个权限。
 
@@ -160,10 +160,10 @@ class PermissionChecker:
     @classmethod
     def _rule_check(cls, *args: Any, **kwargs: Any) -> Callable[..., Awaitable[bool]]:
         """默认实现检查方法，子类可覆盖。"""
-        return cls(*args, **kwargs)._check  # type: ignore  # noqa: SLF001
+        return cls(*args, **kwargs)._check  # type: ignore
 
     @classmethod
-    def checker(cls, *args: Any, **kwargs: Any) -> bool:
+    def Checker(cls, *args: Any, **kwargs: Any) -> bool:
         """默认实现检查方法的依赖注入方法，子类可覆盖。"""
         return Depends(cls._rule_check(*args, **kwargs), use_cache=False)
 
@@ -174,7 +174,7 @@ class PermissionChecker:
         event: Event,  # type: ignore
         global_state: GlobalStateT,
         stack: AsyncExitStack | None = None,
-        dependency_cache: DependencyCacheT | None = None,
+        dependency_cache: dict[Any, Any] | None = None,
     ) -> bool:
         """直接运行检查器并获取结果。"""
         return await self._perm(

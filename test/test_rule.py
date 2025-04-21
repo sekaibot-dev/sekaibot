@@ -1,20 +1,10 @@
-import re
-from argparse import ArgumentParser, Namespace
-
 import pytest
 
-from sekaibot.consts import CMD_KEY, PREFIX_KEY, STARTSWITH_KEY, ENDSWITH_KEY
+from sekaibot.consts import ENDSWITH_KEY, STARTSWITH_KEY
 from sekaibot.internal.message import Message, MessageSegment
 from sekaibot.rule import (
-    Command,
     EndsWith,
-    FullMatch,
-    Keywords,
-    Regex,
-    ShellCommand,
     StartsWith,
-    ToMe,
-    WordFilter,
 )
 
 
@@ -61,31 +51,31 @@ async def test_startswith_endswith():
     state = {}
     event = FakeEvent("hello world")
     rule = StartsWith("hello")
-    result = await rule.__rule__(event, state)
+    result = await rule._rule(event, state)
     print(event.get_message())
     assert result
     assert rule._param(state) == "hello"
 
     state = {}
     rule = EndsWith("world")
-    result = await rule.__rule__(event, state)
+    result = await rule._rule(event, state)
     assert result
     assert state[ENDSWITH_KEY] == "world"
 
     state = {}
     rule = StartsWith("bye")
-    result = await rule.__rule__(event, state)
+    result = await rule._rule(event, state)
     assert not result
     assert STARTSWITH_KEY not in state
 
     state = {}
     rule = EndsWith("bye")
-    result = await rule.__rule__(event, state)
+    result = await rule._rule(event, state)
     assert not result
     assert ENDSWITH_KEY not in state
 
 
-'''@pytest.mark.anyio
+"""@pytest.mark.anyio
 async def test_fullmatch_keywords():
     state = {}
     event = FakeEvent("foo")
@@ -118,7 +108,7 @@ async def test_fullmatch_keywords():
 async def test_regex_rule():
     state = {}
     event = FakeEvent("abc123")
-    rule = Regex(r"\d+")
+    rule = Regex(r"\\d+")
     result = await rule.__rule__(event, state)
     assert result
     if result:
@@ -283,4 +273,4 @@ async def test_tome_rule():
             MySeg(type="text", data={"text": "hello"}),
         ],
     )
-    assert await ToMe().__rule__(event_mixed)'''
+    assert await ToMe().__rule__(event_mixed)"""

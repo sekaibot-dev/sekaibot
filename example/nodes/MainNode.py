@@ -63,7 +63,7 @@ class AutoReply(Node[GroupMessageEvent, dict, Any]):
             keyw = "松泽" if keyw == "sz" else keyw
             keyw = "思灿" if keyw == "sc" else keyw
             keyw = "Kotodama" if keyw == "yl" else keyw
-            text = random.choice(
+            text = random.choice(  # noqa: S311
                 (
                     "{keyw}鞭好粗",
                     "{keyw}鞭好大",
@@ -99,8 +99,7 @@ class AutoReply(Node[GroupMessageEvent, dict, Any]):
                     "{keyw}是蓝凉",
                 )
             ).format(keyw=keyw)
-            print(text)
-            """if self.node_state["sound"] and self.event.message_type == "group":
+            if self.node_state["sound"] and self.event.message_type == "group":
                 await self.call_api(
                     "send_group_ai_record",
                     character=self.node_state["character"],
@@ -108,7 +107,7 @@ class AutoReply(Node[GroupMessageEvent, dict, Any]):
                     text=text,
                 )
             else:
-                await self.reply(text)"""
+                await self.reply(text)
 
 
 @StartsWith("/唐")
