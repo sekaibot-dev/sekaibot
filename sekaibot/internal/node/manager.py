@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, overload
 import anyio
 from anyio.abc import TaskStatus
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
-from exceptiongroup import BaseExceptionGroup, catch
+from exceptiongroup import catch
 
 from sekaibot.consts import JUMO_TO_TARGET, MAX_TIMEOUT
 from sekaibot.dependencies import solve_dependencies_in_bot

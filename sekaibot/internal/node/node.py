@@ -22,7 +22,7 @@ from typing import (
 )
 
 import anyio
-from exceptiongroup import BaseExceptionGroup, catch  # noqa: A004
+from exceptiongroup import catch
 
 from sekaibot.config import ConfigModel
 from sekaibot.consts import JUMO_TO_TARGET, MAX_TIMEOUT, REJECT_TARGET

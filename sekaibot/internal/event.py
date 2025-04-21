@@ -4,7 +4,8 @@
 """
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Generic, NamedTuple, override
+from typing import TYPE_CHECKING, Any, Generic, NamedTuple
+from typing_extensions import override
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -63,19 +64,20 @@ class Event(ABC, BaseModel, Generic[AdapterT]):
         return str(self)
 
     @abstractmethod
-    def get_user_id(self) -> str | None:
+    def get_user_id(self) -> str:
         """获取事件主体 id 的方法，通常是用户 id 。"""
         raise NotImplementedError
 
     @abstractmethod
-    def get_session_id(self) -> str | None:
+    def get_session_id(self) -> str:
         """获取会话 id 的方法，用于判断当前事件属于哪一个会话，
+
         通常是用户 id、群组 id 组合。
         """
         raise NotImplementedError
 
     @abstractmethod
-    def get_message(self) -> Message | None:
+    def get_message(self) -> Message[Any]:
         """获取事件消息内容的方法。"""
         raise NotImplementedError
 
@@ -100,5 +102,5 @@ class EventHandleOption(NamedTuple):
         handle_get: 当前事件是否可以被 get 方法捕获。
     """
 
-    event: Event[AdapterT]
+    event: Event[Any]
     handle_get: bool

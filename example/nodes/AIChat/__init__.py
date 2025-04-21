@@ -11,7 +11,7 @@ from .llm import clear, get_answer
 @WordFilter(word_file="./example/nodes/sensitive_words_lines.txt", use_aho=True)
 @SuperUser()
 @User("group_834922207", "group_788499440")
-class AIChat(Node[GroupMessageEvent, dict, Any]):
+class _AIChat(Node[GroupMessageEvent, dict, Any]):
     priority: int = 1
     block: bool = False
 

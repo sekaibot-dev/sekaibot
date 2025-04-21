@@ -1,4 +1,4 @@
-# from typing import Any
+"""# from typing import Any"""
 
 import random
 from typing import Any
@@ -6,14 +6,10 @@ from typing import Any
 from _randsent import generate_sentence
 from _sound import get_character_name_list_text, parse_character_command
 
-from sekaibot import Event, Node
+from sekaibot import Node
 from sekaibot.adapter.cqhttp.event import GroupMessageEvent, MessageEvent
 from sekaibot.permission import SuperUser, User
 from sekaibot.rule import Keywords, StartsWith
-
-
-def a(event: Event):
-    print(event.get_event_name())
 
 
 @Keywords(
@@ -103,7 +99,8 @@ class AutoReply(Node[GroupMessageEvent, dict, Any]):
                     "{keyw}是蓝凉",
                 )
             ).format(keyw=keyw)
-            if self.node_state["sound"] and self.event.message_type == "group":
+            print(text)
+            """if self.node_state["sound"] and self.event.message_type == "group":
                 await self.call_api(
                     "send_group_ai_record",
                     character=self.node_state["character"],
@@ -111,7 +108,7 @@ class AutoReply(Node[GroupMessageEvent, dict, Any]):
                     text=text,
                 )
             else:
-                await self.reply(text)
+                await self.reply(text)"""
 
 
 @StartsWith("/唐")

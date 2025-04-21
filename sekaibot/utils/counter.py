@@ -23,7 +23,7 @@ class Counter(Generic[T]):
     __slots__ = ("_events", "_max_size", "_time")
 
     def __init__(
-        self, max_size: int = 100, *, time_func: Callable[[], float] = time_util.time
+        self, max_size: int | None = None, *, time_func: Callable[[], float] = time_util.time
     ) -> None:
         """初始化事件计数器。
 

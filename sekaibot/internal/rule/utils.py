@@ -11,19 +11,29 @@ FrontMatter:
     description: nonebot.rule 模块
 """
 
-import os
 import re
 import shlex
-from argparse import Action, ArgumentError
+from argparse import Action, ArgumentError, Namespace
 from argparse import ArgumentParser as ArgParser
-from argparse import Namespace as Namespace
 from collections.abc import Sequence
 from contextvars import ContextVar
 from gettext import gettext
 from itertools import chain, product
-from typing import IO, TYPE_CHECKING, NamedTuple, TypedDict, TypeVar, cast, overload
+from pathlib import Path
+from typing import (
+    IO,
+    TYPE_CHECKING,
+    Any,
+    NamedTuple,
+    Never,
+    TypedDict,
+    TypeVar,
+    cast,
+    overload,
+)
+from typing_extensions import override
 
-from pygtrie import CharTrie
+from pygtrie import CharTrie  # type: ignore
 
 from sekaibot.consts import (
     BOT_GLOBAL_KEY,
@@ -58,15 +68,19 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
-class CMD_RESULT(TypedDict):
+class CommandResult(TypedDict):
+    """命令匹配结果类"""
+
     command: tuple[str, ...] | None
     raw_command: str | None
-    command_arg: Message | None
+    command_arg: Message[Any] | None
     command_start: str | None
     command_whitespace: str | None
 
 
-class TRIE_VALUE(NamedTuple):
+class TrieValue(NamedTuple):
+    """Trie参数"""
+
     command_start: str
     command: tuple[str, ...]
 
@@ -84,13 +98,17 @@ class StartswithRule:
 
     __slots__ = ("ignorecase", "msgs")
 
-    def __init__(self, msgs: tuple[str | MessageSegment, ...], ignorecase: bool = False):
+    def __init__(
+        self, msgs: tuple[str | MessageSegment[Any], ...], ignorecase: bool = False
+    ) -> None:
         self.msgs = msgs
         self.ignorecase = ignorecase
 
+    @override
     def __repr__(self) -> str:
         return f"Startswith(msg={self.msgs}, ignorecase={self.ignorecase})"
 
+    @override
     def __eq__(self, other: object) -> bool:
         return (
             isinstance(other, StartswithRule)
@@ -98,15 +116,19 @@ class StartswithRule:
             and self.ignorecase == other.ignorecase
         )
 
+    @override
     def __hash__(self) -> int:
         return hash((frozenset(self.msgs), self.ignorecase))
 
-    async def __call__(self, event: Event, state: StateT) -> bool:
+    async def __call__(self, event: Event[Any], state: StateT) -> bool:
+        """检查消息富文本是否以指定字符串或 MessageSegment 开头。"""
         try:
             message = event.get_message()
         except Exception:
             return False
-        if match := message.startswith(self.msgs, ignorecase=self.ignorecase, return_key=True):
+        if match := message.startswith(
+            self.msgs, ignorecase=self.ignorecase, return_key=True
+        ):
             state[STARTSWITH_KEY] = match
             return True
         return False
@@ -122,13 +144,17 @@ class EndswithRule:
 
     __slots__ = ("ignorecase", "msgs")
 
-    def __init__(self, msgs: tuple[str | MessageSegment, ...], ignorecase: bool = False):
+    def __init__(
+        self, msgs: tuple[str | MessageSegment[Any], ...], ignorecase: bool = False
+    ) -> None:
         self.msgs = msgs
         self.ignorecase = ignorecase
 
+    @override
     def __repr__(self) -> str:
         return f"Endswith(msg={self.msgs}, ignorecase={self.ignorecase})"
 
+    @override
     def __eq__(self, other: object) -> bool:
         return (
             isinstance(other, EndswithRule)
@@ -136,15 +162,19 @@ class EndswithRule:
             and self.ignorecase == other.ignorecase
         )
 
+    @override
     def __hash__(self) -> int:
         return hash((frozenset(self.msgs), self.ignorecase))
 
-    async def __call__(self, event: Event, state: StateT) -> bool:
+    async def __call__(self, event: Event[Any], state: StateT) -> bool:
+        """检查消息富文本是否以指定字符串或 MessageSegment 结尾。"""
         try:
             message = event.get_message()
         except Exception:
             return False
-        if match := message.endswith(self.msgs, ignorecase=self.ignorecase, return_key=True):
+        if match := message.endswith(
+            self.msgs, ignorecase=self.ignorecase, return_key=True
+        ):
             state[ENDSWITH_KEY] = match
             return True
         return False
@@ -160,20 +190,26 @@ class FullmatchRule:
 
     __slots__ = ("ignorecase", "msgs")
 
-    def __init__(self, msgs: tuple[str | Message | MessageSegment, ...], ignorecase: bool = False):
-        self.msgs: set[str | Message] = set(
+    def __init__(
+        self,
+        msgs: tuple[str | Message[Any] | MessageSegment[Any], ...],
+        ignorecase: bool = False,
+    ) -> None:
+        self.msgs: set[str | Message[Any]] = {
             msg.casefold()
             if ignorecase and isinstance(msg, str)
             else msg.get_message_class()(msg)
             if isinstance(msg, MessageSegment)
             else msg
             for msg in msgs
-        )
+        }
         self.ignorecase = ignorecase
 
+    @override
     def __repr__(self) -> str:
         return f"Fullmatch(msg={self.msgs}, ignorecase={self.ignorecase})"
 
+    @override
     def __eq__(self, other: object) -> bool:
         return (
             isinstance(other, FullmatchRule)
@@ -181,10 +217,12 @@ class FullmatchRule:
             and self.ignorecase == other.ignorecase
         )
 
+    @override
     def __hash__(self) -> int:
         return hash((frozenset(self.msgs), self.ignorecase))
 
-    async def __call__(self, event: Event, state: StateT) -> bool:
+    async def __call__(self, event: Event[Any], state: StateT) -> bool:
+        """检查消息纯文本是否与指定字符串全匹配。"""
         try:
             text = event.get_plain_text()
             message = event.get_message()
@@ -197,7 +235,7 @@ class FullmatchRule:
         if text in self.msgs:
             state[FULLMATCH_KEY] = text
             return True
-        elif message in self.msgs:
+        if message in self.msgs:
             state[FULLMATCH_KEY] = message
             return True
         return False
@@ -212,16 +250,20 @@ class KeywordsRule:
 
     __slots__ = ("ignorecase", "keywords")
 
-    def __init__(self, keywords: tuple[str | MessageSegment, ...], ignorecase: bool = False):
+    def __init__(
+        self, keywords: tuple[str | MessageSegment[Any], ...], ignorecase: bool = False
+    ) -> None:
         self.keywords = set(
             keyword.casefold() if ignorecase and isinstance(keyword, str) else keyword
             for keyword in keywords
         )
         self.ignorecase = ignorecase
 
+    @override
     def __repr__(self) -> str:
         return f"Keywords(keywords={self.keywords}, ignorecase={self.ignorecase})"
 
+    @override
     def __eq__(self, other: object) -> bool:
         return (
             isinstance(other, KeywordsRule)
@@ -229,10 +271,12 @@ class KeywordsRule:
             and self.ignorecase == other.ignorecase
         )
 
+    @override
     def __hash__(self) -> int:
         return hash(frozenset(self.keywords))
 
-    async def __call__(self, event: Event, state: StateT) -> bool:
+    async def __call__(self, event: Event[Any], state: StateT) -> bool:
+        """检查消息纯文本是否包含指定关键字。"""
         try:
             text = event.get_plain_text()
             message = event.get_message()
@@ -242,7 +286,9 @@ class KeywordsRule:
             return False
         text = text.casefold() if self.ignorecase else text
         if keys := tuple(
-            k for k in self.keywords if (isinstance(k, str) and (k in text)) or k in message
+            k
+            for k in self.keywords
+            if (isinstance(k, str) and (k in text)) or k in message
         ):
             state[KEYWORD_KEY] = keys
             return True
@@ -254,22 +300,22 @@ class WordFilterRule:
 
     Args:
         words: 指定关键字集合
-        word_file: 可选的词库文件路径（每行一个词）
+        word_file: 可选的词库文件路径 (每行一个词)
         ignorecase: 是否忽略大小写
         use_pinyin: 是否启用拼音匹配，使用 `pypinyin` 库
-        use_aho: 是否启用 Aho-Corasick 算法（当词数较大时自动激活），使用 `pyahocorasick` 库
+        use_aho: 是否启用 Aho-Corasick 算法 (当词数较大时自动激活) ，使用 `pyahocorasick` 库
     """
 
-    __slots__ = ("ignorecase", "words", "use_pinyin", "use_aho", "_automaton")
+    __slots__ = ("_automaton", "ignorecase", "use_aho", "use_pinyin", "words")
 
     def __init__(
         self,
         words: tuple[str, ...] = (),
-        word_file: str | None = None,
+        word_file: Path | None = None,
         ignorecase: bool = False,
         use_pinyin: bool = False,
         use_aho: bool = False,
-    ):
+    ) -> None:
         self.ignorecase = ignorecase
         self.words: set[str] = set()
         self.use_aho = use_aho
@@ -279,7 +325,8 @@ class WordFilterRule:
             self._load_word_set(word_file)
 
         self.words.update(
-            word.casefold() if ignorecase and isinstance(word, str) else word for word in words
+            word.casefold() if ignorecase and isinstance(word, str) else word
+            for word in words
         )
 
         self.use_pinyin = use_pinyin
@@ -288,15 +335,19 @@ class WordFilterRule:
             try:
                 from pypinyin import Style, lazy_pinyin
             except ImportError:
-                raise ImportError("pypinyin is not installed, please install it first.") from None
+                raise ImportError(
+                    "pypinyin is not installed, please install it first."
+                ) from None
 
-            self.words = set(
-                "".join(lazy_pinyin(word, style=Style.FIRST_LETTER)).casefold() if ignorecase else
-                "".join(lazy_pinyin(word, style=Style.FIRST_LETTER))
+            self.words = {
+                "".join(lazy_pinyin(word, style=Style.FIRST_LETTER)).casefold()
+                if ignorecase
+                else "".join(lazy_pinyin(word, style=Style.FIRST_LETTER))
                 for word in self.words
-            )
+            }
 
-        if self.use_aho and len(self.words) > 2000:
+        min_aho_words = 2000
+        if self.use_aho and len(self.words) > min_aho_words:
             try:
                 from ahocorasick import Automaton
 
@@ -309,12 +360,14 @@ class WordFilterRule:
                     "pyahocorasick is not installed, please install it first."
                 ) from None
 
+    @override
     def __repr__(self) -> str:
         return (
             f"WordFilter(words={self.words}, ignorecase={self.ignorecase}, "
             f"pinyin={self.use_pinyin}, use_aho={self.use_aho})"
         )
 
+    @override
     def __eq__(self, other: object) -> bool:
         return (
             isinstance(other, WordFilterRule)
@@ -324,14 +377,17 @@ class WordFilterRule:
             and self.use_aho == other.use_aho
         )
 
+    @override
     def __hash__(self) -> int:
-        return hash((frozenset(self.words), self.ignorecase, self.use_pinyin, self.use_aho))
+        return hash(
+            (frozenset(self.words), self.ignorecase, self.use_pinyin, self.use_aho)
+        )
 
-    async def __call__(self, event: Event) -> bool:
+    async def __call__(self, event: Event[Any]) -> bool:
         """执行敏感词检测。
 
         Return:
-            bool: 如果消息合法（不包含敏感词）返回 True，否则 False
+            bool: 如果消息合法 (不包含敏感词) 返回 True，否则 False
         """
         try:
             text = event.get_plain_text()
@@ -346,27 +402,29 @@ class WordFilterRule:
             try:
                 from pypinyin import Style, lazy_pinyin
             except ImportError:
-                raise ImportError("pypinyin is not installed, please install it first.") from None
+                raise ImportError(
+                    "pypinyin is not installed, please install it first."
+                ) from None
 
             text += "".join(lazy_pinyin(text, style=Style.FIRST_LETTER))
 
-        if self._automaton:
-            return not any(True for _, (_, word) in self._automaton.iter(text))
+        if self._automaton:  # type: ignore
+            return not any(True for _, (_, word) in self._automaton.iter(text))  # type: ignore
 
         return not any(word in text for word in self.words)
 
-    def _load_word_set(self, file_path: str) -> None:
+    def _load_word_set(self, file_path: Path) -> None:
         """从 txt 文件加载敏感词，每行一个词。
 
         Args:
-            file_path (str): txt文件路径
+            file_path (Path): txt 文件 Path
         """
-        if not os.path.isfile(file_path):
+        if not file_path.is_file():
             raise FileNotFoundError(f"File {file_path} not found.")
 
         word_set: list[str] = []
         try:
-            with open(file_path, encoding="utf-8") as file:
+            with file_path.open(encoding="utf-8") as file:
                 for _, line in enumerate(file, start=1):
                     word = line.strip()
                     if word:
@@ -390,22 +448,28 @@ class RegexRule:
 
     __slots__ = ("flags", "regex")
 
-    def __init__(self, regex: str, flags: int = 0):
+    def __init__(self, regex: str, flags: int = 0) -> None:
         self.regex = regex
         self.flags = flags
 
+    @override
     def __repr__(self) -> str:
         return f"Regex(regex={self.regex!r}, flags={self.flags})"
 
+    @override
     def __eq__(self, other: object) -> bool:
         return (
-            isinstance(other, RegexRule) and self.regex == other.regex and self.flags == other.flags
+            isinstance(other, RegexRule)
+            and self.regex == other.regex
+            and self.flags == other.flags
         )
 
+    @override
     def __hash__(self) -> int:
         return hash((self.regex, self.flags))
 
-    async def __call__(self, event: Event, state: StateT) -> bool:
+    async def __call__(self, event: Event[Any], state: StateT) -> bool:
+        """检查消息字符串是否符合指定正则表达式。"""
         try:
             msg = event.get_message()
         except Exception:
@@ -413,12 +477,13 @@ class RegexRule:
         if matched := re.search(self.regex, str(msg), self.flags):
             state[REGEX_MATCHED] = matched
             return True
-        else:
-            return False
+        return False
 
 
 class CountTriggerRule:
-    __slots__ = ("rule", "min_trigger", "time_window", "count_window", "max_size")
+    """计数器规则。"""
+
+    __slots__ = ("count_window", "max_size", "min_trigger", "rule", "time_window")
 
     def __init__(
         self,
@@ -427,19 +492,21 @@ class CountTriggerRule:
         min_trigger: int = 10,
         max_size: int | None = 100,
         rule: Rule | None = None,
-    ):
+    ) -> None:
         self.rule = rule
         self.min_trigger = min_trigger
         self.time_window = time_window
         self.count_window = count_window
         self.max_size = max_size
 
+    @override
     def __repr__(self) -> str:
         return (
             f"Counter(time_window={self.time_window}, count_window={self.count_window}, "
             f"min_trigger={self.min_trigger}, max_size={self.max_size}, rule={self.rule!r})"
         )
 
+    @override
     def __eq__(self, other: object) -> bool:
         return (
             isinstance(other, CountTriggerRule)
@@ -450,23 +517,27 @@ class CountTriggerRule:
             and self.rule == other.rule
         )
 
+    @override
     def __hash__(self) -> int:
-        return hash((self.time_window, self.count_window, self.min_trigger, self.max_size))
+        return hash(
+            (self.time_window, self.count_window, self.min_trigger, self.max_size)
+        )
 
     async def __call__(
         self,
         name: NameT,
         bot: "Bot",
-        event: Event,
+        event: Event[Any],
         state: StateT,
         global_state: GlobalStateT,
     ) -> bool:
+        """计数器规则。"""
         if isinstance(global_state[BOT_GLOBAL_KEY][COUNTER_STATE], dict):
-            counter: Counter[Event] = global_state[BOT_GLOBAL_KEY][COUNTER_STATE].setdefault(
-                name, Counter[Event](self.max_size)
-            )
+            counter: Counter[Event[Any]] = global_state[BOT_GLOBAL_KEY][
+                COUNTER_STATE
+            ].setdefault(name, Counter[Event[Any]](self.max_size))
         else:
-            counter = Counter[Event](self.max_size)
+            counter = Counter[Event[Any]](self.max_size)
             global_state[BOT_GLOBAL_KEY][COUNTER_STATE] = {name: counter}
 
         if self.rule:
@@ -506,19 +577,23 @@ class CountTriggerRule:
 
 
 class TrieRule:
+    """Trie 规则类"""
+
     prefix: CharTrie
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.prefix = CharTrie()
 
-    def add_prefix(self, prefix: str, value: TRIE_VALUE) -> None:
+    def add_prefix(self, prefix: str, value: TrieValue) -> None:
+        """添加 prefix"""
         if prefix in self.prefix:
             logger.warning(f'Duplicated prefix rule "{prefix}"')
             return
         self.prefix[prefix] = value
 
-    def get_value(self, event: Event, state: StateT) -> CMD_RESULT:
-        prefix = CMD_RESULT(
+    def get_value(self, event: Event[Any], state: StateT) -> CommandResult:
+        """获取解析结果"""
+        prefix = CommandResult(
             command=None,
             raw_command=None,
             command_arg=None,
@@ -530,11 +605,11 @@ class TrieRule:
             return prefix
 
         message = event.get_message()
-        message_seg: MessageSegment = message[0]
+        message_seg: MessageSegment[Any] = message[0]
         if message_seg.is_text():
             segment_text = str(message_seg).lstrip()
             if pf := self.prefix.longest_prefix(segment_text):
-                value: TRIE_VALUE = pf.value
+                value: TrieValue = pf.value
                 prefix[RAW_CMD_KEY] = pf.key
                 prefix[CMD_START_KEY] = value.command_start
                 prefix[CMD_KEY] = value.command
@@ -551,7 +626,10 @@ class TrieRule:
                     arg_str_stripped = arg_str.lstrip()
 
                 has_arg = arg_str_stripped or msg
-                if has_arg and (stripped_len := len(arg_str) - len(arg_str_stripped)) > 0:
+                if (
+                    has_arg
+                    and (stripped_len := len(arg_str) - len(arg_str_stripped)) > 0
+                ):
                     prefix[CMD_WHITESPACE_KEY] = arg_str[:stripped_len]
 
                 # construct command arg
@@ -572,13 +650,13 @@ class CommandRule:
         force_whitespace: 是否强制命令后必须有指定空白符
     """
 
-    __slots__ = ("cmds", "force_whitespace", "char_trie")
+    __slots__ = ("char_trie", "cmds", "force_whitespace")
 
     def __init__(
         self,
         cmds: list[tuple[str, ...]],
         force_whitespace: str | bool | None = None,
-    ):
+    ) -> None:
         self.cmds = tuple(cmds)
         self.force_whitespace = force_whitespace
         self.char_trie = TrieRule()
@@ -587,7 +665,7 @@ class CommandRule:
 
         Bot.bot_startup_hook(self._set_prefix)
 
-    def _set_prefix(self, bot: "Bot"):
+    def _set_prefix(self, bot: "Bot") -> None:
         command_start = bot.config.rule.command_start
         command_sep = bot.config.rule.command_sep
 
@@ -600,27 +678,35 @@ class CommandRule:
 
             if len(command) == 1:
                 for start in command_start:
-                    self.char_trie.add_prefix(f"{start}{command[0]}", TRIE_VALUE(start, command))
+                    self.char_trie.add_prefix(
+                        f"{start}{command[0]}", TrieValue(start, command)
+                    )
             else:
                 for start, sep in product(command_start, command_sep):
                     self.char_trie.add_prefix(
-                        f"{start}{sep.join(command)}", TRIE_VALUE(start, command)
+                        f"{start}{sep.join(command)}", TrieValue(start, command)
                     )
 
+    @override
     def __repr__(self) -> str:
         return f"Command(cmds={self.cmds})"
 
+    @override
     def __eq__(self, other: object) -> bool:
-        return isinstance(other, CommandRule) and frozenset(self.cmds) == frozenset(other.cmds)
+        return isinstance(other, CommandRule) and frozenset(self.cmds) == frozenset(
+            other.cmds
+        )
 
+    @override
     def __hash__(self) -> int:
         return hash((frozenset(self.cmds),))
 
     async def __call__(
         self,
-        event: Event,
+        event: Event[Any],
         state: StateT,
     ) -> bool:
+        """检查消息是否为指定命令。"""
         self.char_trie.get_value(event, state)
 
         cmd = state[PREFIX_KEY][CMD_KEY]
@@ -651,60 +737,69 @@ class ArgumentParser(ArgParser):
         @overload
         def parse_known_args(
             self,
-            args: Sequence[str | MessageSegment] | None = None,
+            args: Sequence[str | MessageSegment[Any]] | None = None,
             namespace: None = None,
-        ) -> tuple[Namespace, list[str | MessageSegment]]: ...
+        ) -> tuple[Namespace, list[str | MessageSegment[Any]]]: ...
 
         @overload
         def parse_known_args(
-            self, args: Sequence[str | MessageSegment] | None, namespace: T
-        ) -> tuple[T, list[str | MessageSegment]]: ...
+            self, args: Sequence[str | MessageSegment[Any]] | None, namespace: T
+        ) -> tuple[T, list[str | MessageSegment[Any]]]: ...
 
         @overload
-        def parse_known_args(self, *, namespace: T) -> tuple[T, list[str | MessageSegment]]: ...
+        def parse_known_args(
+            self, *, namespace: T
+        ) -> tuple[T, list[str | MessageSegment[Any]]]: ...
 
-        def parse_known_args(  # pyright: ignore[reportIncompatibleMethodOverride]
+        def parse_known_args(  # type: ignore  # noqa: D102
             self,
-            args: Sequence[str | MessageSegment] | None = None,
+            args: Sequence[str | MessageSegment[Any]] | None = None,
             namespace: T | None = None,
-        ) -> tuple[Namespace | T, list[str | MessageSegment]]: ...
+        ) -> tuple[Namespace | T, list[str | MessageSegment[Any]]]: ...
 
     @overload
     def parse_args(
         self,
-        args: Sequence[str | MessageSegment] | None = None,
+        args: Sequence[str | MessageSegment[Any]] | None = None,
         namespace: None = None,
     ) -> Namespace: ...
 
     @overload
-    def parse_args(self, args: Sequence[str | MessageSegment] | None, namespace: T) -> T: ...
+    def parse_args(
+        self, args: Sequence[str | MessageSegment[Any]] | None, namespace: T
+    ) -> T: ...
 
     @overload
     def parse_args(self, *, namespace: T) -> T: ...
 
+    @override
     def parse_args(
         self,
-        args: Sequence[str | MessageSegment] | None = None,
+        args: Sequence[str | MessageSegment[Any]] | None = None,
         namespace: T | None = None,
     ) -> Namespace | T:
         result, argv = self.parse_known_args(args, namespace)
         if argv:
             msg = gettext("unrecognized arguments: %s")
             self.error(msg % " ".join(map(str, argv)))
-        return cast(Namespace | T, result)
+        return cast("Namespace | T", result)
 
+    @override
     def _parse_optional(
-        self, arg_string: str | MessageSegment
+        self, arg_string: str | MessageSegment[Any]
     ) -> tuple[Action | None, str, str | None] | None:
-        return super()._parse_optional(arg_string) if isinstance(arg_string, str) else None
+        return (
+            super()._parse_optional(arg_string) if isinstance(arg_string, str) else None
+        )
 
-    def _print_message(self, message: str, file: IO[str] | None = None):  # type: ignore
+    def _print_message(self, message: str, file: IO[str] | None = None) -> None:  # type: ignore
         if (msg := parser_message.get(None)) is not None:
             parser_message.set(msg + message)
         else:
             super()._print_message(message, file)
 
-    def exit(self, status: int = 0, message: str | None = None):
+    @override
+    def exit(self, status: int = 0, message: str | None = None) -> Never:
         if message:
             self._print_message(message)
         raise ParserExit(status=status, message=parser_message.get(None))
@@ -718,11 +813,15 @@ class ShellCommandRule:
         parser: 可选参数解析器
     """
 
-    __slots__ = ("cmds", "parser", "char_trie")
+    __slots__ = ("char_trie", "cmds", "parser")
 
-    def __init__(self, cmds: list[tuple[str, ...]], parser: ArgumentParser | None):
+    def __init__(
+        self, cmds: list[tuple[str, ...]], parser: ArgumentParser | None
+    ) -> None:
         if parser is not None and not isinstance(parser, ArgumentParser):
-            raise TypeError("`parser` must be an instance of nonebot.rule.ArgumentParser")
+            raise TypeError(
+                "`parser` must be an instance of nonebot.rule.ArgumentParser"
+            )
 
         self.cmds = tuple(cmds)
         self.parser = parser
@@ -732,7 +831,7 @@ class ShellCommandRule:
 
         Bot.bot_startup_hook(self._set_prefix)
 
-    def _set_prefix(self, bot: "Bot"):
+    def _set_prefix(self, bot: "Bot") -> None:
         command_start = bot.config.rule.command_start
         command_sep = bot.config.rule.command_sep
         commands: list[tuple[str, ...]] = []
@@ -744,14 +843,20 @@ class ShellCommandRule:
 
             if len(command) == 1:
                 for start in command_start:
-                    TrieRule.add_prefix(f"{start}{command[0]}", TRIE_VALUE(start, command))
+                    self.char_trie.add_prefix(
+                        f"{start}{command[0]}", TrieValue(start, command)
+                    )
             else:
                 for start, sep in product(command_start, command_sep):
-                    TrieRule.add_prefix(f"{start}{sep.join(command)}", TRIE_VALUE(start, command))
+                    self.char_trie.add_prefix(
+                        f"{start}{sep.join(command)}", TrieValue(start, command)
+                    )
 
+    @override
     def __repr__(self) -> str:
         return f"ShellCommand(cmds={self.cmds}, parser={self.parser})"
 
+    @override
     def __eq__(self, other: object) -> bool:
         return (
             isinstance(other, ShellCommandRule)
@@ -759,14 +864,16 @@ class ShellCommandRule:
             and self.parser is other.parser
         )
 
+    @override
     def __hash__(self) -> int:
         return hash((frozenset(self.cmds), self.parser))
 
     async def __call__(
         self,
-        event: Event,
+        event: Event[Any],
         state: StateT,
     ) -> bool:
+        """检查消息是否为指定 shell 命令。"""
         self.char_trie.get_value(event, state)
 
         cmd = state[PREFIX_KEY][CMD_KEY]
@@ -778,7 +885,9 @@ class ShellCommandRule:
         try:
             state[SHELL_ARGV] = list(
                 chain.from_iterable(
-                    shlex.split(str(seg)) if cast(MessageSegment, seg).is_text() else (seg,)
+                    shlex.split(str(seg))
+                    if cast("MessageSegment[Any]", seg).is_text()
+                    else (seg,)
                     for seg in msg
                 )
             )
@@ -793,7 +902,11 @@ class ShellCommandRule:
         if self.parser:
             t = parser_message.set("")
             try:
-                args = self.parser.parse_args(state[SHELL_ARGV])
+                args = self.parser.parse_args(
+                    cast(
+                        "Sequence[str | MessageSegment[Any]] | None", state[SHELL_ARGV]
+                    )
+                )
                 state[SHELL_ARGS] = args
             except ArgumentError as e:
                 state[SHELL_ARGS] = ParserExit(status=2, message=str(e))
@@ -809,16 +922,20 @@ class ToMeRule:
 
     __slots__ = ()
 
+    @override
     def __repr__(self) -> str:
         return "ToMe()"
 
+    @override
     def __eq__(self, other: object) -> bool:
         return isinstance(other, ToMeRule)
 
+    @override
     def __hash__(self) -> int:
         return hash((self.__class__,))
 
-    async def __call__(self, event: Event) -> bool:
+    async def __call__(self, event: Event[Any]) -> bool:
+        """检查事件是否与机器人有关。"""
         return event.is_tome()
 
 

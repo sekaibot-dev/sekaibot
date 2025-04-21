@@ -5,11 +5,12 @@
 
 from collections.abc import Awaitable, Callable
 from contextlib import AsyncExitStack
+from copy import deepcopy
 from typing import TYPE_CHECKING, Any, NoReturn, Self, cast, final
 from typing_extensions import override
 
 import anyio
-from exceptiongroup import BaseExceptionGroup, catch  # noqa: A004
+from exceptiongroup import catch
 
 from sekaibot.dependencies import Dependency, Depends, solve_dependencies_in_bot
 from sekaibot.exceptions import SkipException
@@ -38,8 +39,10 @@ class Permission:
 
     __slots__ = ("checkers",)
 
-    def __init__(self, *checkers: PermissionCheckerT) -> None:
-        self.checkers: set[PermissionCheckerT] = set(checkers)
+    def __init__(self, *checkers: PermissionCheckerT | Dependency[bool]) -> None:
+        self.checkers: set[Dependency[bool]] = set(
+            cast("tuple[Dependency[bool]]", checkers)
+        )
         """存储 `PermissionChecker`"""
 
     @override
@@ -92,7 +95,7 @@ class Permission:
         with catch({SkipException: _handle_skipped_exception}):
             async with anyio.create_task_group() as tg:
                 for checker in self.checkers:
-                    tg.start_soon(_run_checker, cast("Dependency[bool]", checker))
+                    tg.start_soon(_run_checker, checker)
 
         return result
 
@@ -100,7 +103,7 @@ class Permission:
         """禁止 and"""
         raise RuntimeError("And operation between Permissions is not allowed.")
 
-    def __or__(self, other: Self | PermissionCheckerT | None) -> "Permission":
+    def __or__(self, other: "Permission | PermissionCheckerT | None") -> "Permission":
         """or方法"""
         if other is None:
             return self
@@ -108,7 +111,7 @@ class Permission:
             return Permission(*self.checkers, *other.checkers)
         return Permission(*self.checkers, other)
 
-    def __ror__(self, other: Self | PermissionCheckerT | None) -> "Permission":
+    def __ror__(self, other: "Permission | PermissionCheckerT | None") -> "Permission":
         """ror方法"""
         if other is None:
             return self
@@ -116,7 +119,7 @@ class Permission:
             return Permission(*other.checkers, *self.checkers)
         return Permission(other, *self.checkers)
 
-    def __add__(self, other: Self | PermissionCheckerT | None) -> "Permission":
+    def __add__(self, other: "Permission | PermissionCheckerT | None") -> "Permission":
         """add方法"""
         if other is None:
             return self
@@ -124,12 +127,17 @@ class Permission:
             return Permission(*self.checkers, *other.checkers)
         return Permission(other, *self.checkers)
 
-    def __iadd__(self, other: Self | PermissionCheckerT) -> Self:
+    def __iadd__(self, other: "Permission | PermissionCheckerT | None") -> Self:
         """iadd方法"""
-        self.checkers = self.__add__(other).checkers
+        if other is None:
+            return self
+        if isinstance(other, Permission):
+            self.checkers.update(other.checkers)
+        else:
+            self.checkers.add(cast("Dependency[bool]", other))
         return self
 
-    def __sub__(self, other: Self | PermissionCheckerT) -> NoReturn:
+    def __sub__(self, other: object) -> NoReturn:
         """紧张 sub"""
         raise RuntimeError("Subtraction operation between permissions is not allowed.")
 
@@ -137,24 +145,22 @@ class Permission:
 class PermissionChecker:
     """抽象基类，匹配消息规则。"""
 
-    __perm__: Permission
+    _perm: Permission
 
     def __init__(self, perm: Permission) -> None:
-        self.__perm__ = perm
+        self._perm = perm
 
     def __call__(self, cls: NodeT) -> NodeT:
         """将检查器添加到 Node 类中。"""
-        if not isinstance(cls, type):
-            raise TypeError(f"class should be NodeT, not `{type(cls)}`.")
-        if not hasattr(cls, "__node_perm__"):
-            cls.__node_perm__ = Permission()
-        cls.__node_perm__ += self.__perm__
+        if "__node_perm__" not in cls.__dict__:
+            cls.__node_perm__ = deepcopy(cls.__node_perm__)
+        cls.__node_perm__ += self._perm
         return cls
 
     @classmethod
     def _rule_check(cls, *args: Any, **kwargs: Any) -> Callable[..., Awaitable[bool]]:
         """默认实现检查方法，子类可覆盖。"""
-        return cls(*args, **kwargs)._check # type: ignore  # noqa: SLF001
+        return cls(*args, **kwargs)._check  # type: ignore  # noqa: SLF001
 
     @classmethod
     def checker(cls, *args: Any, **kwargs: Any) -> bool:
@@ -171,7 +177,7 @@ class PermissionChecker:
         dependency_cache: DependencyCacheT | None = None,
     ) -> bool:
         """直接运行检查器并获取结果。"""
-        return await self.__perm__(
+        return await self._perm(
             bot,
             event,
             global_state,

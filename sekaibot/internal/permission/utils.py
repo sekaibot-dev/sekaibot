@@ -11,10 +11,11 @@ FrontMatter:
     description: nonebot.permission 模块
 """
 
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING, Any, Self
+from typing_extensions import override
 
 from sekaibot.internal.event import Event
-from sekaibot.internal.permission import Permission as Permission
+from sekaibot.internal.permission import Permission
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
@@ -37,12 +38,16 @@ class UserPermission:
         self.users = users
         self.perm = perm
 
+    @override
     def __repr__(self) -> str:
         return (
-            f"User(users={self.users}" + (f", permission={self.perm})" if self.perm else "") + ")"
+            f"User(users={self.users}"
+            + (f", permission={self.perm})" if self.perm else "")
+            + ")"
         )
 
-    async def __call__(self, event: Event) -> bool:
+    async def __call__(self, event: Event[Any]) -> bool:
+        """运行权限检测"""
         try:
             session = event.get_session_id()
         except Exception:
@@ -51,12 +56,14 @@ class UserPermission:
 
     @classmethod
     def _clean_permission(cls, perm: Permission) -> Permission | None:
-        if len(perm.checkers) == 1 and isinstance(user_perm := next(iter(perm.checkers)).call, cls):
+        if len(perm.checkers) == 1 and isinstance(
+            user_perm := next(iter(perm.checkers)).call, cls # type: ignore
+        ):
             return user_perm.perm
         return perm
 
     @classmethod
-    def from_event(cls, event: Event, perm: Permission | None = None) -> Self:
+    def from_event(cls, event: Event[Any], perm: Permission | None = None) -> Self:
         """从事件中获取会话 ID。
 
         如果 `perm` 中仅有 `User` 类型的权限检查函数，则会去除原有的会话 ID 限制。
@@ -65,9 +72,7 @@ class UserPermission:
             event: Event 对象
             perm: 需同时满足的权限
         """
-        return cls(
-            (event.get_session_id(),), perm=perm and cls._clean_permission(perm)
-        )
+        return cls((event.get_session_id(),), perm=perm and cls._clean_permission(perm))
 
     @classmethod
     def from_permission(
@@ -89,15 +94,20 @@ class SuperUserPermission:
 
     __slots__ = ()
 
+    @override
     def __repr__(self) -> str:
         return "Superuser()"
 
-    async def __call__(self, bot: "Bot", event: Event) -> bool:
+    async def __call__(self, bot: "Bot", event: Event[Any]) -> bool:
+        """运行超级用户检测"""
         try:
             user_id = event.get_user_id()
-            group_id = "group_" + str(event.group_id) if hasattr(event, "group_id") else None
+            group_id = (
+                "group_" + str(getattr(event, "group_id", "no_group_id"))
+            )
         except Exception:
             return False
+
         adapter_name = event.adapter.name.split(maxsplit=1)[0].lower()
         superusers = bot.config.permission.superusers
         return (

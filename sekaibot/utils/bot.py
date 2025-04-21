@@ -37,7 +37,7 @@ from typing import (
 from typing_extensions import ParamSpec, override
 
 import anyio
-from exceptiongroup import BaseExceptionGroup, catch  # noqa: A004
+from exceptiongroup import catch
 from pydantic import BaseModel
 
 from sekaibot.config import ConfigModel

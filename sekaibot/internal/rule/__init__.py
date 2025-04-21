@@ -1,10 +1,14 @@
+"""SekaiBot Rule类
+
+所有 Rule 类的基类
+"""
 from collections.abc import Awaitable, Callable
 from contextlib import AsyncExitStack
-from itertools import chain
-from typing import TYPE_CHECKING, Generic, NoReturn, Self, TypeVar, Union, final
+from typing import TYPE_CHECKING, Any, NoReturn, Self, cast, final
+from typing_extensions import override
 
 import anyio
-from exceptiongroup import BaseExceptionGroup, catch
+from exceptiongroup import catch
 
 from sekaibot.dependencies import Dependency, Depends, solve_dependencies_in_bot
 from sekaibot.exceptions import SkipException
@@ -14,7 +18,7 @@ from sekaibot.typing import DependencyCacheT, GlobalStateT, NodeT, RuleCheckerT,
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
 
-__all__ = ["Rule", "RuleChecker", "MatchRule"]
+__all__ = ["Rule", "RuleChecker"]
 
 
 class Rule:
@@ -35,21 +39,20 @@ class Rule:
 
     __slots__ = ("checkers",)
 
-    def __init__(self, *checkers: Union["Rule", RuleCheckerT, Dependency[bool]]) -> None:
+    def __init__(self, *checkers: RuleCheckerT | Dependency[bool]) -> None:
         self.checkers: set[Dependency[bool]] = set(
-            chain.from_iterable(
-                checker.checkers if isinstance(checker, Rule) else {checker} for checker in checkers
-            )
+            cast("tuple[Dependency[bool]]", checkers)
         )
         """存储 `RuleChecker`"""
 
+    @override
     def __repr__(self) -> str:
         return f"Rule({', '.join(repr(checker) for checker in self.checkers)})"
 
     async def __call__(
         self,
         bot: "Bot",
-        event: Event,
+        event: Event[Any],
         state: StateT,
         global_state: GlobalStateT,
         stack: AsyncExitStack | None = None,
@@ -71,7 +74,7 @@ class Rule:
         result = True
 
         def _handle_skipped_exception(
-            exc_group: BaseExceptionGroup[SkipException],
+            _: BaseExceptionGroup[SkipException],
         ) -> None:
             nonlocal result
             result = False
@@ -99,45 +102,50 @@ class Rule:
 
         return result
 
-    def __and__(self, other: Self | RuleCheckerT | None) -> Self:
+    def __and__(self, other: "Rule | RuleCheckerT | None") -> "Rule":
+        """and方法"""
         if other is None:
             return self
-        elif isinstance(other, Rule):
+        if isinstance(other, Rule):
             return Rule(*self.checkers, *other.checkers)
-        else:
-            return Rule(*self.checkers, other)
+        return Rule(*self.checkers, other)
 
-    def __rand__(self, other: Self | RuleCheckerT | None) -> Self:
+    def __rand__(self, other: "Rule | RuleCheckerT | None") -> "Rule":
+        """rand方法"""
         if other is None:
             return self
-        elif isinstance(other, Rule):
+        if isinstance(other, Rule):
             return Rule(*other.checkers, *self.checkers)
-        else:
-            return Rule(other, *self.checkers)
+        return Rule(other, *self.checkers)
 
     def __or__(self, other: object) -> NoReturn:
+        """or方法"""
         raise RuntimeError("Or operation between rules is not allowed.")
 
-    def __add__(self, other: Self | RuleCheckerT) -> Self:
+    def __add__(self, other: "Rule | RuleCheckerT | None") -> "Rule":
+        """add方法"""
         if other is None:
             return self
-        elif isinstance(other, Rule):
+        if isinstance(other, Rule):
             return Rule(*self.checkers, *other.checkers)
+        return Rule(*self.checkers, other)
+
+    def __iadd__(self, other: "Rule | RuleCheckerT | None") -> Self:
+        """iadd方法"""
+        if other is None:
+            return self
+        if isinstance(other, Rule):
+            self.checkers.update(other.checkers)
         else:
-            return Rule(*self.checkers, other)
+            self.checkers.add(cast("Dependency[bool]", other))
+        return self
 
-    def __iadd__(self, other: Self | RuleCheckerT) -> Self:
-        return self.__add__(other)
-
-    def __sub__(self, other: Self | RuleCheckerT) -> NoReturn:
+    def __sub__(self, other: object) -> NoReturn:
+        """禁止 sub"""
         raise RuntimeError("Subtraction operation between rules is not allowed.")
 
 
-ArgsT = TypeVar("T")
-ParamT = TypeVar("P")
-
-
-class RuleChecker(Generic[ArgsT]):
+class RuleChecker:
     """抽象基类，匹配消息规则。"""
 
     def __init__(self, rule: Rule) -> None:
@@ -151,12 +159,12 @@ class RuleChecker(Generic[ArgsT]):
         return cls
 
     @classmethod
-    def _rule_check(cls, *args: ArgsT, **kwargs) -> Callable[..., Awaitable[bool]]:
+    def _rule_check(cls, *args: Any, **kwargs: Any) -> Callable[..., Awaitable[bool]]:
         """默认实现检查方法，子类可覆盖。"""
-        return cls(*args, **kwargs)._check
+        return cls(*args, **kwargs)._check  # noqa: SLF001
 
     @classmethod
-    def Checker(cls, *args: ArgsT, **kwargs) -> bool:
+    def checker(cls, *args: Any, **kwargs: Any) -> bool:
         """默认实现检查方法的依赖注入方法，子类可覆盖。"""
         return Depends(cls._rule_check(*args, **kwargs), use_cache=False)
 
@@ -164,7 +172,7 @@ class RuleChecker(Generic[ArgsT]):
     async def _check(
         self,
         bot: "Bot",
-        event: Event,
+        event: Event[Any],
         state: StateT,
         global_state: GlobalStateT,
         stack: AsyncExitStack | None = None,
