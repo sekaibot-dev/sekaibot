@@ -1,6 +1,7 @@
 """CQHTTP 适配器消息。"""
 
-from typing import Literal, Self, override
+from typing import Literal, Self
+from typing_extensions import override
 
 from sekaibot.internal.message import Message, MessageSegment
 
@@ -44,7 +45,9 @@ class CQHTTPMessageSegment(MessageSegment["CQHTTPMessage"]):
         if self.type == "text":
             return escape(self.data.get("text", ""), escape_comma=False)
 
-        params = ",".join([f"{k}={escape(str(v))}" for k, v in self.data.items() if v is not None])
+        params = ",".join(
+            [f"{k}={escape(str(v))}" for k, v in self.data.items() if v is not None]
+        )
         return f"[CQ:{self.type}{',' if params else ''}{params}]"
 
     @classmethod

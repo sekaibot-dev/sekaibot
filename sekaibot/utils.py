@@ -77,7 +77,7 @@ _TypeT = TypeVar("_TypeT", bound=type[Any])
 _BaseModelT = TypeVar("_BaseModelT", bound=BaseModel)
 
 StrOrBytesPath = Union[str, bytes, os.PathLike[Any]]  # type alias  # noqa: UP007
-TreeType = dict[_T, Union[Any, "TreeType"]]
+TreeType = dict[_T, Union[Any, "TreeType[_T]"]]
 
 
 class ModulePathFinder(MetaPathFinder):

@@ -61,20 +61,6 @@ class StructLogHandler(logging.Handler):
         )
 
 
-"""
-structlog.configure(
-    processors=[
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.StackInfoRenderer(),
-        structlog.processors.format_exc_info,
-        structlog.processors.JSONRenderer(),  # JSON 格式日志
-    ],
-    wrapper_class=structlog.make_filtering_bound_logger(0),
-    context_class=dict,
-    logger_factory=structlog.PrintLoggerFactory(),
-)
-"""
-
 logger: "FilteringBoundLogger" = structlog.get_logger("nonebot")
 """NoneBot 日志记录器对象。"""
 

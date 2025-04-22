@@ -52,7 +52,7 @@ class Permission:
     async def __call__(
         self,
         bot: "Bot",
-        event: Event,  # type: ignore
+        event: Event[Any],  # type: ignore
         global_state: GlobalStateT | None = None,
         stack: AsyncExitStack | None = None,
         dependency_cache: dict[Any, Any] | None = None,
@@ -82,7 +82,7 @@ class Permission:
             is_passed = await solve_dependencies_in_bot(
                 checker,
                 bot=bot,
-                event=cast("Event[Any]", event),
+                event=event,
                 global_state=global_state,
                 use_cache=False,
                 stack=stack,
@@ -160,18 +160,18 @@ class PermissionChecker:
     @classmethod
     def _rule_check(cls, *args: Any, **kwargs: Any) -> Callable[..., Awaitable[bool]]:
         """默认实现检查方法，子类可覆盖。"""
-        return cls(*args, **kwargs)._check  # type: ignore
+        return cls(*args, **kwargs)._check
 
     @classmethod
     def Checker(cls, *args: Any, **kwargs: Any) -> bool:
         """默认实现检查方法的依赖注入方法，子类可覆盖。"""
-        return Depends(cls._rule_check(*args, **kwargs), use_cache=False)
+        return Depends(cls._rule_check(*args, **kwargs), use_cache=False)  # type: ignore
 
     @final
     async def _check(
         self,
         bot: "Bot",
-        event: Event,  # type: ignore
+        event: Event[Any],
         global_state: GlobalStateT,
         stack: AsyncExitStack | None = None,
         dependency_cache: dict[Any, Any] | None = None,

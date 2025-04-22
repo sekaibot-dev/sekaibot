@@ -37,9 +37,9 @@ from sekaibot.exceptions import (
 )
 from sekaibot.internal.event import Event
 from sekaibot.internal.message import BuildMessageType
+from sekaibot.internal.permission import Permission
+from sekaibot.internal.rule import Rule
 from sekaibot.log import logger
-from sekaibot.permission import Permission
-from sekaibot.rule import Rule
 from sekaibot.typing import (
     ConfigT,
     EventT,
@@ -622,7 +622,7 @@ class Node(Generic[EventT, NodeStateT, ConfigT]):
         if self.block:
             raise StopException
 
-        return exc
+        return exc  # type: ignore
 
     @final
     async def run(
@@ -643,6 +643,7 @@ class Node(Generic[EventT, NodeStateT, ConfigT]):
                 global_state=self.bot.global_state,
                 stack=stack,
             )
+        return None
 
     @final
     async def gather(

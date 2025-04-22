@@ -90,7 +90,7 @@ class StartsWith(RuleChecker):
     @classmethod
     def Param(cls) -> str | MessageSegment[Any]:
         """在依赖注入里获取检查器的数据。"""
-        return Depends(cls._param, use_cache=False)  # type: ignore
+        return Depends(cls._param, use_cache=False)
 
 
 class EndsWith(RuleChecker):

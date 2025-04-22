@@ -2,7 +2,8 @@
 # pyright: reportIncompatibleVariableOverride=false
 
 from copy import deepcopy
-from typing import TYPE_CHECKING, Any, Literal, get_args, get_origin, override
+from typing import TYPE_CHECKING, Any, Literal, get_args, get_origin
+from typing_extensions import override
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.fields import FieldInfo
@@ -12,7 +13,7 @@ from sekaibot.internal.event import Event as BaseEvent
 from .message import CQHTTPMessage
 
 if TYPE_CHECKING:
-    from . import CQHTTPAdapter  # noqa: F401
+    from . import CQHTTPAdapter
 
 
 class CQHTTPEvent(BaseEvent["CQHTTPAdapter"]):
@@ -27,8 +28,8 @@ class CQHTTPEvent(BaseEvent["CQHTTPAdapter"]):
     self_id: int
     post_type: str
 
-    @override
     def get_type(self) -> str:
+        """获取事件类型"""
         return self.post_type
 
     @override
@@ -165,7 +166,9 @@ class MessageEvent(CQHTTPEvent):
     """
 
     @model_validator(mode="before")
+    @classmethod
     def check_message(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """校验message"""
         if "message" in values:
             values["original_message"] = deepcopy(values["message"])
         return values
@@ -185,8 +188,8 @@ class MessageEvent(CQHTTPEvent):
 
     @override
     def get_session_id(self) -> str:
-        if hasattr(self, "group_id") and self.group_id:
-            return f"group_{self.group_id}_{self.get_user_id()}"
+        if group_id := getattr(self, "group_id", None):
+            return f"group_{group_id}_{self.get_user_id()}"
         return self.get_user_id()
 
     @override
@@ -239,8 +242,8 @@ class NoticeEvent(CQHTTPEvent):
 
     @override
     def get_session_id(self) -> str:
-        if hasattr(self, "group_id") and self.group_id:
-            return f"group_{self.group_id}_{self.get_user_id()}"
+        if group_id := getattr(self, "group_id", None):
+            return f"group_{group_id}_{self.get_user_id()}"
         return self.get_user_id()
 
 
@@ -385,7 +388,7 @@ class NotifyEvent(NoticeEvent):
     notice_type: Literal["notify"]
     sub_type: str
     user_id: int
-    group_id: int
+    group_id: int | None
 
     @override
     def get_user_id(self) -> str:
@@ -393,8 +396,8 @@ class NotifyEvent(NoticeEvent):
 
     @override
     def get_session_id(self) -> str:
-        if hasattr(self, "group_id") and self.group_id:
-            return f"group_{self.group_id}_{self.get_user_id()}"
+        if group_id := getattr(self, "group_id", None):
+            return f"group_{group_id}_{self.get_user_id()}"
         return self.get_user_id()
 
 
@@ -455,8 +458,8 @@ class RequestEvent(CQHTTPEvent):
 
     @override
     def get_session_id(self) -> str:
-        if hasattr(self, "group_id") and self.group_id:
-            return f"group_{self.group_id}_{self.get_user_id()}"
+        if group_id := getattr(self, "group_id", None):
+            return f"group_{group_id}_{self.get_user_id()}"
         return self.get_user_id()
 
     async def approve(self) -> dict[str, Any]:

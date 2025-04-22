@@ -170,7 +170,7 @@ class RuleChecker:
     @classmethod
     def Checker(cls, *args: Any, **kwargs: Any) -> bool:
         """默认实现检查方法的依赖注入方法，子类可覆盖。"""
-        return Depends(cls._rule_check(*args, **kwargs), use_cache=False)
+        return Depends(cls._rule_check(*args, **kwargs), use_cache=False)  # type: ignore
 
     @final
     async def _check(

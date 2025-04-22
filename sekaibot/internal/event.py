@@ -9,9 +9,8 @@ from typing_extensions import override
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from sekaibot.internal.message import Message
 from sekaibot.typing import AdapterT
-
-from .message import Message
 
 __all__ = ["Event", "EventHandleOption"]
 

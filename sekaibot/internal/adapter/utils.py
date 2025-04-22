@@ -4,7 +4,7 @@
 """
 
 from abc import ABCMeta, abstractmethod
-from typing import Literal
+from typing import Generic, Literal
 from typing_extensions import override
 
 import aiohttp
@@ -179,7 +179,9 @@ class WebSocketServerAdapter(Adapter[EventT, ConfigT], metaclass=ABCMeta):  # ty
         """处理 WebSocket 响应。"""
 
 
-class WebSocketAdapter(Adapter[EventT, ConfigT], metaclass=ABCMeta):  # type: ignore
+class WebSocketAdapter(
+    Adapter[EventT, ConfigT], Generic[EventT, ConfigT], metaclass=ABCMeta
+):  # type: ignore
     """WebSocket 适配器示例。
 
     同时支持 WebSocket 客户端和服务端。

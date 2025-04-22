@@ -216,4 +216,3 @@ class MainConfig(ConfigModel):
     plugin: PluginConfig = PluginConfig()
     rule: RuleConfig = RuleConfig()
     permission: PermissionConfig = PermissionConfig()
-

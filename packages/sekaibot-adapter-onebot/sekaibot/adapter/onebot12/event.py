@@ -1,9 +1,11 @@
 """OneBot 适配器事件。"""
+
 # pyright: reportIncompatibleVariableOverride=false
 
 from copy import deepcopy
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Literal, get_args, get_origin, override
+from typing import TYPE_CHECKING, Any, Literal, get_args, get_origin
+from typing_extensions import override
 
 from pydantic import BaseModel, ConfigDict, model_validator
 from pydantic.fields import FieldInfo
@@ -13,7 +15,7 @@ from sekaibot.internal.event import Event as BaseEvent
 from .message import OneBotMessage
 
 if TYPE_CHECKING:
-    from . import OneBotAdapter  # noqa: F401
+    from . import OneBotAdapter
 
 
 class Event(BaseEvent["OneBotAdapter"]):
@@ -152,7 +154,7 @@ class MetaEvent(OneBotEvent):
 
     def get_message(self) -> None:
         """获取事件消息内容的方法。"""
-        return None
+        return
 
     def get_plain_text(self) -> str:
         """获取消息纯文本的方法。
@@ -240,13 +242,14 @@ class PrivateMessageEvent(MessageEvent):
 
     @override
     def get_event_description(self) -> str:
-        return (
-            f"Message {self.message_id} from {self.user_id} "
-            + repr(self.original_message)
+        return f"Message {self.message_id} from {self.user_id} " + repr(
+            self.original_message
         )
+
     @override
     def get_user_id(self) -> str:
         return f"private:{self.user_id}"
+
 
 class GroupMessageEvent(MessageEvent):
     """群消息"""
@@ -277,7 +280,7 @@ class ChannelMessageEvent(MessageEvent):
     def get_event_description(self) -> str:
         return (
             f"Message {self.message_id} from {self.user_id}@"
-            f"[guild:{self.guild_id}, channel:{self.channel_id}] {repr(self.original_message)}"
+            f"[guild:{self.guild_id}, channel:{self.channel_id}] {self.original_message!r}"
         )
 
     @override

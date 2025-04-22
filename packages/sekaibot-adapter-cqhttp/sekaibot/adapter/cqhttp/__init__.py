@@ -10,7 +10,8 @@ import sys
 import time
 from collections.abc import Awaitable, Callable
 from functools import partial
-from typing import Any, ClassVar, override
+from typing import Any, ClassVar
+from typing_extensions import override
 
 import aiohttp
 import anyio
@@ -48,7 +49,7 @@ for _, model in inspect.getmembers(event, inspect.isclass):
         DEFAULT_EVENT_MODELS[model.get_event_type()] = model
 
 
-class CQHTTPAdapter(WebSocketAdapter[CQHTTPEvent, Config]):
+class CQHTTPAdapter(WebSocketAdapter[CQHTTPEvent, Config]):  # type: ignore
     """CQHTTP 协议适配器。"""
 
     name = "cqhttp"
@@ -227,7 +228,7 @@ class CQHTTPAdapter(WebSocketAdapter[CQHTTPEvent, Config]):
             event.to_me = True
         else:
 
-            def _is_at_me_seg(segment: CQHTTPMessageSegment):
+            def _is_at_me_seg(segment: CQHTTPMessageSegment) -> bool:
                 return segment.type == "at" and str(segment.data.get("qq", "")) == str(
                     event.self_id
                 )
@@ -254,7 +255,7 @@ class CQHTTPAdapter(WebSocketAdapter[CQHTTPEvent, Config]):
                 if (
                     last_msg_seg.type == "text"
                     and not last_msg_seg.data["text"].strip()
-                    and len(event.message) >= 2
+                    and len(event.message) >= 2  # noqa: PLR2004
                 ):
                     i -= 1
                     last_msg_seg = event.message[i]
@@ -364,7 +365,7 @@ class CQHTTPAdapter(WebSocketAdapter[CQHTTPEvent, Config]):
         raise ApiTimeout
 
     @override
-    async def send(
+    async def send(  # type: ignore
         self,
         event: CQHTTPEvent,
         message: BuildMessageType[CQHTTPMessageSegment],

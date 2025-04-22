@@ -5,7 +5,16 @@
 
 import os
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, ClassVar, Generic, Self, final
+from collections.abc import Awaitable, Callable
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Generic,
+    Self,
+    final,
+    overload,
+)
 
 import anyio
 from exceptiongroup import catch
@@ -14,7 +23,7 @@ from sekaibot.exceptions import MockApiException
 from sekaibot.internal.event import Event
 from sekaibot.internal.message import BuildMessageType, MessageSegmentT
 from sekaibot.log import logger
-from sekaibot.typing import CalledAPIHook, CallingAPIHook, ConfigT
+from sekaibot.typing import CalledAPIHook, CallingAPIHook, ConfigT, EventT
 from sekaibot.utils import flatten_exception_group, handle_exception, is_config_class
 
 if TYPE_CHECKING:
@@ -27,7 +36,7 @@ if os.getenv("SEKAIBOT_DEV") == "1":  # pragma: no cover
     __import__("pkg_resources").declare_namespace(__name__)
 
 
-class Adapter(ABC, Generic[MessageSegmentT, ConfigT]):
+class Adapter(ABC, Generic[EventT, ConfigT]):
     """协议适配器基类。
 
     Attributes:
@@ -90,7 +99,8 @@ class Adapter(ABC, Generic[MessageSegmentT, ConfigT]):
                 retries += 1
             else:
                 logger.warning(
-                    "Adapter run failed after retries", adapter_name=self.__class__.__name__
+                    "Adapter run failed after retries",
+                    adapter_name=self.__class__.__name__,
                 )
                 break
 
@@ -154,12 +164,16 @@ class Adapter(ABC, Generic[MessageSegmentT, ConfigT]):
                 if not excs:
                     return
                 if len(excs) > 1:
-                    logger.warning("Multiple hooks want to mock API result. Use the first one.")
+                    logger.warning(
+                        "Multiple hooks want to mock API result. Use the first one."
+                    )
 
                 skip_calling_api = True
                 result = excs[0].result
 
-                logger.debug(f"Calling API {api} is cancelled. Return {result!r} instead.")
+                logger.debug(
+                    f"Calling API {api} is cancelled. Return {result!r} instead."
+                )
 
             with catch(
                 {
@@ -170,8 +184,8 @@ class Adapter(ABC, Generic[MessageSegmentT, ConfigT]):
                 }
             ):
                 async with anyio.create_task_group() as tg:
-                    for hook in self._calling_api_hooks:
-                        tg.start_soon(hook, self, api, params)
+                    for calling_hook in self._calling_api_hooks:
+                        tg.start_soon(calling_hook, self, api, params)
 
         if not skip_calling_api:
             try:
@@ -195,11 +209,15 @@ class Adapter(ABC, Generic[MessageSegmentT, ConfigT]):
                 if not excs:
                     return
                 if len(excs) > 1:
-                    logger.warning("Multiple hooks want to mock API result. Use the first one.")
+                    logger.warning(
+                        "Multiple hooks want to mock API result. Use the first one."
+                    )
 
                 result = excs[0].result
                 exception = None
-                logger.debug(f"Calling API {api} result is mocked. Return {result} instead.")
+                logger.debug(
+                    f"Calling API {api} result is mocked. Return {result} instead."
+                )
 
             with catch(
                 {
@@ -210,8 +228,8 @@ class Adapter(ABC, Generic[MessageSegmentT, ConfigT]):
                 }
             ):
                 async with anyio.create_task_group() as tg:
-                    for hook in self._called_api_hooks:
-                        tg.start_soon(hook, self, exception, api, params, result)
+                    for called_hook in self._called_api_hooks:
+                        tg.start_soon(called_hook, self, exception, api, params, result)
 
         if exception:
             raise exception
@@ -232,6 +250,63 @@ class Adapter(ABC, Generic[MessageSegmentT, ConfigT]):
             kwargs: 任意额外参数
         """
         raise NotImplementedError
+
+    @overload
+    async def get(
+        self,
+        func: Callable[[EventT], bool | Awaitable[bool]] | None = None,
+        *,
+        event_type: None = None,
+        max_try_times: int | None = None,
+        timeout: float | None = None,
+    ) -> EventT: ...
+
+    @overload
+    async def get(
+        self,
+        func: Callable[[Event[Any]], bool | Awaitable[bool]] | None = None,
+        *,
+        event_type: type[Event[Any]],
+        max_try_times: int | None = None,
+        timeout: float | None = None,
+    ) -> Event[Any]: ...
+
+    @final
+    async def get(
+        self,
+        func: Callable[[Any], bool | Awaitable[bool]] | None = None,
+        *,
+        event_type: Any = None,
+        max_try_times: int | None = None,
+        timeout: float | None = None,
+    ) -> Event[Any]:
+        """获取满足指定条件的的事件，协程会等待直到适配器接收到满足条件的事件、超过最大事件数或超时。
+
+        类似 `Bot` 类的 `get()` 方法，但是隐含了判断产生事件的适配器是本适配器。
+        等效于 `Bot` 类的 `get()` 方法传入 adapter_type 为本适配器类型。
+
+        Args:
+            func: 协程或者函数，函数会被自动包装为协程执行。
+                要求接受一个事件作为参数，返回布尔值。
+                当协程返回 `True` 时返回当前事件。
+                当为 `None` 时相当于输入对于任何事件均返回真的协程，即返回适配器接收到的下一个事件。
+            event_type: 当指定时，只接受指定类型的事件，先于 func 条件生效。默认为 `None`。
+            max_try_times: 最大事件数。
+            timeout: 超时时间。
+
+        Returns:
+            返回满足 func 条件的事件。
+
+        Raises:
+            GetEventTimeout: 超过最大事件数或超时。
+        """
+        return await self.bot.manager.get(
+            func,
+            event_type=event_type,
+            adapter_type=type(self),
+            max_try_times=max_try_times,
+            timeout=timeout,
+        )
 
     @classmethod
     def calling_api_hook(cls, func: CallingAPIHook) -> CallingAPIHook:

@@ -34,7 +34,7 @@ MessageT = TypeVar("MessageT", bound="Message[Any]")
 MessageSegmentT = TypeVar("MessageSegmentT", bound="MessageSegment[Any]")
 
 # 可以转化为 Message 的类型
-BuildMessageType = Iterable[MessageSegmentT] | MessageSegmentT | str | Mapping[str, Any]
+BuildMessageType = Iterable[MessageSegmentT] | MessageSegmentT | str | Mapping[str, Any]  # type: ignore
 
 
 class Message(ABC, list[MessageSegmentT]):
@@ -126,10 +126,10 @@ class Message(ABC, list[MessageSegmentT]):
         """
         if isinstance(other, str):
             return str(self) == other
-        if isinstance(
-            other, list[MessageSegmentT] | MessageSegmentT | str | Mapping[str, Any]
-        ):
-            return super().__eq__(self.__class__(other))
+        if isinstance(other, Iterable | MessageSegment | Mapping):
+            return super().__eq__(
+                self.__class__(cast("BuildMessageType[MessageSegmentT]", other))
+            )
         return False
 
     @override
@@ -483,7 +483,7 @@ class MessageSegment(ABC, BaseModel, Mapping[str, Any], Generic[MessageT]):
     """
 
     type: str
-    data: dict[str, Any] = Field(default_factory=dict)
+    data: dict[str, Any] = Field(default_factory=dict[str, Any])
 
     @classmethod
     @abstractmethod

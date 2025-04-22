@@ -15,7 +15,7 @@ import re
 import shlex
 from argparse import Action, ArgumentError, Namespace
 from argparse import ArgumentParser as ArgParser
-from collections.abc import Hashable, Sequence
+from collections.abc import Hashable, Sequence  # pylint: disable=unused-import
 from contextvars import ContextVar
 from gettext import gettext
 from itertools import chain, product
@@ -58,10 +58,9 @@ from sekaibot.exceptions import ParserExit
 from sekaibot.internal.event import Event
 from sekaibot.internal.message import Message, MessageSegment
 from sekaibot.internal.rule import Rule
+from sekaibot.internal.rule._counter import Counter
 from sekaibot.log import logger
 from sekaibot.typing import GlobalStateT, NameT, StateT
-
-from ._counter import Counter
 
 if TYPE_CHECKING:
     from sekaibot.bot import Bot
@@ -412,7 +411,7 @@ class WordFilterRule:
 
             text += "".join(lazy_pinyin(text, style=Style.FIRST_LETTER))
 
-        if self._automaton:  # type: ignore
+        if self._automaton:
             return not any(True for _, (_, word) in self._automaton.iter(text))  # type: ignore
 
         return not any(word in text for word in self.words)
@@ -738,7 +737,7 @@ class ArgumentParser(ArgParser):
 
     if TYPE_CHECKING:
 
-        @overload
+        @overload  # type: ignore
         def parse_known_args(
             self,
             args: Sequence[str | MessageSegment[Any]] | None = None,
@@ -782,11 +781,11 @@ class ArgumentParser(ArgParser):
         args: Sequence[str | MessageSegment[Any]] | None = None,
         namespace: T | None = None,
     ) -> Namespace | T:
-        result, argv = self.parse_known_args(args, namespace)
+        result, argv = self.parse_known_args(args, namespace)  # pylint: disable=assignment-from-no-return,unpacking-non-sequence
         if argv:
             msg = gettext("unrecognized arguments: %s")
             self.error(msg % " ".join(map(str, argv)))
-        return cast("Namespace | T", result)
+        return cast("Namespace | T", result)  # type: ignore
 
     @override
     def _parse_optional(
