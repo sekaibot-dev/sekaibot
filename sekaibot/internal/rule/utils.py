@@ -608,7 +608,7 @@ class TrieRule:
             return prefix
 
         message = event.get_message()
-        message_seg: MessageSegment[Any] = message[0]
+        message_seg = cast("MessageSegment[Any]", message[0])
         if message_seg.is_text():
             segment_text = str(message_seg).lstrip()
             if pf := self.prefix.longest_prefix(segment_text):

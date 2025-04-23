@@ -19,6 +19,7 @@ import yaml
 from exceptiongroup import catch
 from pydantic import ValidationError, create_model
 
+from sekaibot.adapter import Adapter
 from sekaibot.config import (
     AdapterConfig,
     ConfigModel,
@@ -28,7 +29,6 @@ from sekaibot.config import (
 )
 from sekaibot.dependencies import solve_dependencies
 from sekaibot.exceptions import LoadModuleError, SkipException
-from sekaibot.internal.adapter import Adapter
 from sekaibot.internal.node import Node, NodeLoadType
 from sekaibot.internal.node.manager import NodeManager
 from sekaibot.log import configure_logging, logger
@@ -753,9 +753,7 @@ class Bot:
         raise LookupError(f'Can not find adapter named "{adapter}"')
 
     @classmethod
-    def require_plugin(
-        cls, plugin_class: type[Plugin[Any]]
-    ) -> None:
+    def require_plugin(cls, plugin_class: type[Plugin[Any]]) -> None:
         """声明依赖插件。
 
         Args:

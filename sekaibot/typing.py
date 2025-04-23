@@ -7,8 +7,8 @@ from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any, TypeVar
 
 if TYPE_CHECKING:
+    from sekaibot.adapter import Adapter
     from sekaibot.config import ConfigModel
-    from sekaibot.internal.adapter import Adapter
     from sekaibot.internal.event import Event
     from sekaibot.internal.node import Node
 

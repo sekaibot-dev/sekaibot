@@ -1,0 +1,36 @@
+[project]
+name = "sekaibot-plugin-apscheduler"
+version = "0.1.0"
+description = "APScheduler plugin for SekaiBot."
+authors = [
+    {name = "Kotodama",email = "2682064633@qq.com"}
+]
+license = { text = "MIT" }
+readme = "README.md"
+keywords = ["bot", "chatbot", "scheduling", "apscheduler"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: AsyncIO",
+    "Framework :: Robot Framework",
+    "Framework :: Robot Framework :: Library",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Communications :: Chat",
+]
+requires-python = ">=3.9"
+dependencies = ["sekaibot==0.1.0", "apscheduler>=3.7,<4.0"]
+
+[project.urls]
+Repository = "https://github.com/sekaibot-dev/sekaibot"
+
+[tool.uv.sources]
+sekaibot = { workspace = true }
+
+[tool.hatch.build]
+packages = ["sekaibot"]
+exclude = ["sekaibot/__init__.py", "sekaibot/adapter/__init__.py"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

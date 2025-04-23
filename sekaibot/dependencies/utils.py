@@ -146,7 +146,7 @@ async def _execute_class(
     )
     for key, value in values.items():
         setattr(depend_obj, key, value)
-    depend_obj.__init__()
+    depend_obj.__init__()  # pylint: disable=unnecessary-dunder-call
 
     if isinstance(depend_obj, AbstractAsyncContextManager):
         if stack is None:
@@ -240,5 +240,5 @@ async def solve_dependencies(
     else:
         raise TypeError(f"Dependent {dependent} is not a class, function, or generator")
 
-    dependency_cache[dependent] = depend
-    return depend  # pyright: ignore
+    dependency_cache[dependent] = depend  # pylint: disable=possibly-used-before-assignment
+    return depend

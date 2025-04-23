@@ -11,6 +11,7 @@ from anyio.abc import TaskStatus
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 from exceptiongroup import catch
 
+from sekaibot.adapter import Adapter
 from sekaibot.consts import JUMO_TO_TARGET, MAX_TIMEOUT
 from sekaibot.dependencies import solve_dependencies_in_bot
 from sekaibot.exceptions import (
@@ -21,7 +22,6 @@ from sekaibot.exceptions import (
     SkipException,
     StopException,
 )
-from sekaibot.internal.adapter import Adapter
 from sekaibot.internal.event import Event, EventHandleOption
 from sekaibot.internal.node import Node
 from sekaibot.log import logger

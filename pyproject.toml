@@ -31,8 +31,10 @@ dependencies = [
     "structlog==25.2.0",
     "typing_extensions==4.13.2",
 ]
+
 [project.urls]
 Repository = "https://github.com/sekaibot-dev/sekaibot"
+
 [project.optional-dependencies]
 cqhttp = ["sekaibot-adapter-cqhttp"]
 onebot = ["sekaibot-adapter-onebot"]
@@ -110,7 +112,7 @@ ignore = [
     "N802",
     "SLF001",
 ]
-allowed-confusables = ["，", "：", "！"]
+allowed-confusables = ["，", "：", "！", "（", "）"]
 
 [tool.ruff.lint.flake8-builtins]
 builtins-ignorelist = ["id", "type"]
@@ -142,9 +144,13 @@ keep-runtime-typing = true
 
 [tool.pyright]
 ignore = ["example/nodes"]
+exclude = ["**/.conda", "**/.venv", "**/__pycache__"]
 pythonVersion = "3.11"
 pythonPlatform = "All"
 typeCheckingMode = "strict"
+python.linting.enabled = false
+python.linting.mypyEnabled = false
+python.linting.pylintEnabled = false
 reportUnnecessaryIsInstance = false
 reportCallInDefaultInitializer = true
 reportImplicitOverride = true
@@ -154,11 +160,24 @@ reportShadowedImports = true
 reportUninitializedInstanceVariable = false
 reportPrivateUsage = false
 extraPaths = [
-    "test", "test/test_utils",
+    "test", 
+    "test/test_utils",
     "packages/sekaibot-adapter-cqhttp",
     "packages/sekaibot-adapter-onebot",
     "packages/sekaibot-plugin-apscheduler",
 ]
+
+[[tool.pyright.executionEnvironments]]
+root = "packages/sekaibot-adapter-cqhttp"
+extraPaths = ["../../sekaibot"]
+
+[[tool.pyright.executionEnvironments]]
+root = "packages/sekaibot-adapter-onebot"
+extraPaths = ["../../sekaibot"]
+
+[[tool.pyright.executionEnvironments]]
+root = "sekaibot-plugin-apscheduler"
+extraPaths = ["../../sekaibot"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -212,6 +231,13 @@ disable = [
 py-version = "3.11"
 load-plugins = ["pylint_pydantic"]
 source-roots = ["."]
+init-hook = """
+import sys
+sys.path.insert(0, './sekaibot')
+sys.path.insert(0, './packages/sekaibot-adapter-cqhttp')
+sys.path.insert(0, './packages/sekaibot-plugin-apscheduler')
+sys.path.insert(0, './packages/sekaibot-adapter-onebot')
+"""
 
 [tool.pylint.variables]
 allowed-redefined-builtins = ["id", "type"]
@@ -222,12 +248,14 @@ testpaths = "tests"
 addopts = "--cov=sekaibot --cov-report=term-missing"
 
 [tool.coverage.run]
-omit = ["sekaibot/internal/adapter/utils.py"]
+omit = ["sekaibot/adapter/utils.py"]
 
+[tool.hatch.build]
+packages = ["sekaibot", "sekaibot/py.typed"]
 
 [tool.hatch.build.targets.sdist]
-include = ["/README.md", "/sekaibot"]
+include = ["/README.md", "/sekaibot", "sekaibot/py.typed"]
 
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"

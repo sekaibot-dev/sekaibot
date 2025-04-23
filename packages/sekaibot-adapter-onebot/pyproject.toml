@@ -25,11 +25,11 @@ dependencies = ["sekaibot==0.1.0"]
 Repository = "https://github.com/sekaibot-dev/sekaibot"
 
 [tool.uv.sources]
-alicebot = { workspace = true }
+sekaibot = { workspace = true }
 
 [tool.hatch.build]
 packages = ["sekaibot"]
-exclude = ["sekaibot/__init__.py"]
+exclude = ["sekaibot/__init__.py", "sekaibot/adapter/__init__.py"]
 
 [build-system]
 requires = ["hatchling"]

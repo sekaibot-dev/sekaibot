@@ -5,9 +5,6 @@
     "source.fixAll": "explicit",
   },
   "python.linting.enabled": true,
-  "python.linting.flake8Enabled": false,
-  "python.linting.pylintEnabled": false,
-  "python.linting.mypyEnabled": false,
   "[jsonc]": {
     "editor.defaultFormatter": "vscode.json-language-features"
   },

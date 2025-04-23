@@ -37,7 +37,7 @@ MessageSegmentT = TypeVar("MessageSegmentT", bound="MessageSegment[Any]")
 BuildMessageType = Iterable[MessageSegmentT] | MessageSegmentT | str | Mapping[str, Any]  # type: ignore
 
 
-class Message(ABC, list[MessageSegmentT]):
+class Message(ABC, list[MessageSegmentT], Generic[MessageSegmentT]):
     """消息。
 
     本类是 `list` 的子类，并重写了 `__init__()` 方法，

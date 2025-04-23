@@ -171,6 +171,7 @@ cython_debug/
 .pypirc
 test/.run.bat
 run.bat
+.ruff_cache/
 
 history_596488203.json
 history_788499440.json

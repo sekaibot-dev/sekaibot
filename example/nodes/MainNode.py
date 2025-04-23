@@ -3,7 +3,6 @@
 import random
 from typing import Any
 
-from _randsent import generate_sentence
 from _sound import get_character_name_list_text, parse_character_command
 
 from sekaibot import Node
@@ -29,14 +28,13 @@ from sekaibot.rule import Keywords, StartsWith
     "香氤",
 )
 @SuperUser()
-class AutoReply(Node[GroupMessageEvent, dict, Any]):
+class AutoReply(Node[GroupMessageEvent, dict, Any]):  # type: ignore
     """Hello, World! 示例节点。"""
 
     priority = 0
     zb = Keywords.Param()
-    block = True
 
-    async def handle(self):
+    async def handle(self) -> None:
         keyw = self.zb[0] if self.zb else "蒸"
         if "sound" not in self.node_state:
             self.node_state["sound"] = False
@@ -110,19 +108,9 @@ class AutoReply(Node[GroupMessageEvent, dict, Any]):
                 await self.reply(text)
 
 
-@StartsWith("/唐")
-@SuperUser()
-class RandomSens(Node[MessageEvent, dict, Any]):
-    priority = 0
-    block = True
-
-    async def handle(self):
-        await self.reply(generate_sentence())
-
-
 @Keywords("芽", "老婆", "我", "妻子")
 @User("413966479")
-class YanCheng(Node[GroupMessageEvent, dict, Any]):
+class YanCheng(Node[GroupMessageEvent, dict, Any]):  # type: ignore
     priority = 0
     block = True
 

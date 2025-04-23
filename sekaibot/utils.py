@@ -45,7 +45,7 @@ from sekaibot.log import logger
 from sekaibot.typing import EventT
 
 if TYPE_CHECKING:
-    from sekaibot.internal.adapter import Adapter
+    from sekaibot.adapter import Adapter
     from sekaibot.internal.event import Event
 
 __all__ = [

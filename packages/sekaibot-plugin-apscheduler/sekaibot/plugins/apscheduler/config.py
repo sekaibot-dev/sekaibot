@@ -1,3 +1,7 @@
+"""SekaiBot APScheduler 插件配置"""
+
+from typing import Any
+
 from pydantic import Field
 
 from sekaibot.config import ConfigModel
@@ -5,6 +9,7 @@ from sekaibot.config import ConfigModel
 
 class APSchedulerConfig(ConfigModel):
     """Scheduler 配置模型。
+
     Attributes:
         __config_name__: 配置名称。
         apscheduler_autostart: 是否自动启动调度器。
@@ -16,6 +21,6 @@ class APSchedulerConfig(ConfigModel):
 
     apscheduler_autostart: bool = True
     apscheduler_log_level: int = 30
-    apscheduler_config: dict = Field(
+    apscheduler_config: dict[Any, Any] = Field(
         default_factory=lambda: {"apscheduler.timezone": "Asia/Shanghai"}
     )

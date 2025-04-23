@@ -19,7 +19,7 @@ from aiohttp import web
 from anyio.lowlevel import checkpoint
 from pydantic import TypeAdapter
 
-from sekaibot.internal.adapter.utils import WebSocketAdapter
+from sekaibot.adapter.utils import WebSocketAdapter
 from sekaibot.internal.message import BuildMessageType
 from sekaibot.log import logger
 from sekaibot.utils import PydanticEncoder

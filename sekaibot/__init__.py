@@ -12,10 +12,10 @@
 - `Depends` => [`sekaibot.dependencies.Depends`](./dependencies#Depends)
 """
 
+from sekaibot.adapter import Adapter
 from sekaibot.bot import Bot
 from sekaibot.config import ConfigModel
 from sekaibot.dependencies import Depends
-from sekaibot.internal.adapter import Adapter
 from sekaibot.internal.event import Event
 from sekaibot.internal.node import Node
 from sekaibot.plugin import Plugin
