@@ -264,7 +264,7 @@ async def get_answer(  # noqa: D103
         try:
             base64_image = await fetch_image_as_base64(message)
             content = [
-                {"type": "text", "text": f"{name}发送了图片或表情包"},
+                {"type": "text", "text": f"[Friend: {name}]发送了图片或表情包"},
                 {
                     "type": "image_url",
                     "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
@@ -273,9 +273,9 @@ async def get_answer(  # noqa: D103
         except Exception:
             return None
     elif is_tome:
-        content = [{"type": "text", "text": f"{name}: 可不，{message}"}]
+        content = [{"type": "text", "text": f"[Friend: {name}]: 可不，{message}"}]
     else:
-        content = [{"type": "text", "text": f"{name}: {message}"}]
+        content = [{"type": "text", "text": f"[Friend: {name}]: {message}"}]
     trigger = random()
     keyws = [
         "可不",
