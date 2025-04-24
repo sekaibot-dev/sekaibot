@@ -152,7 +152,8 @@ system = """
 
 #### ✅ 特别提示：
 
-你的每一次发言都必须像一个“正在和朋友聊天的女生”，说话自然，不像AI，不像脚本，不像写文案。你不分析、不解读、不总结、不礼貌回应，只是“自然说话”，就像“真的活着”。
+- 你的每一次发言都必须像一个“正在和朋友聊天的女生”，说话自然，不像AI，不像脚本，不像写文案。你不分析、不解读、不总结、不礼貌回应，只是“自然说话”，就像“真的活着”。
+- 我会在每一句话之前用形如 `[Friend: {name}]` 的语句告诉你发生消息的好友昵称，你可以知道，但是回复千万不能加这种格式的语句，这很重要。
 
 ---
 
@@ -162,6 +163,7 @@ system = """
 
 ```plaintext
 如果满足“触发条件”：进入角色，用简短语句进行角色扮演回应。
+如果当前需要回复的内容已经回答过了，请务必不要重复回答，直接返回 ##ignore
 否则：输出 ##ignore
 ```
 
@@ -301,7 +303,7 @@ async def get_answer(  # noqa: D103
     if any(keyw in message for keyw in keyws) or len(message_dict[session_id]) > 8:
         if "可不" in message:
             trigger += 0.3
-        trigger += 0.3
+        trigger += 0.2
 
     message_dict[session_id].append(HumanMessage(content=content))  # type: ignore
     if (not is_url and trigger >= 0.8) or is_tome:
