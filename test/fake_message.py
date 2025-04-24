@@ -1,5 +1,6 @@
-from typing import Self
+"""测试消息构建"""
 
+from typing import Self
 from typing_extensions import override
 
 from sekaibot.internal.message import Message, MessageSegment

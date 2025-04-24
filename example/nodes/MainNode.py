@@ -2,13 +2,14 @@
 
 import random
 from typing import Any
+from typing_extensions import override
 
 from _sound import get_character_name_list_text, parse_character_command
 
 from sekaibot import Node
-from sekaibot.adapter.cqhttp.event import GroupMessageEvent, MessageEvent
-from sekaibot.permission import SuperUser, User
-from sekaibot.rule import Keywords, StartsWith
+from sekaibot.adapter.cqhttp.event import GroupMessageEvent
+from sekaibot.permission import User
+from sekaibot.rule import Keywords
 
 
 @Keywords(
@@ -17,23 +18,20 @@ from sekaibot.rule import Keywords, StartsWith
     "/角色列表",
     "/角色",
     "蒸",
-    "松泽",
-    "sz",
     "lrc",
+    "松泽",
     "思灿",
-    "sc",
-    "yl",
     "超",
-    "xy",
     "香氤",
 )
-@SuperUser()
+@User("group_596488203", "group_1011357049")
 class AutoReply(Node[GroupMessageEvent, dict, Any]):  # type: ignore
     """Hello, World! 示例节点。"""
 
     priority = 0
     zb = Keywords.Param()
 
+    @override
     async def handle(self) -> None:
         keyw = self.zb[0] if self.zb else "蒸"
         if "sound" not in self.node_state:
@@ -57,10 +55,6 @@ class AutoReply(Node[GroupMessageEvent, dict, Any]):  # type: ignore
                 await self.reply("切换失败，请检查", at_sender=True)
         else:
             keyw = "林睿晨" if keyw == "lrc" else keyw
-            keyw = "香氤" if keyw == "xy" else keyw
-            keyw = "松泽" if keyw == "sz" else keyw
-            keyw = "思灿" if keyw == "sc" else keyw
-            keyw = "Kotodama" if keyw == "yl" else keyw
             text = random.choice(  # noqa: S311
                 (
                     "{keyw}鞭好粗",
@@ -107,63 +101,21 @@ class AutoReply(Node[GroupMessageEvent, dict, Any]):  # type: ignore
             else:
                 await self.reply(text)
 
+    @override
+    async def rule(self) -> bool:
+        return str(self.event.group_id) != "788499440"
+
 
 @Keywords("芽", "老婆", "我", "妻子")
 @User("413966479")
 class YanCheng(Node[GroupMessageEvent, dict, Any]):  # type: ignore
+    """言承"""
     priority = 0
     block = True
 
     keyw = Keywords.Param()
 
-    async def handle(self):
+    @override
+    async def handle(self) -> None:
         if len(self.keyw) > 1 and "芽" in self.keyw:
             await self.reply("理芽不是言承的……！", at_sender=True)
-
-
-'''class HelloWorldNode1(Node):
-    """Hello, World! 示例节点。"""
-
-    scheduler = SchedulerArg()
-
-    parent = "HelloWorldNode"
-    priority = 5
-    
-    async def handle(self):
-        def a(event):
-            print("a", event)
-
-        self.scheduler.add_job(a, trigger="interval", seconds=5, args=[self.event])
-
-    async def rule(self):
-        # result = await self.run(StartsWith._rule_check("Hello, World"))
-        return True
-
-
-class HelloWorldNode2(Node[Event | BEvent, str, dict]):
-    """Hello, World! 示例节点。"""
-
-    parent = "HelloWorldNode"
-    priority = 2
-    # B: _BNode = Depends()
-
-    async def handle(self):
-        pass
-        # self.node_state = "HelloWorldNode2"
-        # self.B.main()
-
-    async def rule(self):
-        return True
-
-
-class HelloWorldNode1_1(Node):
-    """Hello, World! 示例节点。"""
-
-    parent = "HelloWorldNode1"
-    priority = 5
-
-    async def handle(self):
-        return None
-
-    async def rule(self):
-        return True'''

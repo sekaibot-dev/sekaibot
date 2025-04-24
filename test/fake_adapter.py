@@ -1,10 +1,12 @@
+"""SekaiBot 测试适配器构建"""
+
 import inspect
 from collections.abc import Awaitable, Callable
 from typing import Any, Generic
+from typing_extensions import override
 
 import anyio
 from anyio.lowlevel import checkpoint
-from typing_extensions import override
 
 from sekaibot import Adapter, Event, Node
 from sekaibot.typing import ConfigT, StateT
@@ -43,17 +45,18 @@ class FakeAdapter(Adapter[Event[Any], None]):
         self.bot.shutdown()
 
     @override
-    async def _call_api(self, api, **params):
+    async def _call_api(self, api: str, **params: Any) -> None:
         pass
 
     @override
-    async def send(self, event, message, **kwargs):
+    async def send(self, event: Event[Any], message: Any, **kwargs: Any) -> None:
         pass
 
 
 def fake_adapter_class_factory(
     *event_factories: EventFactory, handle_get: bool = True
 ) -> type[FakeAdapter]:
+    """获取自动投放 Event 的测试适配器。"""
     return type(
         "FakeAdapter",
         (FakeAdapter,),
@@ -62,6 +65,8 @@ def fake_adapter_class_factory(
 
 
 class FakeMessageEvent(Event[FakeAdapter]):
+    """用于测试的事件。"""
+
     message: str = "test"
 
     @override
@@ -69,27 +74,30 @@ class FakeMessageEvent(Event[FakeAdapter]):
         return self.message
 
     @override
-    def get_event_description(self):
+    def get_event_description(self) -> str:
         return self.message
 
     @override
-    def get_message(self):
+    def get_message(self) -> str:  # type: ignore
         return self.message
 
     @override
-    def get_session_id(self):
+    def get_session_id(self) -> str:
         return "session_id"
 
     @override
-    def get_user_id(self):
+    def get_user_id(self) -> str:
         return "user_id"
 
     @override
-    def is_tome(self):
+    def is_tome(self) -> bool:
         return True
 
 
-def fake_message_event_factor(adapter: FakeAdapter, message: str = "test") -> FakeMessageEvent:
+def fake_message_event_factor(
+    adapter: FakeAdapter, message: str = "test"
+) -> FakeMessageEvent:
+    """获取注入好的测试事件"""
     return FakeMessageEvent(adapter=adapter, type="message", message=message)
 
 
@@ -97,6 +105,7 @@ class BaseTestNode(
     Generic[StateT, ConfigT],
     Node[FakeMessageEvent, StateT, ConfigT],
 ):
+    """测试节点"""
     @override
     async def handle(self) -> None:
         pass

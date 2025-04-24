@@ -168,7 +168,7 @@ class Adapter(ABC, Generic[EventT, ConfigT]):
                     )
 
                 skip_calling_api = True
-                result = excs[0].result # type: ignore
+                result = excs[0].result  # type: ignore
 
                 logger.debug(
                     f"Calling API {api} is cancelled. Return {result!r} instead."
@@ -184,7 +184,7 @@ class Adapter(ABC, Generic[EventT, ConfigT]):
             ):
                 async with anyio.create_task_group() as tg:
                     for calling_hook in self._calling_api_hooks:
-                        tg.start_soon(calling_hook, self, api, params) # type: ignore
+                        tg.start_soon(calling_hook, self, api, params)  # type: ignore
 
         if not skip_calling_api:
             try:
@@ -212,7 +212,7 @@ class Adapter(ABC, Generic[EventT, ConfigT]):
                         "Multiple hooks want to mock API result. Use the first one."
                     )
 
-                result = excs[0].result # type: ignore
+                result = excs[0].result  # type: ignore
                 exception = None
                 logger.debug(
                     f"Calling API {api} result is mocked. Return {result} instead."
@@ -228,7 +228,7 @@ class Adapter(ABC, Generic[EventT, ConfigT]):
             ):
                 async with anyio.create_task_group() as tg:
                     for called_hook in self._called_api_hooks:
-                        tg.start_soon(called_hook, self, exception, api, params, result) # type: ignore
+                        tg.start_soon(called_hook, self, exception, api, params, result)  # type: ignore
 
         if exception:
             raise exception
@@ -302,10 +302,10 @@ class Adapter(ABC, Generic[EventT, ConfigT]):
         return await self.bot.manager.get(
             func,
             event_type=event_type,
-            adapter_type=type(self), # type: ignore
+            adapter_type=type(self),  # type: ignore
             max_try_times=max_try_times,
             timeout=timeout,
-        ) # type: ignore
+        )  # type: ignore
 
     @classmethod
     def calling_api_hook(cls, func: CallingAPIHook) -> CallingAPIHook:

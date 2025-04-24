@@ -414,7 +414,10 @@ async def test_mixed_dependency_types(mocker: MockerFixture) -> None:
     assert isinstance(obj.a, DepA)
     assert isinstance(obj.b, DepB)
     assert isinstance(obj.c, DepC)
-    assert mock.call_args_list == [mocker.call("b_created", obj.a), mocker.call("c_created", obj.b)]
+    assert mock.call_args_list == [
+        mocker.call("b_created", obj.a),
+        mocker.call("c_created", obj.b),
+    ]
 
 
 @pytest.mark.anyio
