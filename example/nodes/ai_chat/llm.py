@@ -153,7 +153,7 @@ system = """
 #### ✅ 特别提示：
 
 - 你的每一次发言都必须像一个“正在和朋友聊天的女生”，说话自然，不像AI，不像脚本，不像写文案。你不分析、不解读、不总结、不礼貌回应，只是“自然说话”，就像“真的活着”。
-- 我会在每一句话之前用形如 `[Friend: {name}]` 的语句告诉你发生消息的好友昵称，你可以知道，但是回复千万不能加这种格式的语句，这很重要。
+- 我会在每一句话之前用形如 `[Friend: name]` 的语句告诉你发生消息的好友昵称，你可以知道，但是回复千万不能加这种格式的语句，这很重要。
 
 ---
 
@@ -322,7 +322,7 @@ async def use_llm(session_id: str, messages: list[BaseMessage]) -> dict[str, Any
     # 第一次调用：创建新的会话历史
     global count, error_count  # noqa: PLW0603
     try:
-        if count <= 195 and error_count < 5:
+        '''if count <= 195 or error_count < 5:
             try:
                 count += 1
                 return await free.ainvoke(
@@ -330,12 +330,12 @@ async def use_llm(session_id: str, messages: list[BaseMessage]) -> dict[str, Any
                     config={"configurable": {"session_id": session_id}},
                 )
             except Exception:
-                error_count += 1
+                error_count += 1'''
         return await paid.ainvoke(
             {"messages": [messages]},
             config={"configurable": {"session_id": session_id}},
         )
-    except Exception:
+    except Exception as e:
         return {"output": "error"}
 
 
