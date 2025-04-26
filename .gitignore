@@ -170,10 +170,5 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 test/.run.bat
-run.bat
 .ruff_cache/
-
-history_596488203.json
-history_788499440.json
-history_834922207.json
-history_895484096.json
+.run-bot.ps1

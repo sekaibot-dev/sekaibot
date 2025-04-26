@@ -203,6 +203,9 @@ prompt = ChatPromptTemplate.from_messages(
         ),
         MessagesPlaceholder(variable_name="agent_scratchpad"),
         MessagesPlaceholder(variable_name="messages"),
+        SystemMessagePromptTemplate.from_template(
+            "请你根据上下文，选择回复，或者 ##ignore 。"
+        ),
     ]
 )
 
@@ -228,11 +231,10 @@ def get_session_history(session_id: str) -> ChatMessageHistory:
     return histories[session_id]
 
 
-def create_agent(key: str) -> RunnableWithMessageHistory:  # noqa: D103
+def create_agent() -> RunnableWithMessageHistory:  # noqa: D103
     llm = ChatOpenAI(
         model="gpt-4.1-mini",
-        temperature=1.3,
-        api_key=key,  # type: ignore
+        temperature=1.1,
         base_url="https://api.chatanywhere.tech/v1",
     )
     tools = [get_current_time]
@@ -252,8 +254,7 @@ def create_agent(key: str) -> RunnableWithMessageHistory:  # noqa: D103
 
 message_dict: dict[str, list[BaseMessage]] = defaultdict(list)
 
-free = create_agent("sk-ADX97OSA3STCkdmZRruOwzScdpPueRZ6ucOD2orI0ZszZ7Xn")
-paid = create_agent("sk-dFzsKInVuNhZhAt8KpV4qXhyWeFbME0RYxiGJLXjDHrhirkb")
+paid = create_agent()
 
 
 async def get_answer(  # noqa: D103
@@ -300,13 +301,15 @@ async def get_answer(  # noqa: D103
         "VIP",
         "VWP",
     ]
-    if any(keyw in message for keyw in keyws) or len(message_dict[session_id]) > 8:
+    if any(keyw in message for keyw in keyws):
         if "可不" in message:
             trigger += 0.3
         trigger += 0.2
 
     message_dict[session_id].append(HumanMessage(content=content))  # type: ignore
-    if (not is_url and trigger >= 0.8) or is_tome:
+    if (
+        (not is_url and trigger >= 0.93) and len(message_dict[session_id]) > 3
+    ) or is_tome:
         res = await use_llm(session_id, message_dict[session_id])
         answer: str = res.get("output", "ignore")
         message_dict[session_id] = []
@@ -317,26 +320,18 @@ async def get_answer(  # noqa: D103
 
 count = 0
 error_count = 0
+
+
 # === 7. 调用示例 ===
 async def use_llm(session_id: str, messages: list[BaseMessage]) -> dict[str, Any]:  # noqa: D103
     # 第一次调用：创建新的会话历史
-    global count, error_count  # noqa: PLW0603
     try:
-        '''if count <= 195 or error_count < 5:
-            try:
-                count += 1
-                return await free.ainvoke(
-                    {"messages": [messages]},
-                    config={"configurable": {"session_id": session_id}},
-                )
-            except Exception:
-                error_count += 1'''
         return await paid.ainvoke(
             {"messages": [messages]},
             config={"configurable": {"session_id": session_id}},
         )
     except Exception as e:
-        return {"output": "error"}
+        return {"output": f"[error]: {e}"}
 
 
 async def clear(session_id: str) -> None:  # noqa: D103
