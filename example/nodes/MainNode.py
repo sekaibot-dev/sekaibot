@@ -111,7 +111,6 @@ class AutoReply(Node[GroupMessageEvent, dict, Any]):  # type: ignore
 class YanCheng(Node[GroupMessageEvent, dict, Any]):  # type: ignore
     """言承"""
     priority = 0
-    block = True
 
     keyw = Keywords.Param()
 
@@ -119,3 +118,4 @@ class YanCheng(Node[GroupMessageEvent, dict, Any]):  # type: ignore
     async def handle(self) -> None:
         if len(self.keyw) > 1 and "芽" in self.keyw:
             await self.reply("理芽不是言承的……！", at_sender=True)
+            self.stop()

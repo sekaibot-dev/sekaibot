@@ -272,7 +272,7 @@ class Node(Generic[EventT, NodeStateT, ConfigT]):
         return await self.bot.manager.get(
             lambda e: e.get_session_id() == self.event.get_session_id(),
             event_type=type(self.event),
-            adapter_type=type(self.event.adapter),
+            adapter_type=type(self.event.adapter), # type: ignore
             max_try_times=max_try_times,
             timeout=timeout,
         )

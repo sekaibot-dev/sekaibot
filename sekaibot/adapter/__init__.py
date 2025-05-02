@@ -80,19 +80,32 @@ class Adapter(ABC, Generic[EventT, ConfigT]):
         retries = 0
         while not self.bot._should_exit.is_set():
             if retries <= self.bot.config.bot.adapter_max_retries:
+                if retries > 0:
+                    try:
+                        await self.startup()
+                    except Exception:
+                        logger.exception(
+                            "Startup adapter failed", adapter=self.__class__
+                        )
                 with catch(
                     {
                         Exception: handle_exception(
-                            "Run adapter failed", adapter_name=self.__class__.__name__
+                            "Run adapter failed", adapter=self.__class__
                         )
                     }
                 ):
                     await self.run()
                 if self.bot._should_exit.is_set():
                     break
+                try:
+                    await self.shutdown()
+                except Exception:
+                    logger.exception(
+                        "Shutdown adapter failed", adapter=self.__class__
+                    )
                 logger.info(
                     "Retry running the adapter...",
-                    adapter_name=self.__class__.__name__,
+                    adapter=self.__class__,
                     retries=retries,
                 )
                 retries += 1

@@ -139,7 +139,7 @@ keep-runtime-typing = true
 [tool.ruff.lint.per-file-ignores]
 "packages/*/sekaibot/__init__.py" = ["D104"]
 "packages/*/sekaibot/adapter/__init__.py" = ["D104"]
-"examples/plugins/*.py" = ["D", "T", "ANN"]
+"example/nodes/*.py" = ["D", "T", "ANN"]
 "test/*.py" = ["D", "PLR2004"]
 
 [tool.pyright]
@@ -168,25 +168,13 @@ extraPaths = [
     "packages/sekaibot-plugin-apscheduler",
 ]
 
-[[tool.pyright.executionEnvironments]]
-root = "packages/sekaibot-adapter-cqhttp"
-extraPaths = ["../../sekaibot"]
-
-[[tool.pyright.executionEnvironments]]
-root = "packages/sekaibot-adapter-onebot"
-extraPaths = ["../../sekaibot"]
-
-[[tool.pyright.executionEnvironments]]
-root = "sekaibot-plugin-apscheduler"
-extraPaths = ["../../sekaibot"]
-
 [tool.mypy]
 python_version = "3.11"
 strict = true
 exclude = [
     '^packages/.*/sekaibot/__init__\.py$',
     '^packages/.*/sekaibot/adapter/__init__\.py$',
-    '^examples/.*\.py$',
+    '^example/.*\.py$',
 ]
 disable_error_code = [
     "valid-type", 
