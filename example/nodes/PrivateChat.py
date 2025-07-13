@@ -11,7 +11,6 @@ from langchain_core.runnables.base import Runnable
 
 from sekaibot import Node
 from sekaibot.adapter.cqhttp.event import PrivateMessageEvent
-from sekaibot.permission import User
 
 warnings.filterwarnings("ignore")
 
@@ -45,7 +44,6 @@ def split_with_delay(
     return result
 
 
-@User("2682064633", "1615631255")
 class PrivateReply(Node[PrivateMessageEvent, Annotated[Runnable, None], Any]):  # type: ignore
     priority = 0
 
@@ -55,12 +53,14 @@ class PrivateReply(Node[PrivateMessageEvent, Annotated[Runnable, None], Any]):  
             init_config(_config_file="./example/chat_config.toml")
             self.node_state = build_pipeline() | split_with_delay
         text = self.event.get_plain_text()
+        print(text)
         session_id = self.event.get_session_id()
         if not text:
             return
         result = await self.node_state.ainvoke(
             {"input": text}, config={"configurable": {"session_id": session_id}}
         )
+        print(result)
         for segment in result:
             await sleep(segment["delay"])
             await self.reply(segment["output"])
