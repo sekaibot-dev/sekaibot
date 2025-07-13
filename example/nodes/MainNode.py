@@ -110,6 +110,7 @@ class AutoReply(Node[GroupMessageEvent, dict, Any]):  # type: ignore
 @User("413966479")
 class YanCheng(Node[GroupMessageEvent, dict, Any]):  # type: ignore
     """言承"""
+
     priority = 0
 
     keyw = Keywords.Param()
