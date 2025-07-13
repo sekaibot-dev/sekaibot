@@ -43,6 +43,8 @@ class CopyWith(Node[GroupMessageEvent, dict, Any]):
                 )
                 state["repeated"] = True
                 self.stop()
+            elif state["count"] > 0:
+                self.stop()
         else:
             self.node_state[group_id] = {
                 "last_message": message,

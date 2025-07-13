@@ -1,16 +1,19 @@
 """MainChat节点"""
 
-from typing import Any  # type: ignore
+from pathlib import Path
+from typing import Any
 
 from sekaibot import Node
-from sekaibot.adapter.cqhttp.event import GroupMessageEvent  # type: ignore
+from sekaibot.adapter.cqhttp.event import GroupMessageEvent
+from sekaibot.adapter.cqhttp.exceptions import ApiTimeout
+from sekaibot.rule import WordFilter
 
 from .agent import clear
 from .llm import get_answer, handle_img
 
 
 # @WordFilter(word_file=Path("./example/nodes/sensitive_words_lines.txt"), use_aho=True)  # type: ignore
-class MainChat(Node[GroupMessageEvent, dict, Any]):  # type: ignore
+class MainChat(Node[GroupMessageEvent, dict, Any]):
     """AIChat"""
 
     priority: int = 1
@@ -21,7 +24,7 @@ class MainChat(Node[GroupMessageEvent, dict, Any]):  # type: ignore
             or "group_788499440" in self.event.get_session_id()
             or "group_834922207" in self.event.get_session_id()
             or "group_895484096" in self.event.get_session_id()
-        ) and self.event.get_user_id() != "1852262922"
+        )
         """处理"""
         if "/clear" in self.event.message:
             await clear(str(self.event.group_id))
@@ -35,18 +38,21 @@ class MainChat(Node[GroupMessageEvent, dict, Any]):  # type: ignore
         name: str = self.event.sender.nickname
         name = name_map.get(name, name)
 
+        async def get_img_path(_file: str) -> str | None:
+            try:
+                return (await self.call_api("get_image", file=_file)).get("file", None)
+            except ApiTimeout:
+                return None
+
         for msg in self.event.message:
             if msg.type == "image":
-                img_url: str = msg.data.get("url")
-                file_id: str = msg.data.get("file")
-                if img_url and file_id:
-                    await handle_img(
-                        session_id=str(self.event.group_id),
-                        name=name,
-                        img_url=img_url,
-                        file_id=file_id,
-                    )
-                return
+                file: str = msg.data.get("file")
+                await handle_img(
+                    session_id=str(self.event.group_id),
+                    name=name,
+                    get_img_func=get_img_path,
+                    file_id=file,
+                )
 
         if self.event.get_plain_text() and (
             answer := await get_answer(
@@ -61,8 +67,9 @@ class MainChat(Node[GroupMessageEvent, dict, Any]):  # type: ignore
             self.stop()
 
     async def rule(self) -> bool:
-
         return (
             "请使用最新版本" not in self.event.get_plain_text()
             and self.event.user_id != 2854196310  # noqa: PLR2004
+            and self.event.get_user_id() != "1852262922"
+            and self.event.get_user_id() != "303789917"
         )

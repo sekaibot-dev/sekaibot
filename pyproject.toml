@@ -21,14 +21,14 @@ classifiers = [
 requires-python = ">=3.11,<4"
 dependencies = [
     "aiohttp==3.11.13",
-    "anyio==4.8.0",
+    "anyio==4.9.0",
     "exceptiongroup==1.2.2",
     "pyahocorasick==2.1.0",
     "pydantic==2.11.3",
     "pygtrie==2.5.0",
     "pypinyin==0.54.0",
     "PyYAML==6.0.2",
-    "structlog==25.2.0",
+    "structlog==25.3.0",
     "typing_extensions==4.13.2",
 ]
 
@@ -182,6 +182,12 @@ disable_error_code = [
     "index",
     "misc",
 ]
+mypy_path = [
+    ".", 
+    "./packages/sekaibot-adapter-cqhttp", 
+    "./packages/sekaibot-adapter-onebot", 
+    "./packages/sekaibot-plugin-apscheduler"
+]
 warn_return_any = false
 
 [[tool.mypy.overrides]]
@@ -200,6 +206,8 @@ disable = [
     "unsubscriptable-object",
     "protected-access",
     "redefined-outer-name",
+    "import-error",
+    "no-name-in-module",
     # Convention
     "import-outside-toplevel",
     "invalid-name",
