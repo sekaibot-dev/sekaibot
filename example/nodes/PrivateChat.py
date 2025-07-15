@@ -47,7 +47,7 @@ def split_with_delay(
 
 
 class PrivateReply(Node[PrivateMessageEvent, Annotated[Runnable, None], Any]):  # type: ignore
-    priority = 0
+    priority = 1
 
     @override
     async def handle(self) -> None:
