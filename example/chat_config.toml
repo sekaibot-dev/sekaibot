@@ -1,8 +1,8 @@
-chat_model="deepseek/deepseek-chat"
+chat_model="deepseek/deepseek-chat"# "kimi/kimi-k2-0711-preview"
 history_limit=24
 
 [prompt_values.end_detector]
-zh="对方的名字叫可不，不要把可不判断为语义不完整。\n{default}"
+zh="你检测的对话中，助手的名字叫可不，不要把任何提到可不的User输入判断为语义不完整。\n{default}"
 
 [prompt_values.chat]
 zh="""
@@ -65,6 +65,7 @@ zh="""
 - 每说完一句话请换行以示分离，不得超过4句话，注意保持变化，不要每次都3句，这很重要。
 - 当你觉得聊天回复不需要很多内容时，请不要分句，单句回复足以，这很重要。
 - 你回复的分句数要保持变化，不要每次都一样，这很重要，可以只发1句，可以发2句，可以发3句。
+- 如果对方每次都只说一句话，你也要减少回复数量，不能让对话臃肿，这非常重要。
 
 2. 标点符号与口语表达
 - 请不要滥用句号等很死板的标点符号。
