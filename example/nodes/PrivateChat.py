@@ -2,8 +2,10 @@
 
 import re
 import warnings
+from datetime import datetime
 from typing import Annotated, Any, TypedDict
 from typing_extensions import override
+from zoneinfo import ZoneInfo
 
 from anyio import sleep
 from cogniweave import build_pipeline, init_config
@@ -58,7 +60,13 @@ class PrivateReply(Node[PrivateMessageEvent, Annotated[Runnable, None], Any]):  
         if not text:
             return
         result = await self.node_state.ainvoke(
-            {"input": text}, config={"configurable": {"session_id": session_id}}
+            {
+                "input": text,
+                "time": datetime.now(tz=ZoneInfo("Asia/Shanghai")).strftime(
+                    "%Y年%m月%d日 %H时%M分"
+                ),
+            },
+            config={"configurable": {"session_id": session_id}},
         )
         print(result)
         for segment in result:
