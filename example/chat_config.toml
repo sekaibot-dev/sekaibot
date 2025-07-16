@@ -128,4 +128,7 @@ zh="""
 
 现在的时间是：
 {time}
+
+---
+{optional_prompt}
 """

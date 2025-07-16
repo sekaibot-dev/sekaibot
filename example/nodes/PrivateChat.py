@@ -3,7 +3,7 @@
 import re
 import warnings
 from datetime import datetime
-from typing import Annotated, Any, TypedDict
+from typing import Any, Literal, TypedDict
 from typing_extensions import override
 from zoneinfo import ZoneInfo
 
@@ -46,28 +46,78 @@ def split_with_delay(
     return result
 
 
-class PrivateReply(Node[PrivateMessageEvent, Annotated[Runnable, None], Any]):  # type: ignore
+_RUNNABLE_KEY: Literal["_runnable"] = "_runnable"
+_OPTIONAL_PROMPT_KEY: Literal["_optional_prompt"] = "_optional_prompt"
+_RESULT_WARNING_COUNT_KEY: Literal["_result_warning_count"] = "_result_warning_count"
+
+
+class PrivateReply(Node[PrivateMessageEvent, dict, Any]):  # type: ignore
     priority = 1
+
+    def get_or_create_runnable(self) -> Runnable:
+        if _RUNNABLE_KEY not in self.node_state:
+            init_config(_config_file="./example/chat_config.toml")
+            self.node_state[_RUNNABLE_KEY] = build_pipeline() | split_with_delay
+        return self.node_state[_RUNNABLE_KEY]
+
+    @property
+    def optional_prompt(self) -> str:
+        if _OPTIONAL_PROMPT_KEY not in self.node_state:
+            self.node_state[_OPTIONAL_PROMPT_KEY] = ""
+        return self.node_state[_OPTIONAL_PROMPT_KEY]
+
+    @optional_prompt.setter
+    def optional_prompt(self, value: str) -> None:
+        self.node_state[_OPTIONAL_PROMPT_KEY] = value
+
+    @property
+    def result_warning_count(self) -> int:
+        if _RESULT_WARNING_COUNT_KEY not in self.node_state:
+            self.node_state[_RESULT_WARNING_COUNT_KEY] = 0
+        return self.node_state[_RESULT_WARNING_COUNT_KEY]
+
+    @result_warning_count.setter
+    def result_warning_count(self, value: int) -> None:
+        self.node_state[_RESULT_WARNING_COUNT_KEY] = value
 
     @override
     async def handle(self) -> None:
-        if self.node_state is None:
-            init_config(_config_file="./example/chat_config.toml")
-            self.node_state = build_pipeline() | split_with_delay
+        runnable = self.get_or_create_runnable()
         text = self.event.get_plain_text()
         print(text)
         session_id = self.event.get_session_id()
         if not text:
             return
-        result = await self.node_state.ainvoke(
+
+        if self.result_warning_count > 2:  # noqa: PLR2004
+            await runnable.ainvoke(
+                {"action": "clear_history"},
+                config={"configurable": {"session_id": session_id}},
+            )
+
+        result = await runnable.ainvoke(
             {
                 "input": text,
                 "time": datetime.now(tz=ZoneInfo("Asia/Shanghai")).strftime(
                     "%Y年%m月%d日 %H时%M分"
                 ),
+                "optional_prompt": self.optional_prompt,
             },
             config={"configurable": {"session_id": session_id}},
         )
+
+        if len(result) > 5:  # noqa: PLR2004
+            self.optional_prompt = (
+                "### 强制执行通知\n"
+                "- **强制执行通知：您的回复内容已超过五条分句。请立即严格按照要求，在下一条消息中缩短回复。**"
+                "- **请务必重视：如未在下条消息中完成内容缩减，系统将立即终止本次对话，并永久清除所有历史内容，不可恢复。**"
+                "- **本要求无任何例外。请确保严格遵守，否则后果自负。**"
+            )
+            self.result_warning_count += 1
+        else:
+            self.optional_prompt = ""
+            self.result_warning_count = 0
+
         print(result)
         for segment in result:
             await sleep(segment["delay"])
