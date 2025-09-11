@@ -30,7 +30,7 @@ text_splitter = SpacyTextSplitter(
     chunk_overlap=20,
 )
 
-embeddings = create_embeddings()  # "text-embedding-v3", provider="DASHSCOPE"
+embeddings = create_embeddings("text-embedding-v3", provider="DASHSCOPE")
 
 SIMILARITY_THRESHOLD = 0.75
 MIN_CONTENT_LEN = 20
@@ -153,8 +153,8 @@ def web_search(query: str, top_n: int = 3) -> str | None:
 
 
 search_model = create_agent(
-    "qwen-max",
-    provider="DASHSCOPE",
+    "deepseek-chat",
+    provider="DEEPSEEK",
     prompt=search_prompt,
     temperature=0.7,
     tools=[moegirl_search, wiki_search, web_search],

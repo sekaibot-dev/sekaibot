@@ -19,12 +19,14 @@ from sekaibot.rule import Keywords
     "/角色",
     "蒸",
     "lrc",
+    "林睿晨",
     "松泽",
     "思灿",
+    "四维",
     "超",
     "香氤",
 )
-@User("group_596488203", "group_1011357049")
+@User("group_596488203", "group_1011357049", "group_1058218429")
 class AutoReply(Node[GroupMessageEvent, dict, Any]):  # type: ignore
     """Hello, World! 示例节点。"""
 

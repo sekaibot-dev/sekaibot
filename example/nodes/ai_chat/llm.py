@@ -50,11 +50,11 @@ message_dict: dict[str, SortedDict[int, BaseMessage]] = defaultdict(SortedDict)
 message_dict_locks: dict[str, Lock] = defaultdict(Lock)
 
 text_model = create_agent_with_history(
-    "qwen3-235b-a22b",
-    provider="DASHSCOPE",
+    "deepseek-chat",
+    provider="DEEPSEEK",
     prompt=text_prompt,
     temperature=1.2,
-    tools=[get_current_time, search_tool],
+    tools=[get_current_time],
     verbose=True,
 )
 photo_model = create_agent(
@@ -179,7 +179,10 @@ async def get_answer(
     async with message_dict_locks[session_id]:
         message_dict[session_id][message_id] = HumanMessage(content=content)  # type: ignore
 
-    if (get_trigger(message, trigger=0.9 if random_trigger else 1.1) and len(message_dict[session_id]) > 3) or is_tome:
+    if (
+        get_trigger(message, trigger=0.9 if random_trigger else 1.1)
+        and len(message_dict[session_id]) > 3
+    ) or is_tome:
         async with message_dict_locks[session_id]:
             messages = message_dict[session_id].copy()
             message_dict.pop(session_id)

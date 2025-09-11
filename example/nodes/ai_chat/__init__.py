@@ -12,19 +12,13 @@ from .agent import clear
 from .llm import get_answer, handle_img
 
 
-# @WordFilter(word_file=Path("./example/nodes/sensitive_words_lines.txt"), use_aho=True)  # type: ignore
 class MainChat(Node[GroupMessageEvent, dict, Any]):
     """AIChat"""
 
-    priority: int = 1
+    priority: int = 0
 
     async def handle(self) -> None:
-        random_trigger = (
-            "group_834922207" in self.event.get_session_id()
-            or "group_788499440" in self.event.get_session_id()
-            or "group_834922207" in self.event.get_session_id()
-            or "group_895484096" in self.event.get_session_id()
-        )
+        random_trigger = "group_596488203" in self.event.get_session_id()
         """处理"""
         if "/clear" in self.event.message:
             await clear(str(self.event.group_id))

@@ -23,7 +23,7 @@ def get_session_history(session_id: str) -> ChatMessageHistory:
     if session_id not in histories:
         histories[session_id] = ChatMessageHistory(
             file_path=f"../sekaibot-cache/history_{session_id}.json",
-            max_len=24,
+            max_len=40,
         )
     return histories[session_id]
 
@@ -31,7 +31,7 @@ def get_session_history(session_id: str) -> ChatMessageHistory:
 def create_agent(
     model: str,
     *,
-    provider: Literal["OPENAI", "DASHSCOPE"],
+    provider: Literal["OPENAI", "DASHSCOPE", "DEEPSEEK"],
     prompt: ChatPromptTemplate,
     temperature: float = 1,
     tools: list[BaseTool] | None = None,
@@ -42,7 +42,7 @@ def create_agent(
         model=model,
         api_key=secret_from_env(f"{provider}_API_KEY")(),
         temperature=temperature,
-        base_url=from_env(f"{provider}_BASE_URL")(),
+        base_url=from_env(f"{provider}_API_BASE")(),
     )
     tools = tools if tools else []
     agent = create_openai_tools_agent(
@@ -58,7 +58,7 @@ def create_agent(
 def create_agent_with_history(
     model: str,
     *,
-    provider: Literal["OPENAI", "DASHSCOPE"],
+    provider: Literal["OPENAI", "DASHSCOPE", "DEEPSEEK"],
     prompt: ChatPromptTemplate,
     temperature: float = 1,
     tools: list[BaseTool] | None = None,
@@ -88,7 +88,7 @@ def create_embeddings(
     return OpenAIEmbeddings(
         model=model,
         api_key=secret_from_env(f"{provider}_API_KEY")(),
-        base_url=from_env(f"{provider}_BASE_URL")(),
+        base_url=from_env(f"{provider}_API_BASE")(),
     )
 
 
