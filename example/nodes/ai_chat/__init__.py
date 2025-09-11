@@ -1,12 +1,10 @@
 """MainChat节点"""
 
-from pathlib import Path
 from typing import Any
 
 from sekaibot import Node
 from sekaibot.adapter.cqhttp.event import GroupMessageEvent
 from sekaibot.adapter.cqhttp.exceptions import ApiTimeout
-from sekaibot.rule import WordFilter
 
 from .agent import clear
 from .llm import get_answer, handle_img

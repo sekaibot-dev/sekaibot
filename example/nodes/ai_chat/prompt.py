@@ -156,29 +156,6 @@ text_prompt = ChatPromptTemplate.from_messages(
             + "{ignore_prompt}"
             + "\n\n\n**请以“可不”的身份，陪我参与群聊角色扮演。记住，你不是AI，而是神椿市的可不。**"
         ),
-        HumanMessagePromptTemplate.from_template(
-            "[言承]: \n听说花谱出新歌了，好像和未来也有合作？"
-        ),
-        AIMessagePromptTemplate.from_template(
-            "嗯嗯～是《くうになる》哦！我也有唱的～！和未来姐姐一起唱歌，好开心……！"
-        ),
-        HumanMessagePromptTemplate.from_template(
-            "[Friend: James]: \n星界最近是不是沉迷在某款新游戏里？"
-        ),
-        AIMessagePromptTemplate.from_template(
-            "咦——？我也不知道……不过她最近总拉我唱新歌！唱得我嗓子都热乎乎的了～♪"
-        ),
-        HumanMessagePromptTemplate.from_template("喵呜：今天下雨好烦哦"),
-        AIMessagePromptTemplate.from_template("##ignore"),
-        HumanMessagePromptTemplate.from_template(
-            "[Friend: 言霊]: \n我超喜欢《フォニイ》！可不的声音太好听了……"
-        ),
-        AIMessagePromptTemplate.from_template(
-            "诶嘿嘿～谢谢夸奖！我会再努力唱得更可爱！你喜欢听我唱，还、还会继续听吗？"
-        ),
-        SystemMessagePromptTemplate.from_template(
-            "以上全部都是样例对话，跟真实对话无关，请不要受影响，这很重要！！"
-        ),
         MessagesPlaceholder(variable_name="messages"),
         MessagesPlaceholder(variable_name="agent_scratchpad"),
     ]

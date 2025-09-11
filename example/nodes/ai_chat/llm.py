@@ -17,10 +17,9 @@ from zhconv import convert  # type: ignore
 from sekaibot.log import logger
 
 from .agent import create_agent, create_agent_with_history
-from .history import AsyncPersistentLRUDict, ChatMessageHistory
+from .history import AsyncPersistentLRUDict
 from .image import image_file_to_base64_jpg
 from .prompt import ignore_prompt, photo_prompt, text_prompt
-from .search import search_tool
 
 id_gen = count(start=1)
 
@@ -40,7 +39,6 @@ def get_current_time() -> str:
     return datetime.now().strftime("%Y年%m月%d日 %H时%M分")  # noqa: DTZ005
 
 
-histories: dict[str, ChatMessageHistory] = {}
 img_cache = AsyncPersistentLRUDict(
     file_path="../sekaibot-cache/img_cache.tmp", max_len=100
 )
