@@ -7,7 +7,8 @@ from http import HTTPStatus
 import anyio
 import dashscope
 from bs4 import GuessedAtParserWarning
-from duckduckgo_search import DDGS
+from ddgs import DDGS
+from dotenv import load_dotenv
 from langchain.text_splitter import SpacyTextSplitter
 from langchain.tools import tool
 from langchain_community.document_loaders import WikipediaLoader
@@ -19,18 +20,21 @@ from .agent import create_agent, create_embeddings, faiss_service
 from .moegirl import MoegirlLoader
 from .prompt import search_prompt
 
+load_dotenv()
+
 # 设置全局 HTTP/HTTPS 代理
 os.environ["http_proxy"] = "http://127.0.0.1:7890"
 os.environ["https_proxy"] = "http://127.0.0.1:7890"
 
 warnings.filterwarnings("ignore", category=GuessedAtParserWarning)
+
 text_splitter = SpacyTextSplitter(
     chunk_size=200,
     pipeline="zh_core_web_sm",
     chunk_overlap=20,
 )
 
-embeddings = create_embeddings("text-embedding-v3", provider="DASHSCOPE")
+embeddings = create_embeddings()
 
 SIMILARITY_THRESHOLD = 0.75
 MIN_CONTENT_LEN = 20
@@ -43,9 +47,10 @@ def text_rerank(query: str, documents: list[str], top_n: int = 10) -> str | None
         documents=documents,
         top_n=top_n,
         return_documents=False,
+        api_key=os.getenv("DASHSCOPE_API_KEY"),
     )
     if resp.status_code == HTTPStatus.OK:
-        return "。".join(documents[r.index] for r in resp.output.results) + "。"
+        return "\n".join(documents[r.index] for r in resp.output.results)
     return None
 
 
@@ -142,13 +147,13 @@ async def moegirl_search(keyw: str, query: str, top_n: int = 3) -> str | None:
 
 
 @tool(
-    description="通过网页浏览器搜索，适用于查找任何类型的信息，包括模糊问题、最新事件或广泛主题。可以获得关于问题的简短回答。如果维基百科返回内容无效，请使用这个。top_n 指定返回的句子数，最多10，top_n 越大返回越慢，默认为3。"
+    description="通过网页浏览器搜索，适用于查找任何类型的信息，包括模糊问题、最新事件或广泛主题。可以获得关于问题的简短回答。如果维基百科返回内容无效，请使用这个。keyw 是具体词条关键词，query 是查询内容（尽量较完整，不需要复述 keyw）。top_n 指定返回的句子数，最多10，top_n 越大返回越慢，默认为3。"
 )
-def web_search(query: str, top_n: int = 3) -> str | None:
+def web_search(keyw: str, query: str, top_n: int = 3) -> str | None:
     with suppress(Exception), DDGS() as ddgs:
-        results = ddgs.text(query, max_results=top_n * 3)
+        results = ddgs.text(keyw, max_results=top_n * 6)
         doc_texts = [r["body"] for r in results]
-        return convert(text_rerank(query, doc_texts, top_n=top_n), "zh-cn")
+        return convert(text_rerank(f"{keyw} {query}", doc_texts, top_n=top_n), "zh-cn")
     return None
 
 
@@ -173,13 +178,16 @@ async def search_tool(query: str) -> str | None:
 
 
 async def main():
-    print(await wiki_search.ainvoke({"keyw": "若叶睦", "query": "若叶睦"}))
-    print(await moegirl_search.ainvoke({"keyw": "若叶睦", "query": "性格"}))
     import time
 
-    print(t1 := time.time())
-    print(await search_tool.ainvoke({"query": "丰川祥子 性格"}))
-    print(time.time() - t1)
+    t1 = time.time()
+    print(f"start time: {t1}")
+    # print(await wiki_search.ainvoke({"keyw": "若叶睦", "query": "若叶睦"}))
+    # print(await moegirl_search.ainvoke({"keyw": "若叶睦", "query": "性格"}))
+    # print(await web_search.ainvoke({"keyw": "若叶睦", "query": "性格"}))
+    print(await search_tool.ainvoke({"query": "黑柿子是谁"}))
+    t2 = time.time()
+    print(f"end time: {t2}, cost: {t2 - t1}")
 
 
 if __name__ == "__main__":

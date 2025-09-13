@@ -5,10 +5,10 @@ from datetime import datetime
 from itertools import count
 from random import random
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import anyio
 from anyio import Lock
-from langchain.tools import tool
 from langchain_core.messages import BaseMessage, HumanMessage
 from pydantic import BaseModel
 from sortedcontainers import SortedDict  # type: ignore
@@ -20,6 +20,7 @@ from .agent import create_agent, create_agent_with_history
 from .history import AsyncPersistentLRUDict
 from .image import image_file_to_base64_jpg
 from .prompt import ignore_prompt, photo_prompt, text_prompt
+from .search import search_tool
 
 id_gen = count(start=1)
 
@@ -32,11 +33,6 @@ class UnhandleImage(BaseModel):
     file_path: str
     file_id: str
     name: str
-
-
-@tool(description="获取当前年、月、日、几点几分，对方询问时间相关问题时，优先调用")
-def get_current_time() -> str:
-    return datetime.now().strftime("%Y年%m月%d日 %H时%M分")  # noqa: DTZ005
 
 
 img_cache = AsyncPersistentLRUDict(
@@ -52,7 +48,7 @@ text_model = create_agent_with_history(
     provider="DEEPSEEK",
     prompt=text_prompt,
     temperature=1.2,
-    tools=[get_current_time],
+    tools=[search_tool],
     verbose=True,
 )
 photo_model = create_agent(
@@ -60,7 +56,6 @@ photo_model = create_agent(
     provider="OPENAI",
     prompt=photo_prompt,
     temperature=0.5,
-    tools=[get_current_time],
 )
 
 
@@ -179,7 +174,7 @@ async def get_answer(
 
     if (
         get_trigger(message, trigger=0.9 if random_trigger else 1.1)
-        and len(message_dict[session_id]) > 3
+        and len(message_dict[session_id]) > 3  # noqa: PLR2004
     ) or is_tome:
         async with message_dict_locks[session_id]:
             messages = message_dict[session_id].copy()
@@ -209,6 +204,9 @@ async def use_llm(
             {
                 "messages": messages,
                 "ignore_prompt": ignore_prompt if not is_tome else "",
+                "current_time": datetime.now(ZoneInfo("Asia/Shanghai")).strftime(
+                    "%Y年%m月%d日 %H时%M分"
+                ),
             },
             config={"configurable": {"session_id": session_id}},
         )

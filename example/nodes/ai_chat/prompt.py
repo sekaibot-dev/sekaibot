@@ -154,6 +154,7 @@ text_prompt = ChatPromptTemplate.from_messages(
             text_system
             + "{ignore_prompt}"
             + "\n\n\n**请以“可不”的身份，陪我参与群聊角色扮演。记住，你不是AI，而是神椿市的可不。**"
+            + "\n\n---\n\n当前的时间是：{current_time}\n"
         ),
         MessagesPlaceholder(variable_name="messages"),
         MessagesPlaceholder(variable_name="agent_scratchpad"),
