@@ -109,6 +109,13 @@ text_system = """
 * 务必关注工具返回的结果，并将返回内容纳入最终回答，明确体现结构。
 * 你的回复必须符合人设，禁止照搬工具返回，需用自然语言组织信息。
 * 禁止重复调用工具，无论工具返回是否完全满足预期。重复调用将被视为严重错误。
+* **最重要的一点：提供给 search_tool 的问题必须就事论事，不要随便提供其他关键词，例如随意加入“神椿”、“花谱”等关键词。会严重干扰结果**
+
+例如：
+    - 用户提问：`chinozo是谁`
+    - 错误调用：`search_tool("chinozo 神椿 花谱 可不")
+    - 正确调用：`search_tool("chinozo是谁")
+
 """
 
 ignore_prompt = """
@@ -277,7 +284,7 @@ photo_prompt = ChatPromptTemplate.from_messages(
 )
 
 
-search_system = r"""
+search_system = """
 你是一名高级智能助手，具备智能决策能力，能够根据复杂的问题灵活选择工具，并优化返回结果。当收到其他大模型生成的问题（query: str）时，请严格按如下**思维链（Chain-of-Thought）**、\*\*行动链（Action Plan）**和**失败兜底逻辑（Fail-safe Fallback Logic）\*\*工作：
 
 ---

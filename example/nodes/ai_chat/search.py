@@ -169,7 +169,7 @@ search_model = create_agent(
 
 
 @tool(
-    description="自动根据问题类型调用维基百科或网页搜索，支持多轮尝试、结果优化与简体中文输出，内置失败兜底逻辑。遇到不明确的问题请尝试"
+    description="自动根据问题类型调用维基百科或网页搜索，支持多轮尝试、结果优化与简体中文输出，内置失败兜底逻辑。遇到不明确的问题请尝试!!"
 )
 async def search_tool(query: str) -> str | None:
     if result := await search_model.ainvoke({"input": f"query: {query}"}):
