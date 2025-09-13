@@ -16,10 +16,15 @@ class MainChat(Node[GroupMessageEvent, dict, Any]):
     priority: int = 0
 
     async def handle(self) -> None:
-        random_trigger = "group_596488203" in self.event.get_session_id()
-        """处理"""
-        if "/clear" in self.event.message:
+        random_trigger = (
+            "group_596488203" in self.event.get_session_id()
+            or "group_834922207" in self.event.get_session_id()
+            or "group_788499440" in self.event.get_session_id()
+        )
+
+        if self.event.is_tome() and "/clear" in self.event.message:
             await clear(str(self.event.group_id))
+            await self.reply("已清除对话历史")
             return
 
         name_map: dict[str, str] = {
@@ -61,7 +66,7 @@ class MainChat(Node[GroupMessageEvent, dict, Any]):
     async def rule(self) -> bool:
         return (
             "请使用最新版本" not in self.event.get_plain_text()
-            and self.event.user_id != 2854196310  # noqa: PLR2004
+            and self.event.get_user_id() != "2854196310"
             and self.event.get_user_id() != "1852262922"
             and self.event.get_user_id() != "303789917"
         )

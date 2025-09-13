@@ -5,7 +5,7 @@ from contextlib import suppress
 from http import HTTPStatus
 
 import anyio
-import dashscope  # type: ignore
+import dashscope
 from bs4 import GuessedAtParserWarning
 from duckduckgo_search import DDGS
 from langchain.text_splitter import SpacyTextSplitter
@@ -13,11 +13,11 @@ from langchain.tools import tool
 from langchain_community.document_loaders import WikipediaLoader
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
-from zhconv import convert  # type: ignore
+from zhconv import convert
 
-from example.nodes.ai_chat.agent import create_agent, create_embeddings, faiss_service
-from example.nodes.ai_chat.moegirl import MoegirlLoader
-from example.nodes.ai_chat.prompt import search_prompt
+from .agent import create_agent, create_embeddings, faiss_service
+from .moegirl import MoegirlLoader
+from .prompt import search_prompt
 
 # 设置全局 HTTP/HTTPS 代理
 os.environ["http_proxy"] = "http://127.0.0.1:7890"
@@ -173,14 +173,12 @@ async def search_tool(query: str) -> str | None:
 
 
 async def main():
-    # print(await wiki_search.ainvoke({"keyw": "若叶睦", "query": "若叶睦"}))
-    # print(await moegirl_search.ainvoke({"keyw": "若叶睦", "query": "性格"}))
+    print(await wiki_search.ainvoke({"keyw": "若叶睦", "query": "若叶睦"}))
+    print(await moegirl_search.ainvoke({"keyw": "若叶睦", "query": "性格"}))
     import time
 
     print(t1 := time.time())
-    print(
-        await moegirl_search.ainvoke({"keyw": "丰川祥子", "query": "性格"})
-    )  # print(await search_tool.ainvoke({"query": "丰川祥子 性格"}))
+    print(await search_tool.ainvoke({"query": "丰川祥子 性格"}))
     print(time.time() - t1)
 
 

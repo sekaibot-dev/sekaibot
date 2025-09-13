@@ -1,5 +1,4 @@
 from langchain.prompts import (
-    AIMessagePromptTemplate,
     ChatPromptTemplate,
     HumanMessagePromptTemplate,
     MessagesPlaceholder,
@@ -277,7 +276,7 @@ photo_prompt = ChatPromptTemplate.from_messages(
 )
 
 
-search_system = """
+search_system = r"""
 你是一名高级智能助手，具备智能决策能力，能够根据复杂的问题灵活选择工具，并优化返回结果。当收到其他大模型生成的问题（query: str）时，请严格按如下**思维链（Chain-of-Thought）**、\*\*行动链（Action Plan）**和**失败兜底逻辑（Fail-safe Fallback Logic）\*\*工作：
 
 ---

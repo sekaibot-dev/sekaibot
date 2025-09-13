@@ -12,7 +12,6 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from .history import ChatMessageHistory
 
 histories: dict[str, ChatMessageHistory] = {}
-faiss_cache: dict[str, FAISS] = {}
 
 
 def get_session_history(session_id: str) -> ChatMessageHistory:
