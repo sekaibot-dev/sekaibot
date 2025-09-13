@@ -56,6 +56,7 @@ photo_model = create_agent(
     provider="OPENAI",
     prompt=photo_prompt,
     temperature=0.5,
+    tools=[],
 )
 
 

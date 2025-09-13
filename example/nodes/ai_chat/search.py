@@ -29,9 +29,9 @@ os.environ["https_proxy"] = "http://127.0.0.1:7890"
 warnings.filterwarnings("ignore", category=GuessedAtParserWarning)
 
 text_splitter = SpacyTextSplitter(
-    chunk_size=200,
+    chunk_size=500,
     pipeline="zh_core_web_sm",
-    chunk_overlap=20,
+    chunk_overlap=200,
 )
 
 embeddings = create_embeddings()
@@ -81,7 +81,9 @@ async def wiki_search(keyw: str, query: str, top_n: int = 3) -> str | None:
         if result := await asimilarity_search(db, keyw, query, top_n):
             return result
 
-        loader = WikipediaLoader(keyw, lang="zh", load_max_docs=1)
+        loader = WikipediaLoader(
+            keyw, lang="zh", load_max_docs=1, doc_content_chars_max=40000
+        )
         docs = text_splitter.split_documents(
             [
                 Document(
@@ -147,7 +149,7 @@ async def moegirl_search(keyw: str, query: str, top_n: int = 3) -> str | None:
 
 
 @tool(
-    description="通过网页浏览器搜索，适用于查找任何类型的信息，包括模糊问题、最新事件或广泛主题。可以获得关于问题的简短回答。如果维基百科返回内容无效，请使用这个。keyw 是具体词条关键词，query 是查询内容（尽量较完整，不需要复述 keyw）。top_n 指定返回的句子数，最多10，top_n 越大返回越慢，默认为3。"
+    description="通过网页浏览器搜索，适用于查找任何类型的信息，包括模糊问题、最新事件或广泛主题。可以获得关于问题的简短回答。如果维基百科或萌娘百科返回内容无效，请使用这个。keyw 是具体词条关键词，query 是查询内容（尽量较完整，不需要复述 keyw）。top_n 指定返回的句子数，最多10，top_n 越大返回越慢，默认为3。"
 )
 def web_search(keyw: str, query: str, top_n: int = 3) -> str | None:
     with suppress(Exception), DDGS() as ddgs:
@@ -158,8 +160,8 @@ def web_search(keyw: str, query: str, top_n: int = 3) -> str | None:
 
 
 search_model = create_agent(
-    "deepseek-chat",
-    provider="DEEPSEEK",
+    "gpt-5-mini",
+    provider="OPENAI",
     prompt=search_prompt,
     temperature=0.7,
     tools=[moegirl_search, wiki_search, web_search],

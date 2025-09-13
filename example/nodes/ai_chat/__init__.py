@@ -22,7 +22,10 @@ class MainChat(Node[GroupMessageEvent, dict, Any]):
             or "group_788499440" in self.event.get_session_id()
         )
 
-        if self.event.is_tome() and "/clear" in self.event.message:
+        if (
+            self.event.is_tome()
+            and "clear" in self.event.message.get_plain_text().lower()
+        ):
             await clear(str(self.event.group_id))
             await self.reply("已清除对话历史")
             return
@@ -60,7 +63,10 @@ class MainChat(Node[GroupMessageEvent, dict, Any]):
                 random_trigger=random_trigger,
             )
         ):
-            await self.reply(answer)
+            if self.event.is_tome():
+                await self.reply(answer, reply_message=True)
+            else:
+                await self.reply(answer)
             self.stop()
 
     async def rule(self) -> bool:
