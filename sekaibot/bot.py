@@ -102,16 +102,16 @@ class Bot:
         list[type[Plugin[Any]]]  # | str | Path
     ] = []
 
-    _bot_startup_hooks: ClassVar[set[BotHook]] = set()
-    _bot_run_hooks: ClassVar[set[BotHook]] = set()
-    _bot_exit_hooks: ClassVar[set[BotHook]] = set()
-    _adapter_startup_hooks: ClassVar[set[AdapterHook]] = set()
-    _adapter_run_hooks: ClassVar[set[AdapterHook]] = set()
-    _adapter_shutdown_hooks: ClassVar[set[AdapterHook]] = set()
-    _event_preprocessor_hooks: ClassVar[set[EventHook]] = set()
-    _event_postprocessor_hooks: ClassVar[set[EventHook]] = set()
-    _node_preprocessor_hooks: ClassVar[set[NodeHook]] = set()
-    _node_postprocessor_hooks: ClassVar[set[NodeHook]] = set()
+    _bot_startup_hooks: set[BotHook]
+    _bot_run_hooks: set[BotHook]
+    _bot_exit_hooks: set[BotHook]
+    _adapter_startup_hooks: set[AdapterHook]
+    _adapter_run_hooks: set[AdapterHook]
+    _adapter_shutdown_hooks: set[AdapterHook]
+    _event_preprocessor_hooks: set[EventHook]
+    _event_postprocessor_hooks: set[EventHook]
+    _node_preprocessor_hooks: set[NodeHook]
+    _node_postprocessor_hooks: set[NodeHook]
 
     def __init__(
         self,
@@ -163,6 +163,17 @@ class Bot:
         self._extend_nodes = []
         self._extend_node_dirs = []
         self._extend_adapters = []
+
+        self._bot_startup_hooks = set()
+        self._bot_run_hooks = set()
+        self._bot_exit_hooks = set()
+        self._adapter_startup_hooks = set()
+        self._adapter_run_hooks = set()
+        self._adapter_shutdown_hooks = set()
+        self._event_preprocessor_hooks = set()
+        self._event_postprocessor_hooks = set()
+        self._node_preprocessor_hooks = set()
+        self._node_postprocessor_hooks = set()
 
         self._config_file = config_file
         self._config_dict = config_dict
@@ -775,8 +786,7 @@ class Bot:
                 "Require plugin failed: Not a plugin class", plugin_class=plugin_class
             )
 
-    @classmethod
-    def bot_startup_hook(cls, func: BotHook) -> BotHook:
+    def bot_startup_hook(self, func: BotHook) -> BotHook:
         """注册一个 Bot 初始化时的函数。
 
         Args:
@@ -785,11 +795,10 @@ class Bot:
         Returns:
             被注册的函数。
         """
-        cls._bot_startup_hooks.add(func)
+        self._bot_startup_hooks.add(func)
         return func
 
-    @classmethod
-    def bot_run_hook(cls, func: BotHook) -> BotHook:
+    def bot_run_hook(self, func: BotHook) -> BotHook:
         """注册一个 Bot 启动时的函数。
 
         Args:
@@ -798,11 +807,10 @@ class Bot:
         Returns:
             被注册的函数。
         """
-        cls._bot_run_hooks.add(func)
+        self._bot_run_hooks.add(func)
         return func
 
-    @classmethod
-    def bot_exit_hook(cls, func: BotHook) -> BotHook:
+    def bot_exit_hook(self, func: BotHook) -> BotHook:
         """注册一个 Bot 退出时的函数。
 
         Args:
@@ -811,11 +819,10 @@ class Bot:
         Returns:
             被注册的函数。
         """
-        cls._bot_exit_hooks.add(func)
+        self._bot_exit_hooks.add(func)
         return func
 
-    @classmethod
-    def adapter_startup_hook(cls, func: AdapterHook) -> AdapterHook:
+    def adapter_startup_hook(self, func: AdapterHook) -> AdapterHook:
         """注册一个适配器初始化时的函数。
 
         Args:
@@ -824,11 +831,10 @@ class Bot:
         Returns:
             被注册的函数。
         """
-        cls._adapter_startup_hooks.add(func)
+        self._adapter_startup_hooks.add(func)
         return func
 
-    @classmethod
-    def adapter_run_hook(cls, func: AdapterHook) -> AdapterHook:
+    def adapter_run_hook(self, func: AdapterHook) -> AdapterHook:
         """注册一个适配器运行时的函数。
 
         Args:
@@ -837,11 +843,10 @@ class Bot:
         Returns:
             被注册的函数。
         """
-        cls._adapter_run_hooks.add(func)
+        self._adapter_run_hooks.add(func)
         return func
 
-    @classmethod
-    def adapter_shutdown_hook(cls, func: AdapterHook) -> AdapterHook:
+    def adapter_shutdown_hook(self, func: AdapterHook) -> AdapterHook:
         """注册一个适配器关闭时的函数。
 
         Args:
@@ -850,11 +855,10 @@ class Bot:
         Returns:
             被注册的函数。
         """
-        cls._adapter_shutdown_hooks.add(func)
+        self._adapter_shutdown_hooks.add(func)
         return func
 
-    @classmethod
-    def event_preprocessor_hook(cls, func: EventHook) -> EventHook:
+    def event_preprocessor_hook(self, func: EventHook) -> EventHook:
         """注册一个事件预处理函数。
 
         Args:
@@ -863,11 +867,10 @@ class Bot:
         Returns:
             被注册的函数。
         """
-        cls._event_preprocessor_hooks.add(func)
+        self._event_preprocessor_hooks.add(func)
         return func
 
-    @classmethod
-    def event_postprocessor_hook(cls, func: EventHook) -> EventHook:
+    def event_postprocessor_hook(self, func: EventHook) -> EventHook:
         """注册一个事件后处理函数。
 
         Args:
@@ -876,11 +879,10 @@ class Bot:
         Returns:
             被注册的函数。
         """
-        cls._event_postprocessor_hooks.add(func)
+        self._event_postprocessor_hooks.add(func)
         return func
 
-    @classmethod
-    def node_preprocessor_hook(cls, func: NodeHook) -> NodeHook:
+    def node_preprocessor_hook(self, func: NodeHook) -> NodeHook:
         """注册一个节点运行预处理函数。
 
         Args:
@@ -889,11 +891,10 @@ class Bot:
         Returns:
             被注册的函数。
         """
-        cls._node_preprocessor_hooks.add(func)
+        self._node_preprocessor_hooks.add(func)
         return func
 
-    @classmethod
-    def node_postprocessor_hook(cls, func: NodeHook) -> NodeHook:
+    def node_postprocessor_hook(self, func: NodeHook) -> NodeHook:
         """注册一个节点运行后处理函数。
 
         Args:
@@ -902,5 +903,5 @@ class Bot:
         Returns:
             被注册的函数。
         """
-        cls._node_postprocessor_hooks.add(func)
+        self._node_postprocessor_hooks.add(func)
         return func
