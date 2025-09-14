@@ -1,6 +1,6 @@
 [project]
 name = "sekaibot"
-version = "0.1.2"
+version = "0.1.3"
 description = "A cross-platform, asynchronous, and progressive Python bot development framework"
 authors = [
     {name = "Kotodama",email = "2682064633@qq.com"}
