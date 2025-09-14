@@ -1,6 +1,6 @@
 [project]
 name = "sekaibot-adapter-cqhttp"
-version = "0.1.0"
+version = "0.1.2"
 description = "OneBot(CQHTTP) adapter for SekaiBot."
 authors = [
     {name = "Kotodama",email = "2682064633@qq.com"}
@@ -19,7 +19,7 @@ classifiers = [
     "Topic :: Communications :: Chat",
 ]
 requires-python = ">=3.11,<4"
-dependencies = ["sekaibot==0.1.0"]
+dependencies = ["sekaibot==0.1.2"]
 
 [project.urls]
 Repository = "https://github.com/sekaibot-dev/sekaibot"
