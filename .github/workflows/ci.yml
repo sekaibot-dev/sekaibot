@@ -35,7 +35,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --locked --dev --group typecheck
+        run: uv sync --locked --dev
 
       - name: Run Ruff lint
         run: uv run ruff check sekaibot/
