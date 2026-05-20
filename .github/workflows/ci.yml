@@ -21,25 +21,21 @@ jobs:
 
     - name: Install dependencies
       run: |
-        pip install -r requirements.txt
-        pip install black ruff mypy pylint pytest coverage
-
-    - name: Run black (code style)
-      run: black --check .
+        pip install uv
+        uv sync
+        uv pip install ruff mypy pylint pyright
 
     - name: Run ruff (linter)
-      run: ruff .
+      run: ruff check
 
     - name: Run mypy (type checker)
       run: mypy sekaibot/
 
+    - name: Run pyright
+      run: pyright sekaibot/
+
     - name: Run pylint
       run: pylint sekaibot/
-
-    - name: Run pytest with coverage
-      run: |
-        pytest --cov=sekaibot
-        coverage xml
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3

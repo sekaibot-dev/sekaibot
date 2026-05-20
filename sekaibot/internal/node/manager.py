@@ -207,10 +207,7 @@ class NodeManager:
                             event=current_event,
                             state=node.state,
                             stack=stack,
-                            dependency_cache=(
-                                dependency_cache if dependency_cache else {}
-                            )
-                            | {Node: node},
+                            dependency_cache=(dependency_cache or {}) | {Node: node},
                         ),
                         (SkipException,),
                     )
@@ -252,9 +249,7 @@ class NodeManager:
                             event=current_event,
                             state=node.state,
                             stack=stack,
-                            dependency_cache=(
-                                dependency_cache if dependency_cache else {}
-                            )
+                            dependency_cache=(dependency_cache or {})
                             | {Node: node, Exception: exception},
                         ),
                         (SkipException,),

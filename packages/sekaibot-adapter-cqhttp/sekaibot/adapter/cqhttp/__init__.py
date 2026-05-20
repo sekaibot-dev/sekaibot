@@ -198,12 +198,15 @@ class CQHTTPAdapter(WebSocketAdapter[CQHTTPEvent, Config]):  # type: ignore
             if (
                 len(event.message) > index
                 and event.message[index].type == "at"
-                and event.message[index].data.get("qq") == str(event.reply.sender.user_id)
+                and event.message[index].data.get("qq")
+                == str(event.reply.sender.user_id)
             ):
                 del event.message[index]
 
         if len(event.message) > index and event.message[index].type == "text":
-            event.message[index].data["text"] = event.message[index].data["text"].lstrip()
+            event.message[index].data["text"] = (
+                event.message[index].data["text"].lstrip()
+            )
             if not event.message[index].data["text"]:
                 del event.message[index]
 
@@ -238,13 +241,17 @@ class CQHTTPAdapter(WebSocketAdapter[CQHTTPEvent, Config]):  # type: ignore
                 event.to_me = True
                 event.message.pop(0)
                 if event.message and event.message[0].type == "text":
-                    event.message[0].data["text"] = event.message[0].data["text"].lstrip()
+                    event.message[0].data["text"] = (
+                        event.message[0].data["text"].lstrip()
+                    )
                     if not event.message[0].data["text"]:
                         del event.message[0]
                 if event.message and _is_at_me_seg(event.message[0]):
                     event.message.pop(0)
                     if event.message and event.message[0].type == "text":
-                        event.message[0].data["text"] = event.message[0].data["text"].lstrip()
+                        event.message[0].data["text"] = (
+                            event.message[0].data["text"].lstrip()
+                        )
                         if not event.message[0].data["text"]:
                             del event.message[0]
 
@@ -351,7 +358,9 @@ class CQHTTPAdapter(WebSocketAdapter[CQHTTPEvent, Config]):  # type: ignore
                 break
             async with self._api_response_cond:
                 try:
-                    with anyio.fail_after(start_time + self.config.api_timeout - time.time()):
+                    with anyio.fail_after(
+                        start_time + self.config.api_timeout - time.time()
+                    ):
                         await self._api_response_cond.wait()
                 except TimeoutError:
                     break

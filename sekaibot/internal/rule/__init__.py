@@ -155,7 +155,7 @@ class RuleChecker:
     def __init__(self, rule: Rule) -> None:
         self._rule = rule
 
-    def __call__(self, cls: NodeT) -> NodeT:
+    def __call__(self, cls: type[NodeT]) -> type[NodeT]:
         """将检查器添加到 Node 类中。"""
         if "__node_rule__" not in cls.__dict__:
             cls.__node_rule__ = deepcopy(cls.__node_rule__)

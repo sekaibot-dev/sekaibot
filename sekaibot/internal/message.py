@@ -219,8 +219,10 @@ class Message(ABC, list[MessageSegmentT], Generic[MessageSegmentT]):
         """
         return self.__class__(
             filter(
-                lambda x: (not include or x.type in include)
-                and (not exclude or x.type not in exclude),
+                lambda x: (
+                    (not include or x.type in include)
+                    and (not exclude or x.type not in exclude)
+                ),
                 self,
             )
         )

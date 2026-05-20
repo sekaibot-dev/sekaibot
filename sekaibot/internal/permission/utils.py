@@ -57,7 +57,8 @@ class UserPermission:
     @classmethod
     def _clean_permission(cls, perm: Permission) -> Permission | None:
         if len(perm.checkers) == 1 and isinstance(
-            user_perm := next(iter(perm.checkers)).call, cls # type: ignore
+            user_perm := next(iter(perm.checkers)).call,  # type: ignore
+            cls,
         ):
             return user_perm.perm
         return perm
@@ -102,9 +103,7 @@ class SuperUserPermission:
         """运行超级用户检测"""
         try:
             user_id = event.get_user_id()
-            group_id = (
-                "group_" + str(getattr(event, "group_id", "no_group_id"))
-            )
+            group_id = "group_" + str(getattr(event, "group_id", "no_group_id"))
         except Exception:
             return False
 

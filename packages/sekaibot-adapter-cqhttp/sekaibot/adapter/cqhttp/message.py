@@ -65,6 +65,7 @@ class CQHTTPMessageSegment(MessageSegment["CQHTTPMessage"]):
         cls,
         file: str,
         type_: Literal["flash"] | None = None,
+        sub_type: Literal[0, 1] = 0,
         cache: bool = True,
         proxy: bool = True,
         timeout: int | None = None,
@@ -75,6 +76,7 @@ class CQHTTPMessageSegment(MessageSegment["CQHTTPMessage"]):
             data={
                 "file": file,
                 "type": type_,
+                "sub_type": sub_type,
                 "cache": cache,
                 "proxy": proxy,
                 "timeout": timeout,

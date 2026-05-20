@@ -61,7 +61,6 @@ __all__ = [
     "get_classes_from_module_name",
     "handle_exception",
     "is_config_class",
-    "remove_none_attributes",
     "run_coro_with_catch",
     "samefile",
     "sync_ctx_manager_wrapper",
@@ -74,7 +73,6 @@ _P = ParamSpec("_P")
 _R = TypeVar("_R")
 _E = TypeVar("_E", bound=BaseException)
 _TypeT = TypeVar("_TypeT", bound=type[Any])
-_BaseModelT = TypeVar("_BaseModelT", bound=BaseModel)
 
 StrOrBytesPath = Union[str, bytes, os.PathLike[Any]]  # type alias  # noqa: UP007
 TreeType = dict[_T, Union[Any, "TreeType[_T]"]]
@@ -114,31 +112,6 @@ def is_config_class(config_class: Any) -> TypeGuard[type[ConfigModel]]:
         and ABC not in config_class.__bases__
         and not inspect.isabstract(config_class)
     )
-
-
-def remove_none_attributes(
-    model: _BaseModelT, exclude: set[str] | None = None
-) -> _BaseModelT:
-    """去除类中值为None的属性
-
-    Args:
-        model: BaseModel的子类
-        exclude: 无论是否为None都不去除的属性名
-
-    Returns:
-        返回是去除类中值为None的属性后的类。
-    """
-    if exclude is None:
-        exclude = set()
-    cleaned_data = {
-        key: value
-        for key, value in model.__dict__.items()
-        if key in exclude or value is not None
-    }
-    for key in list(model.__dict__.keys()):
-        delattr(model, key)
-    model.__dict__.update(cleaned_data)
-    return model
 
 
 def get_classes_from_module(module: ModuleType, super_class: _TypeT) -> list[_TypeT]:
@@ -277,6 +250,7 @@ def handle_exception(
     **kwargs: Any,
 ) -> Callable[[BaseExceptionGroup[Exception]], None]:
     """递归遍历 BaseExceptionGroup ，并输出日志"""
+
     def _handle(exc_group: BaseExceptionGroup[Exception]) -> None:
         for exc in flatten_exception_group(exc_group):
             if level in ("error", "critical"):

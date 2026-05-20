@@ -760,23 +760,23 @@ class ArgumentParser(ArgParser):
             namespace: T | None = None,
         ) -> tuple[Namespace | T, list[str | MessageSegment[Any]]]: ...
 
-    @overload
+    @overload  # type: ignore[override]
     def parse_args(
         self,
         args: Sequence[str | MessageSegment[Any]] | None = None,
         namespace: None = None,
     ) -> Namespace: ...
 
-    @overload
+    @overload  # type: ignore[override]
     def parse_args(
         self, args: Sequence[str | MessageSegment[Any]] | None, namespace: T
     ) -> T: ...
 
-    @overload
+    @overload  # type: ignore[override]
     def parse_args(self, *, namespace: T) -> T: ...
 
     @override
-    def parse_args(
+    def parse_args(  # type: ignore
         self,
         args: Sequence[str | MessageSegment[Any]] | None = None,
         namespace: T | None = None,

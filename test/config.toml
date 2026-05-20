@@ -1,8 +1,0 @@
-[bot]
-nodes = ["nodes.node1"]
-node_dirs = []
-adapters = []
-
-[bot.log]
-level = "DEBUG"
-verbose_exception = true

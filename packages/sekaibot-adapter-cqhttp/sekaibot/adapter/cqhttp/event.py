@@ -176,7 +176,9 @@ class MessageEvent(CQHTTPEvent):
     @override
     def get_event_name(self) -> str:
         sub_type = getattr(self, "sub_type", None)
-        return f"{self.post_type}.{self.message_type}" + (f".{sub_type}" if sub_type else "")
+        return f"{self.post_type}.{self.message_type}" + (
+            f".{sub_type}" if sub_type else ""
+        )
 
     @override
     def get_message(self) -> CQHTTPMessage:
@@ -238,7 +240,9 @@ class NoticeEvent(CQHTTPEvent):
     @override
     def get_event_name(self) -> str:
         sub_type = getattr(self, "sub_type", None)
-        return f"{self.post_type}.{self.notice_type}" + (f".{sub_type}" if sub_type else "")
+        return f"{self.post_type}.{self.notice_type}" + (
+            f".{sub_type}" if sub_type else ""
+        )
 
     @override
     def get_session_id(self) -> str:
@@ -454,7 +458,9 @@ class RequestEvent(CQHTTPEvent):
     @override
     def get_event_name(self) -> str:
         sub_type = getattr(self, "sub_type", None)
-        return f"{self.post_type}.{self.request_type}" + (f".{sub_type}" if sub_type else "")
+        return f"{self.post_type}.{self.request_type}" + (
+            f".{sub_type}" if sub_type else ""
+        )
 
     @override
     def get_session_id(self) -> str:

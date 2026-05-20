@@ -263,7 +263,7 @@ class OneBotAdapter(WebSocketAdapter[OneBotEvent, Config]):  # type: ignore
                 if (
                     last_msg_seg.type == "text"
                     and not last_msg_seg.data["text"].strip()
-                    and len(event.message) >= 2
+                    and len(event.message) > 1
                 ):
                     i -= 1
                     last_msg_seg = event.message[i]
@@ -281,7 +281,7 @@ class OneBotAdapter(WebSocketAdapter[OneBotEvent, Config]):  # type: ignore
         Args:
             msg: 接收到的信息。
         """
-        self.self_id = msg.get("self_id")
+        self.self_id = msg.get("self_id", "")
         self.platform = msg.get("platform", "onebot")
 
         post_type = msg.get("post_type")
@@ -313,8 +313,8 @@ class OneBotAdapter(WebSocketAdapter[OneBotEvent, Config]):  # type: ignore
                 logger.info("OneBot status update", status=onebot_event.status)
         else:
             if isinstance(onebot_event, MessageEvent):
-                await self._get_reply(onebot_event)
-                await self._get_to_me(onebot_event)
+                self._get_reply(onebot_event)
+                self._get_to_me(onebot_event)
             await self.handle_event(onebot_event)
 
     @override
@@ -408,7 +408,9 @@ class OneBotAdapter(WebSocketAdapter[OneBotEvent, Config]):  # type: ignore
 
         full_message = OneBotMessage()  # create a new message with at sender segment
         if reply_message and "message_id" in event_dict:
-            full_message += OneBotMessageSegment.reply(event_dict["message_id"])
+            full_message += OneBotMessageSegment.reply(
+                event_dict["message_id"], params["user_id"]
+            )
         if at_sender and params["detail_type"] != "private":
             full_message += OneBotMessageSegment.mention(params["user_id"]) + " "
         full_message += message

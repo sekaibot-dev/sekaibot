@@ -49,14 +49,14 @@ class APScheduler(Plugin[APSchedulerConfig]):
         aps_logger.handlers.clear()
         aps_logger.addHandler(StructLogHandler())
         if self.config.apscheduler_autostart:
-            if not self.scheduler.running: # type: ignore
-                self.scheduler.start() # type: ignore
+            if not self.scheduler.running:  # type: ignore
+                self.scheduler.start()  # type: ignore
                 logger.info("Running APScheduler...")
             Bot.bot_exit_hook(self.shutdown)
 
     async def shutdown(self) -> None:
-        if self.scheduler.running: # type: ignore
-            self.scheduler.shutdown() # type: ignore
+        if self.scheduler.running:  # type: ignore
+            self.scheduler.shutdown()  # type: ignore
             logger.info("Stopping APScheduler...")
 
 

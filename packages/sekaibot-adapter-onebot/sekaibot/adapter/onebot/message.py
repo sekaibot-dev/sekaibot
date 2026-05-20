@@ -77,7 +77,9 @@ class OneBotMessageSegment(MessageSegment["OneBotMessage"]):
         return cls(type="file", data={"file_id": file_id})
 
     @classmethod
-    def location(cls, latitude: float, longitude: float, title: str, content: str) -> Self:
+    def location(
+        cls, latitude: float, longitude: float, title: str, content: str
+    ) -> Self:
         """位置"""
         return cls(
             type="file",

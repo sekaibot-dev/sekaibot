@@ -150,7 +150,7 @@ class PermissionChecker:
     def __init__(self, perm: Permission) -> None:
         self._perm = perm
 
-    def __call__(self, cls: NodeT) -> NodeT:
+    def __call__(self, cls: type[NodeT]) -> type[NodeT]:
         """将检查器添加到 Node 类中。"""
         if "__node_perm__" not in cls.__dict__:
             cls.__node_perm__ = deepcopy(cls.__node_perm__)

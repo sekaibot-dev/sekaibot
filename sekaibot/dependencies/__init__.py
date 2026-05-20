@@ -26,9 +26,7 @@ __all__ = [
 ]
 
 
-def Depends(
-    dependency: Dependency[_T] | None = None, *, use_cache: bool = True
-) -> _T:
+def Depends(dependency: Dependency[_T] | None = None, *, use_cache: bool = True) -> _T:
     """子依赖装饰器。
 
     Args:
