@@ -102,16 +102,16 @@ class Bot:
         list[type[Plugin[Any]]]  # | str | Path
     ] = []
 
-    _bot_startup_hooks: ClassVar[set[BotHook]]
-    _bot_run_hooks: ClassVar[set[BotHook]]
-    _bot_exit_hooks: ClassVar[set[BotHook]]
-    _adapter_startup_hooks: ClassVar[set[AdapterHook]]
-    _adapter_run_hooks: ClassVar[set[AdapterHook]]
-    _adapter_shutdown_hooks: ClassVar[set[AdapterHook]]
-    _event_preprocessor_hooks: ClassVar[set[EventHook]]
-    _event_postprocessor_hooks: ClassVar[set[EventHook]]
-    _node_preprocessor_hooks: ClassVar[set[NodeHook]]
-    _node_postprocessor_hooks: ClassVar[set[NodeHook]]
+    _bot_startup_hooks: ClassVar[set[BotHook]] = set()
+    _bot_run_hooks: ClassVar[set[BotHook]] = set()
+    _bot_exit_hooks: ClassVar[set[BotHook]] = set()
+    _adapter_startup_hooks: ClassVar[set[AdapterHook]] = set()
+    _adapter_run_hooks: ClassVar[set[AdapterHook]] = set()
+    _adapter_shutdown_hooks: ClassVar[set[AdapterHook]] = set()
+    _event_preprocessor_hooks: ClassVar[set[EventHook]] = set()
+    _event_postprocessor_hooks: ClassVar[set[EventHook]] = set()
+    _node_preprocessor_hooks: ClassVar[set[NodeHook]] = set()
+    _node_postprocessor_hooks: ClassVar[set[NodeHook]] = set()
 
     def __init__(
         self,

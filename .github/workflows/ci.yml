@@ -2,40 +2,53 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
+  lint:
+    name: Lint and Type Check
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: "pyproject.toml"
 
-    - name: Install dependencies
-      run: |
-        pip install uv
-        uv sync
-        uv pip install ruff mypy pylint pyright
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
 
-    - name: Run ruff (linter)
-      run: ruff check
+      - name: Install dependencies
+        run: uv sync --locked --dev --group typecheck
 
-    - name: Run mypy (type checker)
-      run: mypy sekaibot/
+      - name: Run Ruff lint
+        run: uv run ruff check sekaibot/
 
-    - name: Run pyright
-      run: pyright sekaibot/
+      - name: Run Ruff format check
+        run: uv run ruff format --check sekaibot/
 
-    - name: Run pylint
-      run: pylint sekaibot/
+      - name: Run Pyright
+        run: uv run pyright sekaibot/
 
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
+      - name: Run Mypy
+        run: uv run mypy sekaibot/
+
+      - name: Prune uv cache
+        if: always()
+        run: uv cache prune --ci
